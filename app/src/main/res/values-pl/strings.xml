@@ -8,7 +8,7 @@
     <string name="title_settings_about">O aplikacji</string>
     <string name="label_version_value">Wersja %s</string>
     <string name="button_cancel">Anuluj</string>
-    <string name="msg_about_privacy">Aplikacja nie ma dostępu do Internetu. Zdjęcia i filmy zostają w telefonie. Bez konta, bez analityki, bez żadnych usług.</string>
+    <string name="msg_about_privacy">Aplikacja nie ma dostępu do Internetu. Zdjęcia i filmy pozostają w telefonie.</string>
     <string name="label_licenses">Licencje open source</string>
     <string name="desc_licenses">Składniki open source użyte w aplikacji</string>
     <string name="label_apache_license">Apache License 2.0</string>

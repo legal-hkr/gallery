@@ -1,4 +1,4 @@
-# Gallery
+# <img src="metadata/en-US/icon.png" width="42"/> Gallery
 
 Private gallery for photos and videos on Android.
 
