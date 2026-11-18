@@ -1,0 +1,4 @@
+v0.1.0
+
+In development:
+- The app’s frame and the first settings pages

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Galeria</string>
+    <string name="label_nav_search">Szukaj</string>
+    <string name="label_nav_settings">Ustawienia</string>
+    <string name="content_description_back">Wstecz</string>
+    <string name="title_settings">Ustawienia</string>
+    <string name="title_settings_about">O aplikacji</string>
+    <string name="label_version_value">Wersja %s</string>
+    <string name="button_cancel">Anuluj</string>
+    <string name="msg_about_privacy">Aplikacja nie ma dostępu do Internetu. Zdjęcia i filmy zostają w telefonie. Bez konta, bez analityki, bez żadnych usług.</string>
+    <string name="label_licenses">Licencje open source</string>
+    <string name="desc_licenses">Składniki open source użyte w aplikacji</string>
+    <string name="label_apache_license">Apache License 2.0</string>
+    <string name="button_close">Zamknij</string>
+    <string name="title_settings_group_app">Aplikacja</string>
+    <string name="title_settings_group_data">Dane</string>
+    <string name="title_settings_language">Język</string>
+    <string name="language_system_default">Domyślny systemowy</string>
+    <string name="title_settings_reset">Resetowanie</string>
+    <string name="desc_settings_reset_row">Zdjęcia i filmy zostają</string>
+    <string name="desc_settings_reset">Wszystkie ustawienia wrócą do domyślnych, a język będzie zgodny z systemem. Zdjęcia, filmy i albumy pozostaną bez zmian.</string>
+    <string name="button_restore_defaults">Przywróć ustawienia domyślne</string>
+    <string name="title_confirm_restore_defaults">Przywrócić ustawienia domyślne?</string>
+    <string name="msg_confirm_restore_defaults">Wszystkie ustawienia wrócą do domyślnych, a język będzie zgodny z systemem. Zdjęcia, filmy i albumy pozostaną bez zmian.</string>
+    <string name="button_restore">Przywróć</string>
+    <string name="msg_defaults_restored">Przywrócono ustawienia domyślne</string>
+    <string name="title_about_license">Licencja</string>
+    <string name="msg_license_english_only">Wiążący jest wyłącznie oryginalny tekst w języku angielskim.</string>
+    <string name="title_about_source">Kod źródłowy</string>
+    <string name="msg_no_browser">Brak aplikacji, która otworzy ten link</string>
+    <string name="whats_new_title">Co nowego</string>
+    <string name="whats_new_badge">Nowe</string>
+    <plurals name="whats_new_row_supporting">
+        <item quantity="one">Wersja %1$s, %2$d zmiana</item>
+        <item quantity="few">Wersja %1$s, %2$d zmiany</item>
+        <item quantity="many">Wersja %1$s, %2$d zmian</item>
+        <item quantity="other">Wersja %1$s, %2$d zmiany</item>
+    </plurals>
+    <string name="whats_new_updated_snackbar">Zaktualizowano do wersji %1$s</string>
+    <string name="label_nav_photos">Zdjęcia</string>
+    <string name="label_nav_albums">Albumy</string>
+    <string name="msg_in_development">W budowie.</string>
+</resources>
