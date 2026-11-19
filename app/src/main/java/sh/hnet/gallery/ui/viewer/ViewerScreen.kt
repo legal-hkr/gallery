@@ -13,12 +13,15 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -57,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,7 +72,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -77,7 +80,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -101,12 +103,11 @@ import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.model.ViewerList
 import sh.hnet.gallery.ui.components.Consent
 import sh.hnet.gallery.ui.components.LocalConsent
-import sh.hnet.gallery.ui.components.MediaThumbnail
 import sh.hnet.gallery.ui.components.MenuItem
-import sh.hnet.gallery.ui.components.Thumbnails
 import sh.hnet.gallery.ui.components.TooltipIconButton
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
@@ -160,6 +161,12 @@ fun ViewerScreen(
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val density = LocalDensity.current
     val deletedElsewhere = stringResource(R.string.msg_deleted_elsewhere)
+    // One video player for this opening (LOGIKA §14.1)
+    val player = remember { ViewerPlayer(context) }
+    DisposableEffect(player) { onDispose { player.release() } }
+    val playback by player.state.collectAsStateWithLifecycle()
+    // Each use of the chrome or the card restarts its 3 s while a video plays (D9)
+    var touched by remember { mutableIntStateOf(0) }
 
     fun close() {
         if (dismiss.closing) return
@@ -221,7 +228,30 @@ fun ViewerScreen(
 
     val item = byId[currentId]
     val fact = facts?.get(currentId)
-    val hdr = hdrOf[currentId] == true
+    val video = item?.video == true
+    val hdr = if (video) playback.item == currentId && playback.hdr != null else hdrOf[currentId] == true
+    // A video plays when its page settles and pauses when it is left (SPEC §8.2)
+    LaunchedEffect(currentId, video) {
+        val shown = item ?: return@LaunchedEffect
+        if (video) player.show(shown) else playback.item?.let { player.pauseFor(it) }
+    }
+    // An HDR video's SDR toggle only where the phone's decoder tone-maps it (D11)
+    var toneMaps by remember(currentId) { mutableStateOf(false) }
+    LaunchedEffect(currentId, hdr) {
+        val shown = item
+        toneMaps = shown != null && video && hdr && ViewerPlayer.decoderToneMaps(context.contentResolver, shown)
+    }
+    // A long video stopped on its last frame: the chrome comes back and stays until it plays again (the owner, 19 Nov 2026)
+    LaunchedEffect(playback.ended, video) {
+        if (video && playback.ended) chrome = true
+    }
+    // The chrome hides 4 s after the last touch while a video plays; paused, it stays (D9)
+    LaunchedEffect(chrome, video, playback.playing, touched) {
+        if (chrome && video && playback.playing) {
+            delay(Playback.CHROME_HIDE_MS)
+            chrome = false
+        }
+    }
     // HDR only while an HDR photo is settled, and not after its toggle (SPEC §6.1, §7.4)
     LaunchedEffect(currentId, hdr, sdr, window) {
         window?.colorMode = if (hdr && !sdr) ActivityInfo.COLOR_MODE_HDR else ActivityInfo.COLOR_MODE_DEFAULT
@@ -239,7 +269,14 @@ fun ViewerScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface.copy(alpha = dismiss.backdropAlpha))
             .onSizeChanged { dismiss.containerHeight = it.height }
-            .viewerSwipeToDismiss(state = dismiss, onStart = { false }, onClose = { close() }, onSettle = {}, onSwipeUp = { if (item != null && !item.video) info = true }),
+            .viewerSwipeToDismiss(
+                state = dismiss,
+                // A video pauses while it is swiped (its frame stands in: D12) and goes on if the swipe settles back
+                onStart = { (video && playback.playing).also { if (it) player.togglePlay() } },
+                onClose = { close() },
+                onSettle = { wasPlaying -> if (wasPlaying) player.togglePlay() },
+                onSwipeUp = { if (item != null) info = true },
+            ),
     ) {
         // The media, moved, scaled and rounded by the swipe (the gesture above reads untransformed positions)
         Box(
@@ -257,8 +294,14 @@ fun ViewerScreen(
                 val pageItem = byId[pages[page]] ?: return@HorizontalPager
                 val isCurrent = pageItem.id == currentId
                 if (pageItem.video) {
-                    // The player comes with S3: the video's frame meanwhile
-                    VideoStill(pageItem) { chrome = !chrome }
+                    VideoPage(
+                        pageItem, player, live = isCurrent && !dismiss.active,
+                        onTap = {
+                            touched++
+                            chrome = !chrome
+                        },
+                        onOpenWith = { open(context, pageItem, Intent.ACTION_VIEW) },
+                    )
                     LaunchedEffect(pageItem.id) { onLoaded(pageItem.id) }
                 } else {
                     PhotoPage(
@@ -266,6 +309,8 @@ fun ViewerScreen(
                         facts?.get(pageItem.id),
                         motion = isCurrent && (motion || holding),
                         holding = isCurrent && holding,
+                        // A held motion photo plays with sound when it was turned on in this opening (SPEC §7.5, §8.3)
+                        sound = isCurrent && holding && !playback.muted,
                         onMotionEnded = { if (isCurrent && !holding) motion = false },
                         onPicture = { picture ->
                             hdrOf[pageItem.id] = (picture as? Picture.Still)?.gainmap == true
@@ -287,12 +332,17 @@ fun ViewerScreen(
 
         if (item != null) {
             AnimatedVisibility(chromeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.TopCenter)) {
-                TopBar(item, hdr = hdr, sdr = sdr, motionPhoto = fact?.motion == true, onBack = { close() }, onSdr = { sdr = it }, onPlayMotion = { motion = true })
+                TopBar(
+                    item, hdr = hdr && (!video || toneMaps), sdr = sdr, motionPhoto = fact?.motion == true,
+                    onBack = { close() },
+                    onSdr = { value ->
+                        sdr = value
+                        if (video) player.setSdr(value)
+                    },
+                    onPlayMotion = { motion = true },
+                )
             }
-            AnimatedVisibility(
-                chromeShown, enter = fadeIn(), exit = fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)).offset(y = -FloatingToolbarDefaults.ScreenOffset),
-            ) {
+            val toolbar: @Composable () -> Unit = {
                 Toolbar(
                     item,
                     onFavorite = { scope.launch { change(writer.favorite(listOf(item), !item.favorite), consent) {} } },
@@ -303,8 +353,28 @@ fun ViewerScreen(
                     onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
                 )
             }
+            val bottomInsets = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
+            if (video && landscape) {
+                // Landscape (SPEC §8.5): the one-row card at the bottom start, beside the toolbar at the bottom end
+                AnimatedVisibility(chromeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).then(bottomInsets).padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PlaybackCard(player, compact = true, onInteraction = { touched++ }, modifier = Modifier.weight(1f))
+                        toolbar()
+                    }
+                }
+            } else {
+                if (video) {
+                    // Portrait (SPEC §8.1): the card above the toolbar, 12 dp from the sides
+                    AnimatedVisibility(chromeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).then(bottomInsets).padding(start = 12.dp, end = 12.dp, bottom = 92.dp)) {
+                        PlaybackCard(player, compact = false, onInteraction = { touched++ }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                AnimatedVisibility(chromeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).then(bottomInsets).offset(y = -FloatingToolbarDefaults.ScreenOffset)) {
+                    toolbar()
+                }
+            }
             if (info) {
-                InfoSheet(item, fact, hdr, landscape, onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }, onDismiss = { info = false })
+                InfoSheet(item, fact, hdr, landscape, playback.takeIf { it.item == item.id }, onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }, onDismiss = { info = false })
             }
         }
 
@@ -317,15 +387,6 @@ fun ViewerScreen(
 
 /** Time a page must rest before its motion plays (SPEC §7.5: the pager idle ~300 ms). */
 private const val MOTION_SETTLE_MS = 300L
-
-/** A video's page until the player of S3: its frame, fitted; a tap toggles the chrome. */
-@Composable
-private fun VideoStill(item: MediaItem, onTap: () -> Unit) {
-    val zoom = rememberZoomState(IntSize(item.width, item.height), onSingleTap = onTap)
-    Box(Modifier.fillMaxSize().zoomable(zoom), contentAlignment = Alignment.Center) {
-        MediaThumbnail(item, Thumbnails.sizeFor(Int.MAX_VALUE), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
-    }
-}
 
 /**
  * The top bar (SPEC §6.2): a `surface-container` band from the top edge, Back, the date and time

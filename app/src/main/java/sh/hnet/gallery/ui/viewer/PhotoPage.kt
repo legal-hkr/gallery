@@ -87,6 +87,7 @@ fun PhotoPage(
     fact: Fact?,
     motion: Boolean,
     holding: Boolean,
+    sound: Boolean,
     onMotionEnded: () -> Unit,
     onPicture: (Picture) -> Unit,
     onTap: () -> Unit,
@@ -151,7 +152,7 @@ fun PhotoPage(
             }
             if (fact?.motion == true && fact.motionLength != null && full != IntSize.Zero) {
                 FittedBox(full, zoom) { modifier ->
-                    MotionVideo(item, fact.motionLength, playing = motion, loop = holding, onEnded = onMotionEnded, modifier = modifier)
+                    MotionVideo(item, fact.motionLength, playing = motion, loop = holding, sound = sound, onEnded = onMotionEnded, modifier = modifier)
                 }
             }
         }
@@ -224,9 +225,9 @@ private fun ZoomTiles(item: MediaItem, source: TileSource, still: Picture.Still,
 /** How long the zoom must rest before the tiles of the new view are decoded. */
 private const val TILE_SETTLE_MS = 80L
 
-/** The family's problem card (SPEC §6.9): the file can't be shown; Open with hands it to another app. */
+/** The family's problem card (SPEC §6.9): the file can't be shown; Open with hands it to another app. Videos that can't be played too. */
 @Composable
-private fun BrokenFile(onOpenWith: () -> Unit) {
+internal fun BrokenFile(onOpenWith: () -> Unit) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Surface(
             shape = RoundedCornerShape(20.dp),

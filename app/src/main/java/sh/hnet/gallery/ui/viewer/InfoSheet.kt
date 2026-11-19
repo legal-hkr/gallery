@@ -6,7 +6,10 @@ import android.content.ClipData
 import android.content.ContentResolver
 import android.content.Intent
 import android.media.MediaDataSource
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import android.text.format.DateFormat
 import android.text.format.Formatter
 import androidx.annotation.DrawableRes
@@ -74,17 +77,20 @@ import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.facts.Fact
 import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.groupShapes
 import sh.hnet.gallery.ui.components.settingsRowColors
 import sh.hnet.gallery.ui.components.storageName
 import sh.hnet.gallery.ui.grid.formatDate
+import sh.hnet.gallery.ui.grid.formatDuration
 
 /** What the file itself says, read when the sheet opens (SPEC §7.1). */
 private class FileInfo(
@@ -95,7 +101,11 @@ private class FileInfo(
     val longitude: Double?,
     val located: Boolean,
     val motionMs: Long?,
+    val video: VideoInfo? = null,
 )
+
+/** A video's own details (SPEC §7.1's `movie` row), read from the file. */
+private class VideoInfo(val durationMs: Long, val width: Int, val height: Int, val frameRate: Float?, val hdr: String?, val channels: Int?)
 
 /** Formats whose date `ExifInterface` can write (SPEC §7.2: no pencil for HEIC, DNG or videos). */
 private val DATE_WRITABLE = setOf("image/jpeg", "image/png", "image/webp")
@@ -109,11 +119,13 @@ private val DATE_WRITABLE = setOf("image/jpeg", "image/png", "image/webp")
  * @param onChangeDate The new date and time, in the phone's zone
  */
 @Composable
-fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, onChangeDate: (LocalDate, LocalTime) -> Unit, onDismiss: () -> Unit) {
+fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, playback: ViewerPlayer.State?, onChangeDate: (LocalDate, LocalTime) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val locale = LocalConfiguration.current.locales[0]
-    val info by produceState<FileInfo?>(null, item.id, item.generation) { value = readInfo(resolver, item, fact) }
+    val app = LocalContext.current.applicationContext as GalleryApplication
+    val location = remember { app.media.canLocate() }
+    val info by produceState<FileInfo?>(null, item.id, item.generation) { value = readInfo(resolver, item, fact, location) }
     // Partly open in portrait (the first rows), drags to full; fully open in landscape (SPEC §7.1), as Calendar's colour sheet
     val state = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -216,6 +228,19 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
     }
 
     info?.camera?.let { camera -> rows.add(Row(R.drawable.ic_photo_camera, camera, listOfNotNull(info.settings, info.lens))) }
+    // A video's row in place of the camera's (SPEC §7.1): length, size, frame rate; under it HDR and sound
+    info?.video?.let { video ->
+        val fps = video.frameRate?.let { Playback.fpsText(it, locale) }
+        val dims = "${video.width} × ${video.height}"
+        val title = if (fps != null) stringResource(R.string.format_video_details, formatDuration(video.durationMs), dims, fps) else "${formatDuration(video.durationMs)}, $dims"
+        val sound = when {
+            video.channels == null || video.channels == 0 -> stringResource(R.string.label_no_sound)
+            video.channels == 1 -> stringResource(R.string.label_sound_mono)
+            else -> stringResource(R.string.label_sound_stereo)
+        }
+        val hdrText = video.hdr?.let { stringResource(R.string.label_hdr_video, it) }
+        rows.add(Row(R.drawable.ic_movie, title, listOf(listOfNotNull(hdrText, sound).joinToString(", "))))
+    }
 
     val size = Formatter.formatFileSize(context, item.size)
     val dims = if (item.width > 0 && item.height > 0) "${item.width} × ${item.height}" else null
@@ -223,7 +248,7 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
     rows.add(Row(R.drawable.ic_description, item.name, listOf(details)))
     rows.add(Row(R.drawable.ic_folder, item.path.trimEnd('/'), listOf(storageName(item.volume))))
 
-    if (hdr || fact?.gainmap == true) rows.add(Row(R.drawable.ic_hdr_on, stringResource(R.string.title_hdr), listOf(stringResource(R.string.label_ultra_hdr))))
+    if (!item.video && (hdr || fact?.gainmap == true)) rows.add(Row(R.drawable.ic_hdr_on, stringResource(R.string.title_hdr), listOf(stringResource(R.string.label_ultra_hdr))))
     if (fact?.motion == true) {
         val length = info?.motionMs?.let { ms -> ExifText.seconds(ms / 1000.0, locale) + " s" }
         rows.add(Row(R.drawable.ic_motion_photos_on, stringResource(R.string.title_motion_photo), listOfNotNull(length?.let { stringResource(R.string.label_motion_length, it) })))
@@ -281,7 +306,8 @@ private fun MapsButton(lat: Double, lon: Double) {
 }
 
 /** The file's camera details, location and motion length, read on the IO thread; nothing when unreadable. */
-private suspend fun readInfo(resolver: ContentResolver, item: MediaItem, fact: Fact?): FileInfo = withContext(Dispatchers.IO) {
+private suspend fun readInfo(resolver: ContentResolver, item: MediaItem, fact: Fact?, location: Boolean): FileInfo = withContext(Dispatchers.IO) {
+    if (item.video) return@withContext readVideo(resolver, item, location)
     var camera: String? = null
     var settings: String? = null
     var lens: String? = null
@@ -354,3 +380,62 @@ fun viewerTitle(item: MediaItem, fact: Fact?): String {
     val time = DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "H:mm" else "h:mm a", locale).format(taken)
     return stringResource(R.string.format_viewer_title, day, time)
 }
+
+/**
+ * A video's details and location (SPEC §7.1, LOGIKA §14.6): length, upright size, frame rate, HDR
+ * kind and sound from its tracks; the location (`©xyz`, ISO 6709) only with access to it – the
+ * system cuts it out otherwise.
+ */
+private fun readVideo(resolver: ContentResolver, item: MediaItem, location: Boolean): FileInfo {
+    var video: VideoInfo? = null
+    var latitude: Double? = null
+    var longitude: Double? = null
+    try {
+        val uri = if (location) MediaStore.setRequireOriginal(item.uri()) else item.uri()
+        resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(descriptor.fileDescriptor)
+                val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: item.duration
+                val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: item.width
+                val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: item.height
+                val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                Playback.iso6709(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_LOCATION))?.let { (lat, lon) ->
+                    latitude = lat
+                    longitude = lon
+                }
+                var frameRate: Float? = null
+                var hdr: String? = null
+                var channels: Int? = null
+                val extractor = MediaExtractor()
+                try {
+                    extractor.setDataSource(descriptor.fileDescriptor)
+                    for (i in 0 until extractor.trackCount) {
+                        val format = extractor.getTrackFormat(i)
+                        val mime = format.getString(MediaFormat.KEY_MIME).orEmpty()
+                        if (mime.startsWith("video/") && frameRate == null) {
+                            if (format.containsKey(MediaFormat.KEY_FRAME_RATE)) frameRate = format.getNumber(MediaFormat.KEY_FRAME_RATE)?.toFloat()
+                            val transfer = if (format.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) format.getInteger(MediaFormat.KEY_COLOR_TRANSFER) else 0
+                            hdr = when {
+                                mime == MediaFormat.MIMETYPE_VIDEO_DOLBY_VISION -> "Dolby Vision"
+                                transfer == MediaFormat.COLOR_TRANSFER_HLG -> "HLG"
+                                transfer == MediaFormat.COLOR_TRANSFER_ST2084 -> "HDR10"
+                                else -> null
+                            }
+                        }
+                        if (mime.startsWith("audio/") && channels == null) channels = if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) format.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 2
+                    }
+                } finally {
+                    extractor.release()
+                }
+                val upright = rotation % 180 != 0
+                video = VideoInfo(duration, if (upright) height else width, if (upright) width else height, frameRate, hdr, channels ?: 0)
+            } finally {
+                retriever.release()
+            }
+        }
+    } catch (_: Exception) {
+    }
+    return FileInfo(null, null, null, latitude, longitude, location, null, video)
+}
+

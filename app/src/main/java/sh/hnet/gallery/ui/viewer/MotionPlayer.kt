@@ -86,13 +86,13 @@ private class TailDataSource(private val resolver: ContentResolver, private val 
 }
 
 /**
- * A motion photo's video over its still, muted (SPEC §7.5): shown only while [playing]; [loop] plays
+ * A motion photo's video over its still, muted unless [sound] (SPEC §7.5): shown only while [playing]; [loop] plays
  * it round while a finger holds the photo. [onEnded] when it played through once. Drawn on a
  * TextureView, so it zooms and moves with the photo.
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun MotionVideo(item: MediaItem, length: Long, playing: Boolean, loop: Boolean, onEnded: () -> Unit, modifier: Modifier = Modifier) {
+fun MotionVideo(item: MediaItem, length: Long, playing: Boolean, loop: Boolean, sound: Boolean, onEnded: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val ended by rememberUpdatedState(onEnded)
@@ -123,6 +123,8 @@ fun MotionVideo(item: MediaItem, length: Long, playing: Boolean, loop: Boolean, 
             player.release()
         }
     }
+    // Sound only for a hold in an opening whose sound was turned on (SPEC §7.5); never the audio focus taken from other apps' music
+    LaunchedEffect(sound) { player.volume = if (sound) 1f else 0f }
     LaunchedEffect(playing, loop) {
         player.repeatMode = if (loop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         if (playing) {

@@ -167,4 +167,19 @@
     <string name="title_no_location">No location</string>
     <!-- Stage S2a after the owner's test: the photo's zone after its time in Info, when it isn't the phone's (mine) -->
     <string name="format_time_zone">%1$s (%2$s)</string>
+    <!-- Stage S3 -->
+    <string name="content_description_frame_back">Previous frame</string>
+    <string name="content_description_frame_forward">Next frame</string>
+    <string name="content_description_pause">Pause</string>
+    <string name="content_description_play">Play</string>
+    <string name="content_description_replay">Play again</string>
+    <string name="content_description_sound_off">Turn sound off</string>
+    <string name="content_description_sound_on">Turn sound on</string>
+    <string name="content_description_speed">Speed: %1$s×</string>
+    <string name="format_video_details">%1$s, %2$s, %3$s fps</string>
+    <string name="label_hdr_video">HDR (%1$s)</string>
+    <string name="label_no_sound">no sound</string>
+    <string name="label_sound_mono">mono sound</string>
+    <string name="label_sound_stereo">stereo sound</string>
+    <string name="label_speed">%1$s×</string>
 </resources>

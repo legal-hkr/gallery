@@ -166,4 +166,19 @@
     <string name="title_no_location">Brak lokalizacji</string>
     <!-- Stage S2a after the owner's test: the photo's zone after its time in Info, when it isn't the phone's (mine) -->
     <string name="format_time_zone">%1$s (%2$s)</string>
+    <!-- Stage S3 -->
+    <string name="content_description_frame_back">Poprzednia klatka</string>
+    <string name="content_description_frame_forward">Następna klatka</string>
+    <string name="content_description_pause">Wstrzymaj</string>
+    <string name="content_description_play">Odtwórz</string>
+    <string name="content_description_replay">Odtwórz ponownie</string>
+    <string name="content_description_sound_off">Wyłącz dźwięk</string>
+    <string name="content_description_sound_on">Włącz dźwięk</string>
+    <string name="content_description_speed">Prędkość: %1$s×</string>
+    <string name="format_video_details">%1$s, %2$s, %3$s kl./s</string>
+    <string name="label_hdr_video">HDR (%1$s)</string>
+    <string name="label_no_sound">bez dźwięku</string>
+    <string name="label_sound_mono">dźwięk mono</string>
+    <string name="label_sound_stereo">dźwięk stereo</string>
+    <string name="label_speed">%1$s×</string>
 </resources>
