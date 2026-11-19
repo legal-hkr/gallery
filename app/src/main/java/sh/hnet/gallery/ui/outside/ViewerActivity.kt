@@ -7,11 +7,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -123,7 +122,8 @@ private fun OutsideViewer(intent: Intent?, secure: Boolean, onClose: () -> Unit,
     }
 
     CompositionLocalProvider(LocalConsent provides consent, LocalMediaActions provides actions, LocalMediaOrigins provides remember { MediaOrigins() }) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        // A surface, so text without its own colour gets the theme's (as the picker: black in the dark theme otherwise)
+        Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxSize()) {
             opening?.let { now ->
                 key(now) {
                     ViewerScreen(

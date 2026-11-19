@@ -109,3 +109,22 @@ class StoragePathsTest {
         assertEquals(null, StoragePaths.split("/data/user/0/x/a.jpg", "external_primary"))
     }
 }
+
+class PickRequestTest {
+    @Test
+    fun typesAndKinds() {
+        val photos = PickRequest.of("image/*", null, multiple = true)
+        assertTrue(photos.accepts("image/jpeg"))
+        assertFalse(photos.accepts("video/mp4"))
+        assertEquals(PickRequest.Kind.PHOTOS, photos.kind)
+        // The list wins over the type
+        val list = PickRequest.of("*/*", arrayOf("image/png", "video/mp4"), multiple = false)
+        assertTrue(list.accepts("video/mp4"))
+        assertFalse(list.accepts("image/jpeg"))
+        assertEquals(PickRequest.Kind.ITEMS, list.kind)
+        // Anything: every photo and video
+        assertTrue(PickRequest.of("*/*", null, false).accepts("video/quicktime"))
+        assertTrue(PickRequest.of(null, null, false).accepts("image/heic"))
+        assertEquals(PickRequest.Kind.VIDEOS, PickRequest.of("vnd.android.cursor.dir/video", null, false).kind)
+    }
+}

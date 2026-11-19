@@ -108,6 +108,8 @@ fun AlbumsScreen(
     onOpenFolder: (FolderKey) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenTrash: () -> Unit,
+    /** A new album: its page with the picker over it (SPEC-albums §9.6). */
+    onNewAlbum: (Long) -> Unit = onOpenAlbum,
     viewModel: AlbumsViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -231,8 +233,8 @@ fun AlbumsScreen(
     if (naming) {
         AlbumNameDialog(stringResource(R.string.title_new_album), "", stringResource(R.string.button_create), albumNamesTaken(), onDismiss = { naming = false }) { name ->
             naming = false
-            // A new album opens on its empty state: items come in through Add to album (D13; the picker comes with S5)
-            scope.launch { onOpenAlbum(viewModel.create(name)) }
+            // A new album opens the picker over its page; closed, the album stays empty on its empty state (SPEC-albums §9.6, D19)
+            scope.launch { onNewAlbum(viewModel.create(name)) }
         }
     }
 }
@@ -261,7 +263,7 @@ private fun AlbumSelectionToolbar(chosen: List<AlbumEntry>, onPin: (Boolean) -> 
 
 /** A collection's tonal tile (SPEC §9.2): 64 dp, `surface-container`, 16 dp corners, the icon in its box, the name and the count. */
 @Composable
-private fun CollectionTile(@DrawableRes icon: Int, name: String, count: String?, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun CollectionTile(@DrawableRes icon: Int, name: String, count: String?, enabled: Boolean = true, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Row(
         Modifier
@@ -328,7 +330,7 @@ private fun AlbumsHeader(sort: String, onSort: (String) -> Unit) {
  * Selecting, it takes the system's selected-tile pattern (SPEC §5.2).
  */
 @Composable
-private fun AlbumTile(album: AlbumEntry, name: String, count: String, selecting: Boolean, selected: Boolean, onLongClick: () -> Unit, onClick: () -> Unit) {
+internal fun AlbumTile(album: AlbumEntry, name: String, count: String, selecting: Boolean, selected: Boolean, onLongClick: () -> Unit, onClick: () -> Unit) {
     val scheme = MaterialTheme.colorScheme
     Column(Modifier.clip(RoundedCornerShape(16.dp)).combinedClickable(onLongClick = onLongClick, onClick = onClick)) {
         SelectableFrame(selecting, selected, 16.dp, Modifier.fillMaxWidth().aspectRatio(1f)) {

@@ -328,4 +328,14 @@
     <string name="label_outside_gallery">Outside Gallery</string>
     <!-- Stage S5b -->
     <string name="msg_saved_to_downloads">Saved to Downloads</string>
+    <!-- Stage S5c -->
+    <string name="desc_cannot_pick">Can’t be chosen here</string>
+    <string name="button_done">Done</string>
+    <string name="title_pick_item">Choose a photo or video</string>
+    <string name="title_pick_items">Choose photos or videos</string>
+    <string name="title_pick_photo">Choose a photo</string>
+    <string name="title_pick_photos">Choose photos</string>
+    <string name="title_pick_video">Choose a video</string>
+    <string name="title_pick_videos">Choose videos</string>
+    <string name="title_pick_for_album">Add to %1$s</string>
 </resources>

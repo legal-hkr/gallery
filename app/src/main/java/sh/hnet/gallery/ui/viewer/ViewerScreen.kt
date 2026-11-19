@@ -153,6 +153,8 @@ fun ViewerScreen(
     trash: Boolean = false,
     album: Long? = null,
     revealed: Boolean = true,
+    /** Opened by the picker's long press to check an item (SPEC §17.4): Info is the only action. */
+    readOnly: Boolean = false,
     extra: List<MediaItem> = emptyList(),
     locked: Boolean = false,
     unlock: (() -> Unit) -> Unit = { it() },
@@ -418,7 +420,11 @@ fun ViewerScreen(
                 )
             }
             val toolbar: @Composable () -> Unit = {
-                if (item.outside) {
+                if (readOnly) {
+                    HorizontalFloatingToolbar(expanded = true) {
+                        TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), { info = true })
+                    }
+                } else if (item.outside) {
                     // A file from outside (SPEC §17.2, SPEC-albums §17.2): Share, Save to phone, Info, Open with – nothing that changes it
                     OutsideToolbar(
                         onShare = { actions.share(listOf(item)) },
@@ -507,14 +513,14 @@ fun ViewerScreen(
                 val folderShown = sources?.let { SourceStore.stateOf(item.folder, it, newFolders) != SourceState.HIDDEN } == true
                 InfoSheet(
                     item, fact, hdr, landscape, playback.takeIf { it.item == item.id },
-                    onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) },
+                    onChangeDate = if (readOnly) null else ({ date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }),
                     onDismiss = { info = false },
                     // The sheet is a window of its own, above anything the viewer's host lays over it: it closes as the album opens (owner's test of S4b1)
-                    onOpenFolder = if (folderShown && !trash) ({
+                    onOpenFolder = if (folderShown && !trash && !readOnly) ({
                         info = false
                         onOpenFolder(item)
                     }) else null,
-                    albums = if (trash) emptyList() else albumsOf(item.id),
+                    albums = if (trash || readOnly) emptyList() else albumsOf(item.id),
                     onOpenAlbum = { id ->
                         info = false
                         openAlbum(id)

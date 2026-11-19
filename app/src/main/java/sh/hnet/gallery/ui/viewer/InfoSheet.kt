@@ -133,7 +133,7 @@ fun InfoSheet(
     hdr: Boolean,
     landscape: Boolean,
     playback: ViewerPlayer.State?,
-    onChangeDate: (LocalDate, LocalTime) -> Unit,
+    onChangeDate: ((LocalDate, LocalTime) -> Unit)?,
     onDismiss: () -> Unit,
     onOpenFolder: (() -> Unit)? = null,
     albums: List<Pair<Long, String>> = emptyList(),
@@ -183,7 +183,7 @@ fun InfoSheet(
             val count = rows.size + if (albums.isNotEmpty()) 1 else 0
             rows.forEachIndexed { index, row ->
                 InfoRow(index, count, row, trailing = when {
-                    row.date && !item.video && item.mime in DATE_WRITABLE -> {
+                    row.date && onChangeDate != null && !item.video && item.mime in DATE_WRITABLE -> {
                         { TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.content_description_edit_date), { pickingDate = true }) }
                     }
                     row.open != null -> {
@@ -224,7 +224,7 @@ fun InfoSheet(
             confirmButton = {
                 TextButton(onClick = {
                     pickedDate = null
-                    onChangeDate(date, LocalTime.of(picker.hour, picker.minute))
+                    onChangeDate?.invoke(date, LocalTime.of(picker.hour, picker.minute))
                 }) { Text(stringResource(R.string.button_save)) }
             },
             dismissButton = { TextButton(onClick = { pickedDate = null }) { Text(stringResource(R.string.button_cancel)) } },

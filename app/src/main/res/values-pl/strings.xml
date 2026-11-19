@@ -329,4 +329,14 @@
     <string name="label_outside_gallery">Spoza Galerii</string>
     <!-- Stage S5b -->
     <string name="msg_saved_to_downloads">Zapisano w Pobranych</string>
+    <!-- Stage S5c -->
+    <string name="desc_cannot_pick">Nie można tu wybrać</string>
+    <string name="button_done">Gotowe</string>
+    <string name="title_pick_item">Wybierz zdjęcie lub film</string>
+    <string name="title_pick_items">Wybierz zdjęcia lub filmy</string>
+    <string name="title_pick_photo">Wybierz zdjęcie</string>
+    <string name="title_pick_photos">Wybierz zdjęcia</string>
+    <string name="title_pick_video">Wybierz film</string>
+    <string name="title_pick_videos">Wybierz filmy</string>
+    <string name="title_pick_for_album">Dodaj do albumu %1$s</string>
 </resources>

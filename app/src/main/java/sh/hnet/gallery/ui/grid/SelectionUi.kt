@@ -34,6 +34,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +73,15 @@ class SelectionState {
 
 @Composable
 fun rememberSelection(): SelectionState = remember { SelectionState() }
+
+/**
+ * A selection that outlives the activity being made again (a change of dark theme, the process ended in the
+ * background): the picker's choice is the user's work (owner's test of S5c: the theme's change lost it).
+ */
+@Composable
+fun rememberSaveableSelection(): SelectionState = rememberSaveable(
+    saver = Saver(save = { it.selected.toLongArray() }, restore = { saved -> SelectionState().apply { selected = saved.toSet() } }),
+) { SelectionState() }
 
 /** Set by a tab's screen while it selects: the shell hides the navigation bar, the selection's toolbar takes its place (SPEC §5.1). */
 val LocalHideNavigationBar = compositionLocalOf<MutableState<Boolean>?> { null }

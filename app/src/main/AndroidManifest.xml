@@ -78,6 +78,32 @@
             </intent-filter>
         </activity>
 
+        <!-- Picking for other apps (SPEC §17.4, LOGIKA §16.6): GET_CONTENT and PICK for photos and videos. Portrait as
+             the app; the long press's viewer turns with the phone as inside the app (D1) -->
+        <activity
+            android:name=".ui.pick.PickerActivity"
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@style/Theme.Gallery"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PICK" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="vnd.android.cursor.dir/image" />
+                <data android:mimeType="vnd.android.cursor.dir/video" />
+            </intent-filter>
+        </activity>
+
         <!-- Hands the copies made for a share to the app the user picks; nothing else is reachable -->
         <provider
             android:name="androidx.core.content.FileProvider"

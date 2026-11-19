@@ -73,6 +73,7 @@ import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.model.CollectionKind
 import sh.hnet.gallery.model.FolderKey
+import sh.hnet.gallery.model.PickRequest
 import sh.hnet.gallery.model.TimelineFolders
 import sh.hnet.gallery.ui.albums.AlbumPage
 import sh.hnet.gallery.ui.albums.AlbumsScreen
@@ -91,6 +92,7 @@ import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.components.rememberConsent
 import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
 import sh.hnet.gallery.ui.photos.PhotosScreen
+import sh.hnet.gallery.ui.pick.PickerScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
 import sh.hnet.gallery.ui.settings.BackupScreen
@@ -304,10 +306,23 @@ fun GalleryApp() {
                             onOpenFolder = { currentStack.add(Screen.Folder(it.key)) },
                             onOpenAlbum = { currentStack.add(Screen.Album(it)) },
                             onOpenTrash = { currentStack.add(Screen.Trash) },
+                            onNewAlbum = { id ->
+                                currentStack.add(Screen.Album(id))
+                                currentStack.add(Screen.PickForAlbum(id))
+                            },
                         )
                     }
                     entry<Screen.Collection> { key -> AlbumPage(PageKey.Collection(CollectionKind.of(key.kind)), onBack = back, onOpen = { viewer = it }) }
-                    entry<Screen.Album> { key -> AlbumPage(PageKey.User(key.id), onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Album> { key -> AlbumPage(PageKey.User(key.id), onBack = back, onOpen = { viewer = it }, onAddPhotos = { currentStack.add(Screen.PickForAlbum(key.id)) }) }
+                    entry<Screen.PickForAlbum> { key ->
+                        val albums by app.albums.albums.collectAsStateWithLifecycle()
+                        val name = albums?.firstOrNull { it.id == key.id }?.name.orEmpty()
+                        // Done adds the chosen items and returns to the album; Close leaves it as it was (SPEC-albums §9.6)
+                        PickerScreen(PickRequest.ALL, stringResource(R.string.title_pick_for_album, name), onClose = back, onLook = { viewer = it }, onDone = { items ->
+                            app.appScope.launch { app.albums.add(key.id, items, System.currentTimeMillis()) }
+                            back()
+                        })
+                    }
                     entry<Screen.Folder> { key ->
                         val folder = FolderKey.of(key.key)
                         if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }

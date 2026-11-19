@@ -79,7 +79,7 @@ import sh.hnet.gallery.ui.viewer.ViewerRequest
  * emptied, closes the page. Slideshow is S8's (disabled, D5).
  */
 @Composable
-fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, viewModel: PageViewModel = viewModel(key = key.toString())) {
+fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, onAddPhotos: (() -> Unit)? = null, viewModel: PageViewModel = viewModel(key = key.toString())) {
     LaunchedEffect(key) { viewModel.show(key) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
@@ -226,11 +226,11 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         if (allIds.isEmpty()) {
             when (key) {
                 is PageKey.Collection -> EmptyState(key.kind.icon, stringResource(key.kind.empty))
-                // An empty user album (SPEC-albums §9.9): Add photos opens the picker of S5 – disabled until then (D13, D5)
+                // An empty user album (SPEC-albums §9.9): Add photos opens the picker (S5c)
                 is PageKey.User -> EmptyState(R.drawable.ic_photo_album, stringResource(R.string.msg_album_empty)) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.widthIn(max = 296.dp)) {
                         Text(stringResource(R.string.desc_album_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                        FilledTonalButton(onClick = {}, enabled = false) {
+                        FilledTonalButton(onClick = { onAddPhotos?.invoke() }, enabled = onAddPhotos != null) {
                             Icon(painterResource(R.drawable.ic_add_photo_alternate), contentDescription = null, modifier = Modifier.size(18.dp))
                             Text(stringResource(R.string.button_add_photos), modifier = Modifier.padding(start = 8.dp))
                         }

@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -64,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -135,13 +137,23 @@ fun MediaGrid(
     topCount: Int = 0,
     selection: SelectionState? = null,
     bottomPadding: Dp = 0.dp,
+    /** Picking several (SPEC §17.4): the circles show before anything is chosen, a tap always toggles. */
+    alwaysSelecting: Boolean = false,
+    /** Picking: items of the types asked for; the others are dimmed and do nothing (SPEC §17.4). */
+    pickable: (MediaItem) -> Boolean = { true },
+    /** A long press other than selecting (the picker's look at an item, SPEC §17.4). */
+    onHold: ((MediaItem) -> Unit)? = null,
     onOpen: (MediaItem) -> Unit = {},
 ) {
     val timeline = if (step.months) months else days
     // Selecting (SPEC §5.3): the tiles in reading order, and each header's tiles
     val order = remember(timeline) { timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id } }
     val orderIndex = remember(order) { order.withIndex().associate { (i, id) -> id to i } }
-    val groups = remember(timeline) { Selection.groups(timeline.entries) }
+    // A header's circle takes only the tiles that can be picked (SPEC §17.4)
+    val groups = remember(timeline) {
+        val blocked = timeline.entries.mapNotNullTo(HashSet()) { (it as? TimelineEntry.Tile)?.item?.takeIf { item -> !pickable(item) }?.id }
+        Selection.groups(timeline.entries).mapValues { (_, ids) -> if (blocked.isEmpty()) ids else ids.filter { it !in blocked } }
+    }
     var drag by remember { mutableStateOf<DragRun?>(null) }
     val haptics = LocalHapticFeedback.current
     var anchor by remember { mutableStateOf<Anchor?>(null) }
@@ -358,7 +370,7 @@ fun MediaGrid(
                 when (entry) {
                     is TimelineEntry.Day, is TimelineEntry.Month -> {
                         val group = groups[entry.key].orEmpty()
-                        val pick = if (selection?.active == true && group.isNotEmpty()) {
+                        val pick = if ((alwaysSelecting || selection?.active == true) && selection != null && group.isNotEmpty()) {
                             HeaderPick(selected = selection.selected.containsAll(group)) { selection.selected = Selection.toggleGroup(selection.selected, group) }
                         } else null
                         val measured = Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height }
@@ -370,9 +382,13 @@ fun MediaGrid(
                         cellPx.toInt(),
                         corner,
                         marks = !step.months,
-                        selecting = selection?.active == true,
+                        selecting = alwaysSelecting || selection?.active == true,
                         selected = selection?.selected?.contains(entry.item.id) == true,
-                        onLongClick = if (selection == null) null else ({
+                        enabled = pickable(entry.item),
+                        onLongClick = if (onHold != null) ({
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onHold(entry.item)
+                        }) else if (selection == null) null else ({
                             // Selecting starts with this tile, or a long press while selecting flips it; keeping the finger down drags a run
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             val base = selection.selected
@@ -381,9 +397,11 @@ fun MediaGrid(
                             orderIndex[entry.item.id]?.let { index -> drag = DragRun(index, base, select) }
                         }),
                         onClick = {
-                            if (selection?.active == true) {
+                            if (!pickable(entry.item)) {
+                                // Not of a type asked for: nothing (SPEC §17.4)
+                            } else if (alwaysSelecting || selection?.active == true) {
                                 // While selecting a tap toggles, it never opens the viewer (SPEC §5.2)
-                                selection.toggle(entry.item.id)
+                                selection?.toggle(entry.item.id)
                             } else if (step.months) {
                                 // A tile of the month view opens step 2 at its day, not the viewer (SPEC §4.4)
                                 val info = state.layoutInfo.visibleItemsInfo.firstOrNull { it.key == entry.key }
@@ -522,19 +540,26 @@ private fun Tile(
     modifier: Modifier = Modifier,
     selecting: Boolean = false,
     selected: Boolean = false,
+    enabled: Boolean = true,
     onLongClick: (() -> Unit)? = null,
 ) {
+    val cannot = stringResource(R.string.desc_cannot_pick)
     // The tile is where the viewer flies from and back to (SPEC §6.1)
     SelectableFrame(
-        selecting,
+        selecting && enabled,
         selected,
         corner,
-        // The ripple keeps the tile's corners
-        modifier.aspectRatio(1f).mediaOrigin(item.id.toString(), corner).clip(RoundedCornerShape(corner)).combinedClickable(onLongClick = onLongClick, onClick = onClick),
+        // The ripple keeps the tile's corners; a tile that can't be picked is dimmed as M3's disabled content
+        modifier
+            .aspectRatio(1f)
+            .mediaOrigin(item.id.toString(), corner)
+            .clip(RoundedCornerShape(corner))
+            .combinedClickable(onLongClick = onLongClick, onClick = onClick)
+            .then(if (enabled) Modifier else Modifier.alpha(0.38f).semantics { stateDescription = cannot }),
     ) {
         MediaThumbnail(item, px, Modifier.fillMaxSize())
-        // Marks are hidden while selecting: the circle takes the corner
-        if (!marks || selecting) return@SelectableFrame
+        // Marks are hidden while selecting (the circle takes the corner) and on a tile that can't be picked
+        if (!marks || selecting || !enabled) return@SelectableFrame
         when {
             item.video -> Mark(Modifier.align(Alignment.TopEnd)) {
                 Text(formatDuration(item.duration), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)

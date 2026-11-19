@@ -25,6 +25,9 @@ sealed interface Screen : NavKey {
     @Serializable data class Folder(val key: String) : Screen
     /** A user album (SPEC-albums §9.7), by its id. */
     @Serializable data class Album(val id: Long) : Screen
+
+    /** The picker adding to a user album (SPEC-albums §9.6, §9.9; LOGIKA §16.6). */
+    @Serializable data class PickForAlbum(val id: Long) : Screen
     @Serializable data object Settings : Screen
     @Serializable data object SettingsPhotos : Screen
     @Serializable data object SettingsViewer : Screen
