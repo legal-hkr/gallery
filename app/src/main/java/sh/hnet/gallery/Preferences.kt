@@ -3,12 +3,15 @@ package sh.hnet.gallery
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import sh.hnet.gallery.backup.BackupSettings
 import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.model.GridStep
 import sh.hnet.gallery.model.TimelineFolders
@@ -45,6 +48,32 @@ class Preferences(private val context: Context) {
 
     suspend fun setNewAlbumsInPhotos(on: Boolean) = context.settings.edit { it[NEW_ALBUMS_IN_PHOTOS] = on }
 
+    /** How many of the two offers of Media management were shown (SPEC §10.6): the wizard's, then one after the first system dialog. */
+    val mediaManagementOffers: Flow<Int> = context.settings.data.map { it[MEDIA_MANAGEMENT_OFFERS] ?: 0 }.distinctUntilChanged()
+
+    suspend fun markMediaManagementOffered() = context.settings.edit { it[MEDIA_MANAGEMENT_OFFERS] = ((it[MEDIA_MANAGEMENT_OFFERS] ?: 0) + 1).coerceAtMost(2) }
+
+    /** Every setting as the backup holds it (SPEC §20.2). */
+    suspend fun snapshot(): BackupSettings {
+        val p = context.settings.data.first()
+        return BackupSettings(
+            gridStep = GridStep.of(p[GRID_STEP]).name,
+            timelineOn = p[TIMELINE_ON].orEmpty().sorted(),
+            timelineOff = p[TIMELINE_OFF].orEmpty().sorted(),
+            newAlbumsInPhotos = p[NEW_ALBUMS_IN_PHOTOS] ?: true,
+            mediaManagementOffers = p[MEDIA_MANAGEMENT_OFFERS] ?: 0,
+        )
+    }
+
+    /** A backup's settings: each one the file holds replaces the current value; one it lacks stays as it is (family rule). */
+    suspend fun restore(backup: BackupSettings) = context.settings.edit { p ->
+        backup.gridStep?.let { p[GRID_STEP] = GridStep.of(it).name }
+        backup.timelineOn?.let { p[TIMELINE_ON] = it.filter { key -> FolderKey.of(key) != null }.toSet() }
+        backup.timelineOff?.let { p[TIMELINE_OFF] = it.filter { key -> FolderKey.of(key) != null }.toSet() }
+        backup.newAlbumsInPhotos?.let { p[NEW_ALBUMS_IN_PHOTOS] = it }
+        backup.mediaManagementOffers?.let { p[MEDIA_MANAGEMENT_OFFERS] = it.coerceIn(0, 2) }
+    }
+
     /** Restore defaults (Settings › Reset): every setting of this store back to its default. */
     suspend fun restoreDefaults() = context.settings.edit { it.clear() }
 
@@ -53,5 +82,6 @@ class Preferences(private val context: Context) {
         val TIMELINE_ON = stringSetPreferencesKey("timeline_on")
         val TIMELINE_OFF = stringSetPreferencesKey("timeline_off")
         val NEW_ALBUMS_IN_PHOTOS = booleanPreferencesKey("new_albums_in_photos")
+        val MEDIA_MANAGEMENT_OFFERS = intPreferencesKey("media_management_offers")
     }
 }

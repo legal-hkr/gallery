@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,7 +42,14 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
                     _items.value = emptyList()
                     return@collectLatest
                 }
-                safely { load(firstScreen = _items.value == null) }
+                val first = _items.value == null
+                safely { load(firstScreen = first) }
+                // Access just given: MediaStore may answer from what it knew of the app's permissions a moment ago and list nothing
+                // (owner's test of S1b, 19 Nov 2026: nothing after the wizard's grant), so everything is read once more when that settles
+                if (!first) scope.launch(Dispatchers.IO) {
+                    delay(ACCESS_SETTLE_MS)
+                    safely { load(firstScreen = false) }
+                }
                 source.changes().debounce(CHANGE_DEBOUNCE_MS).collect { safely { refresh() } }
             }
         }
@@ -103,5 +111,8 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
 
         /** MediaStore announces a change many times; one refresh after it settles (SPEC §22.3). */
         const val CHANGE_DEBOUNCE_MS = 300L
+
+        /** How long after a change of access the list is read again. */
+        const val ACCESS_SETTLE_MS = 2_000L
     }
 }

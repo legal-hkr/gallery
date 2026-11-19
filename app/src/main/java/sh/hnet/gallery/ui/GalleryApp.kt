@@ -11,10 +11,12 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -33,8 +35,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -43,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -50,18 +55,23 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import kotlinx.coroutines.delay
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
+import sh.hnet.gallery.ui.components.MediaAccess
+import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
+import sh.hnet.gallery.ui.settings.BackupScreen
 import sh.hnet.gallery.ui.settings.LanguageScreen
 import sh.hnet.gallery.ui.settings.LicensesScreen
 import sh.hnet.gallery.ui.settings.PhotosSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
+import sh.hnet.gallery.ui.welcome.WizardScreen
 
 /**
  * The app's shell (as Music's, SPEC §3): one back stack per navigation bar destination, snackbars.
@@ -107,10 +117,27 @@ fun GalleryApp() {
     val fastEffects: FiniteAnimationSpec<Float> = motion.fastEffectsSpec()
     val shift = with(LocalDensity.current) { 30.dp.roundToPx() }
 
+    val messages = rememberCoroutineScope()
+    // The first run (SPEC §19): the wizard lies over everything until it is done, as Contacts'
+    var wizard by rememberSaveable { mutableStateOf(!MediaAccess.wizardDone(appContext)) }
+
+    // Reading the files' facts (owner's decision D4): the status card once a reading takes over a second, never for a single new shot
+    val reading by app.facts.progress.collectAsStateWithLifecycle()
+    var readingShown by remember { mutableStateOf(false) }
+    LaunchedEffect(reading != null) {
+        if (reading != null) {
+            delay(1000)
+            readingShown = true
+        } else {
+            readingShown = false
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
-            SnackbarHost(snackbars) { data ->
+            if (!wizard) SnackbarHost(snackbars) { data ->
                 Snackbar(data, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.padding(horizontal = 12.dp))
             }
         },
@@ -132,6 +159,7 @@ fun GalleryApp() {
             }
         },
     ) { padding ->
+        Box(Modifier.fillMaxSize()) {
         AnimatedContent(
             targetState = tab,
             // Fade through between destinations
@@ -178,6 +206,7 @@ fun GalleryApp() {
                             onBack = back,
                             onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
+                            onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
                             onOpenAbout = { currentStack.add(Screen.SettingsAbout) },
                         )
@@ -191,6 +220,7 @@ fun GalleryApp() {
                         )
                     }
                     entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
+                    entry<Screen.SettingsBackup> { BackupScreen(onBack = back, snackbars = snackbars, messageScope = messages) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
                     entry<Screen.SettingsLanguage> { LanguageScreen(onBack = back) }
                     entry<Screen.SettingsReset> { ResetScreen(onBack = back) }
@@ -199,5 +229,30 @@ fun GalleryApp() {
                 },
             )
         }
+        val progress = reading
+        if (readingShown && progress != null && !wizard) {
+            StatusCard(
+                title = stringResource(R.string.status_reading),
+                line = stringResource(R.string.progress_read, progress.done, progress.total),
+                progress = progress.done.toFloat() / progress.total.coerceAtLeast(1),
+                // Above the navigation bar on a tab's root (the content ends there), above the system's navigation on pages
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .then(if (stack.size == 1) Modifier else Modifier.navigationBarsPadding())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp + padding.calculateBottomPadding()),
+            )
+        }
+        }
+    }
+    if (wizard) {
+        WizardScreen(snackbars, messages, onDone = {
+            MediaAccess.markWizardDone(appContext)
+            wizard = false
+        })
+        // The restore's messages show over the wizard, above the system's navigation area
+        SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) { data ->
+            Snackbar(data, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.padding(horizontal = 12.dp))
+        }
+    }
     }
 }

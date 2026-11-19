@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
+import sh.hnet.gallery.backup.BackupManager
 import sh.hnet.gallery.data.MediaIndex
 import sh.hnet.gallery.data.MediaSource
 import sh.hnet.gallery.facts.FactReader
@@ -26,6 +27,9 @@ class GalleryApplication : Application() {
 
     /** What the files say beyond MediaStore, read while the app runs (LOGIKA §2.3). */
     val facts: FactScanner by lazy { FactScanner(database.factDao(), FactReader(contentResolver), appScope, media::canLocate) }
+
+    /** Backup and restore of the settings (SPEC §20.2). */
+    val backup: BackupManager by lazy { BackupManager(this, getSharedPreferences("stamps", MODE_PRIVATE)) }
 
     override fun onCreate() {
         super.onCreate()

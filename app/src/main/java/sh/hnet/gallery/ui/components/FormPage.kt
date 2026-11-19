@@ -105,8 +105,8 @@ fun FormPage(
 }
 
 /**
- * The app's mark at 144 dp, as ComfyChair's AppLogo: placed so the note's left edge lines up with
- * text inset by [titleInset], with the empty band under the note cut off.
+ * The app's mark at 144 dp, as ComfyChair's AppLogo: placed so the mark's left edge lines up with
+ * text inset by [titleInset], with the empty band under the mark cut off.
  */
 @Composable
 fun AppLogo(titleInset: Dp, modifier: Modifier = Modifier) {
@@ -128,8 +128,8 @@ fun AppLogo(titleInset: Dp, modifier: Modifier = Modifier) {
 
 private val LOGO_SIZE = 144.dp
 
-/** Where the note starts in ic_launcher_foreground, as a share of its width (x 123 on the 512 grid, moved by 128 on the 768-unit canvas). */
-private const val LOGO_MARK_START = (128f + 123f) / 768f
+/** Where the photo frame starts in ic_launcher_foreground (the owner's icon), as a share of its width (x 96 on the 512 grid, moved by 128 on the 768-unit canvas). */
+private const val LOGO_MARK_START = (128f + 96f) / 768f
 
-/** The empty band below the note, as a share of the height (the note ends at y 426 on the 512 grid). */
-private const val LOGO_EMPTY_BELOW = (768f - 128f - 426f) / 768f
+/** The empty band below the frame, as a share of the height (the frame ends at y 386 on the 512 grid). */
+private const val LOGO_EMPTY_BELOW = (768f - 128f - 386f) / 768f

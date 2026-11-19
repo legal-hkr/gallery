@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <!-- S1: the optional special access "Media management" (SPEC §10.6), offered in the wizard; declared so the system lists the app on its page -->
+    <uses-permission android:name="android.permission.MANAGE_MEDIA" />
 
     <application
         android:name=".GalleryApplication"
