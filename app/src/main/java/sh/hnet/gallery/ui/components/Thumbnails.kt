@@ -39,7 +39,10 @@ import sh.hnet.gallery.model.MediaItem
  * to a few steps, so the grid's steps share what was read.
  */
 object Thumbnails {
-    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 6).toInt()) {
+    // Hardware bitmaps (see [stored]) live in graphics memory, not the app's heap: the budget is half the heap's size rather
+    // than a sixth – a sixth (about 40 MB on a Pixel) held a dozen tiles of the two-column step, and the Albums tab's covers
+    // pushed the Photos tab's out, which then read again on coming back (owner's phone test)
+    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 2).toInt()) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
     }
 
@@ -99,9 +102,9 @@ object Thumbnails {
             val signal = CancellationSignal()
             val handle = currentCoroutineContext().job.invokeOnCompletion { signal.cancel() }
             try {
-                val whole = cache.get(key) ?: resolver.loadThumbnail(item.uri(), Size(size, size), signal).also { cache.put(key, it) }
+                val whole = cache.get(key) ?: stored(resolver.loadThumbnail(item.uri(), Size(size, size), signal)).also { cache.put(key, it) }
                 if (crop && thinForTile(whole, item, px)) {
-                    decodeSquare(resolver, item, size, signal)?.let { square ->
+                    decodeSquare(resolver, item, size, signal)?.let(::stored)?.let { square ->
                         cache.put(squareKey(item, px), square)
                         return@withContext Thumb.Image(square.asImageBitmap())
                     }
@@ -152,13 +155,24 @@ private fun decodeSquare(resolver: ContentResolver, item: MediaItem, size: Int, 
         val left = (targetWidth - side) / 2
         val top = (targetHeight - side) / 2
         decoder.crop = Rect(left, top, left + side, top + side)
-        // Software, as the system's thumbnails: they're drawn and cached alike
+        // Software here; kept as a hardware bitmap as every thumbnail is ([stored])
         decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
     }
 } catch (e: OperationCanceledException) {
     throw e
 } catch (_: Exception) {
     null
+}
+
+/**
+ * The thumbnail as kept: a hardware bitmap, uploaded to the GPU here, off the screen's threads, instead of by the render
+ * thread the first time a tile is drawn while scrolling; the software one is let go. Kept as it is where the copy fails.
+ */
+private fun stored(bitmap: Bitmap): Bitmap {
+    if (bitmap.config == Bitmap.Config.HARDWARE) return bitmap
+    val hardware = bitmap.copy(Bitmap.Config.HARDWARE, false) ?: return bitmap
+    bitmap.recycle()
+    return hardware
 }
 
 /** A thumbnail read, or the sign that it can't be. */
