@@ -8,7 +8,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.hnet.gallery.BuildConfig
+import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.ui.components.MediaManagement
 import sh.hnet.gallery.ui.components.SettingsGroup
@@ -21,8 +23,9 @@ import sh.hnet.gallery.ui.components.SettingsPage
  * tab by the top bar's icon, so with Back.
  */
 @Composable
-fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
+    val removeLocation by (context.applicationContext as GalleryApplication).preferences.shareWithoutLocation.collectAsStateWithLifecycle(true)
     val version = BuildConfig.VERSION_NAME.removePrefix("v")
     val language = appLanguages.firstOrNull { it.tag == currentLanguageTag(context) } ?: appLanguages.first()
     SettingsPage(title = stringResource(R.string.title_settings), onBack = onBack) {
@@ -32,6 +35,13 @@ fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewe
             }
             row { shapes ->
                 SettingsNavigationRow(shapes, R.drawable.ic_imagesmode, stringResource(R.string.settings_viewer), stringResource(R.string.settings_viewer_desc), onClick = onOpenViewer)
+            }
+            row { shapes ->
+                SettingsNavigationRow(
+                    shapes, R.drawable.ic_share, stringResource(R.string.settings_sharing),
+                    stringResource(if (removeLocation) R.string.settings_sharing_removed else R.string.settings_sharing_included),
+                    onClick = onOpenSharing,
+                )
             }
         }
         // Media management (SPEC §20.1, LOGIKA §15.11): whether it is given, and the system's page; read again on every return

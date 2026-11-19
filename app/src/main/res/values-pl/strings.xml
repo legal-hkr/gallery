@@ -308,4 +308,19 @@
     <string name="title_missing_items">Nie znaleziono elementów</string>
     <!-- Stage S4b -->
     <string name="settings_backup_desc">Ustawienia i albumy w pliku JSON</string>
+    <!-- Stage S5a -->
+    <string name="action_include_location">Dołącz lokalizację</string>
+    <string name="action_remove_location">Usuń lokalizację</string>
+    <string name="error_prepare_share">Nie udało się przygotować plików do udostępnienia (%1$d).</string>
+    <string name="meta_location_included">Z lokalizacją (oryginalne pliki).</string>
+    <string name="meta_location_kept">Nie można usunąć lokalizacji z niektórych plików (%1$d). Zostaną udostępnione z lokalizacją.</string>
+    <string name="meta_location_removed">Bez lokalizacji (%1$d).</string>
+    <string name="progress_removing_location">Usuwanie lokalizacji z filmów: %1$d z %2$d</string>
+    <string name="status_preparing_share">Przygotowywanie do udostępnienia…</string>
+    <!-- Stage S5a -->
+    <string name="desc_remove_location">Udostępniane zdjęcia i filmy są kopiami bez lokalizacji. Przy każdym udostępnianiu można to zmienić.</string>
+    <string name="label_remove_location">Usuwaj lokalizację</string>
+    <string name="settings_sharing">Udostępnianie</string>
+    <string name="settings_sharing_included">Lokalizacja: dołączana</string>
+    <string name="settings_sharing_removed">Lokalizacja: usuwana</string>
 </resources>

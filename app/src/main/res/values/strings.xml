@@ -307,4 +307,19 @@
     <string name="title_missing_items">Items not found</string>
     <!-- Stage S4b -->
     <string name="settings_backup_desc">Settings and albums in a JSON file</string>
+    <!-- Stage S5a -->
+    <string name="action_include_location">Include location</string>
+    <string name="action_remove_location">Remove location</string>
+    <string name="error_prepare_share">Couldn’t prepare the files for sharing (%1$d).</string>
+    <string name="meta_location_included">With location (original files).</string>
+    <string name="meta_location_kept">Location can’t be removed from some files (%1$d). They will be shared with their location.</string>
+    <string name="meta_location_removed">Without location (%1$d).</string>
+    <string name="progress_removing_location">Removing location from videos: %1$d of %2$d</string>
+    <string name="status_preparing_share">Preparing to share…</string>
+    <!-- Stage S5a -->
+    <string name="desc_remove_location">Shared photos and videos are copies without location. This can be changed at every share.</string>
+    <string name="label_remove_location">Remove location</string>
+    <string name="settings_sharing">Sharing</string>
+    <string name="settings_sharing_included">Location: included</string>
+    <string name="settings_sharing_removed">Location: removed</string>
 </resources>

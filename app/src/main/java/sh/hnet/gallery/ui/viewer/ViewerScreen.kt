@@ -125,6 +125,7 @@ import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.RenameDialog
 import sh.hnet.gallery.ui.components.TooltipIconButton
+import sh.hnet.gallery.ui.grid.ShareButton
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
 private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
@@ -417,6 +418,7 @@ fun ViewerScreen(
                 } else {
                     Toolbar(
                         item,
+                        onShare = { actions.share(listOf(item)) },
                         onFavorite = { actions.favorite(listOf(item), !item.favorite) },
                         onInfo = { info = true },
                         onDelete = { actions.trash(listOf(item)) { ownTrashed.add(item.id) } },
@@ -566,6 +568,7 @@ private fun Tooltip(label: String, content: @Composable () -> Unit) {
 @Composable
 private fun Toolbar(
     item: MediaItem,
+    onShare: () -> Unit,
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
     onDelete: () -> Unit,
@@ -579,7 +582,7 @@ private fun Toolbar(
 ) {
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
-        TooltipIconButton(R.drawable.ic_share, stringResource(R.string.action_share), {}, enabled = false)
+        ShareButton(onShare)
         if (item.mime !in NOT_EDITABLE) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), {}, enabled = false)
         TooltipIconButton(
             if (item.favorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite,

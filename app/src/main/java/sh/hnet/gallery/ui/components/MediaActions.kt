@@ -1,16 +1,21 @@
 package sh.hnet.gallery.ui.components
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.MediaWriter
+import sh.hnet.gallery.data.ShareMaker
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.ui.share.ShareSheet
 
 /**
  * The actions on items shared by every grid and the viewer (SPEC §5.5, §6.4, §6.5, §11): each goes
@@ -25,6 +30,42 @@ class MediaActions(
     private val snackbars: SnackbarHostState,
     private val messageScope: CoroutineScope,
 ) {
+    /** Starts an activity from the shell's activity (the share sheet); set by the shell. */
+    var start: (Intent) -> Unit = {}
+
+    /** Shows the family's error details (Show of a failure's snackbar); set by the shell. */
+    var showError: (ErrorDetails) -> Unit = {}
+
+    private var sharing: Job? = null
+
+    /**
+     * Share (SPEC §14): prepared – copies without location by Settings › Sharing, or the originals – then the system's
+     * sheet; a failure says how many files couldn't be prepared, with Show.
+     */
+    fun share(items: List<MediaItem>, removeLocation: Boolean? = null, onDone: () -> Unit = {}) {
+        if (items.isEmpty()) return
+        val app = context.applicationContext as GalleryApplication
+        sharing?.cancel()
+        sharing = messageScope.launch {
+            // The setting, or the share sheet's choice for this share
+            val remove = removeLocation ?: app.preferences.shareWithoutLocation.first()
+            when (val prepared = app.sharing.prepare(items, app.facts.facts.value.orEmpty(), remove, app.media.canLocate())) {
+                is ShareMaker.Prepared.Ready -> {
+                    onDone()
+                    start(ShareSheet.chooser(context, app.sharing, prepared, items.map { it.id }, remove))
+                }
+                is ShareMaker.Prepared.Failed -> messageScope.reportFailure(
+                    snackbars, context.getString(R.string.error_prepare_share, prepared.count), prepared.details, context.getString(R.string.button_show), showError,
+                )
+            }
+        }
+    }
+
+    /** The status card's Cancel (SPEC §14.3): what is done stays in the cache, nothing is shared. */
+    fun cancelShare() {
+        sharing?.cancel()
+    }
+
     /** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal or a failure changes nothing. */
     fun apply(change: MediaWriter.Change, then: () -> Unit) {
         when (change) {

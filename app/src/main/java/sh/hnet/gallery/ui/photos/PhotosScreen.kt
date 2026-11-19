@@ -181,6 +181,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 chosen,
                                 // Both end the selection once done (owner's test of S4a, over SPEC §5.4: as in the family's other apps)
                                 onFavorite = { favorite -> actions.favorite(chosen, favorite, say = true) { selection.clear() } },
+                                onShare = { actions.share(chosen) { selection.clear() } },
                                 onAddToAlbum = { adding = chosen },
                                 onDelete = { actions.trash(chosen) { selection.clear() } },
                                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),

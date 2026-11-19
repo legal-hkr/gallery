@@ -20,12 +20,14 @@ import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
@@ -36,10 +38,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.ui.components.TooltipIconButton
@@ -116,6 +122,7 @@ fun SelectionTopBar(count: Int, allSelected: Boolean, onClose: () -> Unit, onSel
 @Composable
 fun MediaSelectionToolbar(
     items: List<MediaItem>,
+    onShare: () -> Unit,
     onFavorite: (Boolean) -> Unit,
     onAddToAlbum: () -> Unit,
     onDelete: () -> Unit,
@@ -130,8 +137,7 @@ fun MediaSelectionToolbar(
         expandedShadowElevation = 3.dp,
         modifier = modifier,
     ) {
-        // S5
-        TooltipIconButton(R.drawable.ic_share, stringResource(R.string.action_share), {}, enabled = false)
+        ShareButton(onShare)
         TooltipIconButton(
             if (allFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite,
             stringResource(if (allFavorite) R.string.action_unfavorite else R.string.action_favorite),
@@ -210,3 +216,27 @@ fun SelectionMark(selected: Boolean, modifier: Modifier = Modifier) {
         Box(modifier.size(20.dp).background(scheme.surfaceContainer, CircleShape).border(2.dp, scheme.outline, CircleShape))
     }
 }
+
+/**
+ * Share, with the wait shown in its place (SPEC §14.3): after half a second of preparing copies a `LoadingIndicator`
+ * takes the icon's place; after two the shell's status card says how far it is.
+ */
+@Composable
+fun ShareButton(onClick: () -> Unit, enabled: Boolean = true) {
+    val app = LocalContext.current.applicationContext as GalleryApplication
+    val progress by app.sharing.progress.collectAsStateWithLifecycle()
+    var waiting by remember { mutableStateOf(false) }
+    LaunchedEffect(progress != null) {
+        waiting = false
+        if (progress != null) {
+            delay(500)
+            waiting = true
+        }
+    }
+    if (waiting && progress != null) {
+        Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { LoadingIndicator(Modifier.size(32.dp)) }
+    } else {
+        TooltipIconButton(R.drawable.ic_share, stringResource(R.string.action_share), onClick, enabled = enabled)
+    }
+}
+

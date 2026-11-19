@@ -3,6 +3,7 @@
 package sh.hnet.gallery.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -64,6 +65,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
@@ -76,6 +78,8 @@ import sh.hnet.gallery.ui.albums.AlbumPage
 import sh.hnet.gallery.ui.albums.AlbumsScreen
 import sh.hnet.gallery.ui.albums.PageKey
 import sh.hnet.gallery.ui.albums.TrashScreen
+import sh.hnet.gallery.ui.components.ErrorDetails
+import sh.hnet.gallery.ui.components.ErrorDetailsDialog
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.LocalOpenAlbum
@@ -95,6 +99,7 @@ import sh.hnet.gallery.ui.settings.LicensesScreen
 import sh.hnet.gallery.ui.settings.PhotosSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
+import sh.hnet.gallery.ui.settings.SharingSettingsScreen
 import sh.hnet.gallery.ui.settings.ViewerSettingsScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
 import sh.hnet.gallery.ui.viewer.LocalMediaOrigins
@@ -155,7 +160,31 @@ fun GalleryApp() {
     var overViewer by remember { mutableStateOf<Screen?>(null) }
     val origins = remember { MediaOrigins() }
     val consent = rememberConsent()
+    val activity = LocalActivity.current
     val actions = remember(consent) { MediaActions(appContext, MediaWriter(appContext), consent, snackbars, messages) }
+    var errorShown by remember { mutableStateOf<ErrorDetails?>(null) }
+    SideEffect {
+        actions.start = { intent -> activity?.startActivity(intent) }
+        actions.showError = { errorShown = it }
+    }
+    // The share sheet's Include / Remove location: the same items again with the other choice (SPEC §14.2)
+    LaunchedEffect(actions) {
+        app.shareAgain.filterNotNull().collect { again ->
+            app.shareAgain.value = null
+            val byId = app.index.items.value.orEmpty().associateBy { it.id }
+            actions.share(again.ids.mapNotNull { byId[it] }, again.removeLocation)
+        }
+    }
+    // Preparing a share (SPEC §14.3): the status card once it takes over two seconds
+    val shareProgress by app.sharing.progress.collectAsStateWithLifecycle()
+    var shareShown by remember { mutableStateOf(false) }
+    LaunchedEffect(shareProgress != null) {
+        shareShown = false
+        if (shareProgress != null) {
+            delay(2000)
+            shareShown = true
+        }
+    }
     // The second offer of Media management (SPEC §10.6): once, after the first system dialog the user confirmed
     val offers by app.preferences.mediaManagementOffers.collectAsStateWithLifecycle(2)
     var offering by remember { mutableStateOf(false) }
@@ -279,6 +308,7 @@ fun GalleryApp() {
                             onBack = back,
                             onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
                             onOpenViewer = { currentStack.add(Screen.SettingsViewer) },
+                            onOpenSharing = { currentStack.add(Screen.SettingsSharing) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
@@ -295,6 +325,7 @@ fun GalleryApp() {
                     }
                     entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
                     entry<Screen.SettingsViewer> { ViewerSettingsScreen(onBack = back) }
+                    entry<Screen.SettingsSharing> { SharingSettingsScreen(onBack = back) }
                     entry<Screen.SettingsBackup> { BackupScreen(onBack = back, snackbars = snackbars, messageScope = messages) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
                     entry<Screen.SettingsLanguage> { LanguageScreen(onBack = back) }
@@ -304,8 +335,21 @@ fun GalleryApp() {
                 },
             )
         }
+        val sharingNow = shareProgress
+        if (shareShown && sharingNow != null && !wizard) {
+            StatusCard(
+                title = stringResource(R.string.status_preparing_share),
+                line = stringResource(R.string.progress_removing_location, sharingNow.done, sharingNow.total),
+                progress = sharingNow.done.toFloat() / sharingNow.total.coerceAtLeast(1),
+                onCancel = actions::cancelShare,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .then(if (stack.size == 1 && !hideNavigationBar.value) Modifier else Modifier.navigationBarsPadding())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp + padding.calculateBottomPadding()),
+            )
+        }
         val progress = reading
-        if (readingShown && progress != null && !wizard) {
+        if (readingShown && progress != null && !wizard && !(shareShown && sharingNow != null)) {
             StatusCard(
                 title = stringResource(R.string.status_reading),
                 line = stringResource(R.string.progress_read, progress.done, progress.total),
@@ -359,6 +403,7 @@ fun GalleryApp() {
         }
         }
     }
+    errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }
     if (offering) {
         val answered = {
             offering = false

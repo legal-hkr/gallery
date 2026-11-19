@@ -56,6 +56,8 @@ data class BackupSettings(
     /** Sources' albums pinned (pinning time, for the order) and their sorts, by `volume:path`. */
     val sourcePins: Map<String, Long>? = null,
     val sourceSorts: Map<String, String>? = null,
+    /** Shares go without location (Settings › Sharing). */
+    val shareWithoutLocation: Boolean? = null,
     /** The Albums tab's order (`RECENT`, `NAME`, `COUNT`). */
     val albumSort: String? = null,
     /** The collections shown oldest first, by name. */

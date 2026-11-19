@@ -293,7 +293,8 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                 MediaSelectionToolbar(
                     chosen,
                     onFavorite = { favorite -> actions.favorite(chosen, favorite, say = true) { selection.clear() } },
-                    onAddToAlbum = { adding = chosen },
+                    onShare = { actions.share(chosen) { selection.clear() } },
+                                onAddToAlbum = { adding = chosen },
                     onDelete = { actions.trash(chosen) { selection.clear() } },
                     modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
                     // Remove from album: this album only, at once, with Undo (SPEC-albums §9.8)

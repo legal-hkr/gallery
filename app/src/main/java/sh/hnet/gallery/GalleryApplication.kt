@@ -4,6 +4,7 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -18,6 +19,7 @@ import sh.hnet.gallery.backup.BackupManager
 import sh.hnet.gallery.data.AlbumStore
 import sh.hnet.gallery.data.MediaIndex
 import sh.hnet.gallery.data.MediaSource
+import sh.hnet.gallery.data.ShareMaker
 import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.facts.FactReader
 import sh.hnet.gallery.facts.FactScanner
@@ -56,6 +58,12 @@ class GalleryApplication : Application() {
     /** User albums (SPEC-albums §9.12). */
     val albums: AlbumStore by lazy { AlbumStore(database.albumDao(), appScope) }
 
+    /** The share sheet's location action (SPEC §14.2), for the shell to share again; kept for a shell not composed yet. */
+    val shareAgain = MutableStateFlow<ShareAgain?>(null)
+
+    /** Shares without location (SPEC §14, LOGIKA §16). */
+    val sharing: ShareMaker by lazy { ShareMaker(this) }
+
     /** Backup and restore of the settings (SPEC §20.2). */
     val backup: BackupManager by lazy { BackupManager(this, getSharedPreferences("stamps", MODE_PRIVATE)) }
 
@@ -63,6 +71,8 @@ class GalleryApplication : Application() {
         super.onCreate()
         // Every new list of items is checked for files not read yet
         appScope.launch { index.items.filterNotNull().collect { facts.update(it) } }
+        // The copies made for shares of earlier starts go (SPEC §14.1)
+        appScope.launch(Dispatchers.IO) { sharing.clearOld() }
         // Album members whose ids a rescan changed are found again by fingerprint (SPEC-albums §9.12)
         appScope.launch { index.items.filterNotNull().collect { albums.relink(it) } }
         // Every folder the index shows has a state: new ones are classified once (SPEC-albums §22.2)
@@ -74,3 +84,7 @@ class GalleryApplication : Application() {
         }
     }
 }
+
+/** Share these items again, with or without their location (SPEC §14.2). */
+data class ShareAgain(val ids: List<Long>, val removeLocation: Boolean)
+
