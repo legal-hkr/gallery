@@ -46,7 +46,7 @@ object ZoomMath {
         return Dim(image.width * fit, image.height * fit)
     }
 
-    /** The largest scale (SPEC §6.1): one image pixel per screen pixel, but at least 3 × fitted. */
+    /** The largest scale: 10 × fitted (the owner, 19 Nov 2026, over SPEC §6.1's 3×), further when that doesn't yet reach one image pixel per screen pixel. */
     fun maxScale(container: Dim, image: Dim): Float {
         val fit = fitScale(container, image)
         return if (fit <= 0f) MIN_MAX_SCALE else max(1f / fit, MIN_MAX_SCALE)
@@ -127,7 +127,7 @@ object ZoomMath {
         return sample
     }
 
-    const val MIN_MAX_SCALE = 3f
+    const val MIN_MAX_SCALE = 10f
     const val DOUBLE_TAP_SCALE = 2f
 }
 

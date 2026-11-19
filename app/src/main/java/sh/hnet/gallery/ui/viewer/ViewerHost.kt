@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -56,7 +57,12 @@ import sh.hnet.gallery.ui.components.Thumbnails
  */
 class ViewerRequest(val ids: List<Long>, val start: Long, val onPage: (Long) -> Unit)
 
-/** The item flying between its tile and the viewer: its thumbnail, cropped to a moving rect, over a fading backdrop. */
+/**
+ * The item flying between its tile and the viewer: its picture, cropped to a moving rect, over a
+ * fading backdrop. Out of the tile it starts as the tile's thumbnail and the photo decoded for the
+ * screen fades in over it as soon as it is there ([sharp]) – the thumbnail alone, stretched to the
+ * screen, was all pixels (owner, 19 Nov 2026); back into the tile it flies the decoded photo.
+ */
 private class Flight(
     val image: ImageBitmap,
     val from: Rect,
@@ -67,6 +73,7 @@ private class Flight(
     val toBackdrop: Float,
 ) {
     val progress = Animatable(0f)
+    var sharp by mutableStateOf<ImageBitmap?>(null)
 
     suspend fun run() {
         progress.animateTo(1f, tween(FLIGHT_MS, easing = StandardEasing))
@@ -97,6 +104,8 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
     var shown by remember { mutableStateOf(false) }
     var current by remember { mutableStateOf(request.start) }
     val loaded = remember { mutableStateOf(emptySet<Long>()) }
+    // The photos decoded for the screen of the last pages drawn, for the flight back (the pager keeps only its neighbours)
+    val decoded = remember { LinkedHashMap<Long, ImageBitmap>() }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     // Turns with the phone while open, portrait again after (owner's decision D1: the system's lock is respected; the rest of the app is portrait by the family's rule)
@@ -129,6 +138,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
                 to = Rect(Offset.Zero, screen.toSize()).fitted(picture.width.toFloat() / picture.height),
                 fromCornerPx = origin.cornerPx, toCornerPx = 0f, fromBackdrop = 0f, toBackdrop = 1f,
             )
+            out.sharp = decoded[key]
             flight = out
             out.run()
             // Closed meanwhile (Back during the flight): the flight back has taken over
@@ -148,7 +158,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
     val requestClose: (ViewerCloseFrom, Long) -> Boolean = requestClose@{ from, id ->
         current = id
         val origin = origins[id.toString()]
-        val picture = still(id)
+        val picture = decoded[id] ?: still(id)
         if (landscape || origin == null || !origin.visible || picture == null || picture.height <= 0 || size == IntSize.Zero) return@requestClose false
         val screen = Rect(Offset.Zero, size.toSize())
         val back = Flight(
@@ -175,7 +185,15 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
                     current = it
                     request.onPage(it)
                 },
-                onLoaded = { loaded.value += it },
+                onLoaded = { id, image ->
+                    loaded.value += id
+                    if (image != null) {
+                        decoded.remove(id)
+                        decoded[id] = image
+                        while (decoded.size > 3) decoded.remove(decoded.keys.first())
+                        flight?.let { out -> if (id == request.start && out.toBackdrop == 1f) out.sharp = image }
+                    }
+                },
                 onClose = onClose,
                 onRequestClose = requestClose,
             )
@@ -190,17 +208,17 @@ private fun FlightLayer(flight: Flight) {
     val rect = lerp(flight.from, flight.to, progress)
     val corner = with(LocalDensity.current) { lerp(flight.fromCornerPx, flight.toCornerPx, progress).toDp() }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = lerp(flight.fromBackdrop, flight.toBackdrop, progress))))
-    Image(
-        bitmap = flight.image,
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier
-            .layout { measurable, constraints ->
-                val placeable = measurable.measure(Constraints.fixed(rect.width.roundToInt().coerceAtLeast(0), rect.height.roundToInt().coerceAtLeast(0)))
-                layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(rect.left.roundToInt(), rect.top.roundToInt()) }
-            }
-            .clip(RoundedCornerShape(corner)),
-    )
+    val place = Modifier
+        .layout { measurable, constraints ->
+            val placeable = measurable.measure(Constraints.fixed(rect.width.roundToInt().coerceAtLeast(0), rect.height.roundToInt().coerceAtLeast(0)))
+            layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(rect.left.roundToInt(), rect.top.roundToInt()) }
+        }
+        .clip(RoundedCornerShape(corner))
+    val sharp = flight.sharp
+    val sharpAlpha by animateFloatAsState(if (sharp != null) 1f else 0f, MaterialTheme.motionScheme.fastEffectsSpec(), label = "sharp")
+    // The thumbnail until the decoded photo has faded in over it
+    if (sharpAlpha < 1f) Image(bitmap = flight.image, contentDescription = null, contentScale = ContentScale.Crop, modifier = place)
+    if (sharp != null) Image(bitmap = sharp, contentDescription = null, contentScale = ContentScale.Crop, modifier = place.graphicsLayer { alpha = sharpAlpha })
 }
 
 /** The rect after the swipe's transform of the viewer: scaled about [pivot], then moved down by [offsetY]. */

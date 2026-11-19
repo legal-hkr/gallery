@@ -16,10 +16,11 @@ class ZoomMathTest {
 
     @Test
     fun maxScaleReachesThePixels() {
-        // Fitted in portrait the 8160 px width is shown on 1080 px: one image pixel per screen pixel at 7.56×
-        assertEquals(8160f / 1080f, ZoomMath.maxScale(portrait, photo), EPS)
-        // A small image still zooms to 3× (SPEC §6.1)
-        assertEquals(3f, ZoomMath.maxScale(portrait, Dim(800f, 600f)), EPS)
+        // Every photo zooms to 10× (the owner), here past one image pixel per screen pixel (7.56×)
+        assertEquals(10f, ZoomMath.maxScale(portrait, photo), EPS)
+        assertEquals(10f, ZoomMath.maxScale(portrait, Dim(800f, 600f)), EPS)
+        // A larger one goes on to its pixels: 16 320 px on 1080
+        assertEquals(16320f / 1080f, ZoomMath.maxScale(portrait, Dim(16320f, 12240f)), EPS)
     }
 
     @Test

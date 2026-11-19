@@ -19,7 +19,6 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +42,7 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -75,6 +75,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.GalleryApplication
@@ -137,6 +138,16 @@ fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, pl
     val zone = fact?.offsetMinutes?.let { ZoneOffset.ofTotalSeconds(it * 60) } ?: ZoneId.systemDefault()
     val taken = ZonedDateTime.ofInstant(Instant.ofEpochMilli(item.taken), zone)
 
+    // The sheet opens with its rows complete: rows added while it rose changed its anchors (half the screen or the content's
+    // height) mid-way, so it jumped to a lower place (owner, 19 Nov 2026). The file is read in tens of milliseconds; a slow
+    // read doesn't hold the sheet back beyond INFO_WAIT_MS
+    var waited by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(item.id) {
+        delay(INFO_WAIT_MS)
+        waited = true
+    }
+    if (info == null && !waited) return
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = state,
@@ -144,7 +155,8 @@ fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, pl
         sheetMaxWidth = if (landscape) 640.dp else BottomSheetDefaults.SheetMaxWidth,
     ) {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding().padding(bottom = 16.dp),
+            // The sheet keeps clear of the navigation bar itself (as the family's sheets); padding for it here as well made the content shrink once the sheet's window got its insets, so the sheet sank back a little after opening (owner, 19 Nov 2026)
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(stringResource(R.string.title_info), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp).semantics { heading() })
@@ -198,6 +210,9 @@ fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, pl
 }
 
 private const val DAY_MILLIS = 86_400_000L
+
+/** Longest wait for the file's details before the sheet opens without them. */
+private const val INFO_WAIT_MS = 300L
 
 /** One row of the sheet: its icon, title and supporting lines; [date] marks the row with the pencil. */
 private class Row(@DrawableRes val icon: Int, val title: String, val lines: List<String>, val date: Boolean = false)

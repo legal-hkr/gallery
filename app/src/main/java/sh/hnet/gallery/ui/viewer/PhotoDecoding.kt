@@ -10,6 +10,8 @@ import android.graphics.Rect
 import android.graphics.drawable.AnimatedImageDrawable
 import android.os.ParcelFileDescriptor
 import android.util.LruCache
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.IntSize
 import androidx.exifinterface.media.ExifInterface
 import java.io.Closeable
@@ -33,6 +35,9 @@ sealed interface Picture {
      */
     class Still(val bitmap: Bitmap, val full: IntSize) : Picture {
         val gainmap: Boolean get() = bitmap.hasGainmap()
+
+        /** The same bitmap for drawing (the page and the flight share it). */
+        val image: ImageBitmap by lazy { bitmap.asImageBitmap() }
 
         /** Image pixels per bitmap pixel: how much the screen decode is sampled down. */
         val sampled: Float get() = if (bitmap.width > 0) full.width.toFloat() / bitmap.width else 1f

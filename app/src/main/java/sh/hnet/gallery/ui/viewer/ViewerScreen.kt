@@ -71,6 +71,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -125,7 +126,7 @@ private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
  *
  * @param opened The ids of the list it was opened from, in its order
  * @param onPage The item settled on (the list under it scrolls there, so the flight back lands on its tile)
- * @param onLoaded An item's picture is drawn (the flight in hands over to it)
+ * @param onLoaded An item's picture is drawn (the flight in hands over to it), with the photo decoded for the screen
  * @param onRequestClose Asked first on closing: true when the host flies the item back to its tile, else the viewer fades
  */
 @Composable
@@ -135,7 +136,7 @@ fun ViewerScreen(
     snackbars: SnackbarHostState,
     messageScope: CoroutineScope,
     onPage: (Long) -> Unit,
-    onLoaded: (Long) -> Unit,
+    onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
     onRequestClose: (ViewerCloseFrom, Long) -> Boolean,
 ) {
@@ -330,7 +331,7 @@ fun ViewerScreen(
                         },
                         onOpenWith = { open(context, pageItem, Intent.ACTION_VIEW) },
                     )
-                    LaunchedEffect(pageItem.id) { onLoaded(pageItem.id) }
+                    LaunchedEffect(pageItem.id) { onLoaded(pageItem.id, null) }
                 } else {
                     PhotoPage(
                         pageItem,
@@ -342,7 +343,7 @@ fun ViewerScreen(
                         onMotionEnded = { if (isCurrent && !holding) motion = false },
                         onPicture = { picture ->
                             hdrOf[pageItem.id] = (picture as? Picture.Still)?.gainmap == true
-                            onLoaded(pageItem.id)
+                            onLoaded(pageItem.id, (picture as? Picture.Still)?.image)
                         },
                         onTap = { chrome = !chrome },
                         onHold = { held ->

@@ -138,8 +138,7 @@ fun PhotoPage(
             if (fade < 1f) (thumb as? Thumb.Image)?.let { Image(it.bitmap, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
             when (current) {
                 is Picture.Still -> {
-                    val image = remember(current) { current.bitmap.asImageBitmap() }
-                    Image(image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade })
+                    Image(current.image, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade })
                     tiles?.let { ZoomTiles(item, it, current, zoom) }
                 }
                 is Picture.Animated -> AndroidView(
