@@ -91,7 +91,8 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
             PhotosState.Loading -> Loading()
             PhotosState.NoAccess -> NoAccess(onAnswer = viewModel::recheck)
             is PhotosState.Shown -> {
-                if (current.timeline.entries.isEmpty()) {
+                val timeline = current.timeline(step)
+                if (timeline.entries.isEmpty()) {
                     Column(Modifier.fillMaxSize()) {
                         current.partial?.let { PartialAccessCard(it, onAnswer = viewModel::recheck) }
                         if (!current.anyMedia) {
@@ -109,11 +110,12 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                 } else {
                     val locale = LocalConfiguration.current.locales[0]
                     val topCount = if (current.partial != null) 1 else 0
-                    val entries = current.timeline.entries
+                    val entries = timeline.entries
                     val monthYear = stringResource(R.string.format_month_year)
                     Box(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
                         MediaGrid(
-                            current.timeline,
+                            current.days,
+                            current.months,
                             step,
                             onStepChange = viewModel::setStep,
                             facts = facts,
@@ -124,7 +126,6 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                             },
                             topCount = topCount,
                             onOpen = { item ->
-                                val timeline = current.timeline
                                 val ids = timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
                                 onOpen(ViewerRequest(ids, item.id) { id ->
                                     // The grid under the viewer follows the item shown, so the flight back lands on its tile
@@ -138,7 +139,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                         // The bubble shows the month and year there; the month view's headers already say the month, so the year alone (SPEC §4.6)
                         GridFastScroller(grid, entries.size + topCount, label = { index ->
                             val month = entries[(index - topCount).coerceIn(0, entries.lastIndex)].month
-                            if (current.timeline.months) month.year.toString() else formatDate(monthYear, month.atDay(1), locale)
+                            if (timeline.months) month.year.toString() else formatDate(monthYear, month.atDay(1), locale)
                         }, modifier = Modifier.align(Alignment.TopEnd))
                     }
                 }

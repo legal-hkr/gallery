@@ -94,6 +94,7 @@ fun PhotoPage(
     onHold: (Boolean) -> Unit,
     onOpenWith: () -> Unit,
     zoomKey: Any,
+    pager: PagerHandoff? = null,
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -121,7 +122,7 @@ fun PhotoPage(
         is Picture.Animated -> current.full
         else -> (thumb as? Thumb.Image)?.bitmap?.let { IntSize(it.width, it.height) } ?: IntSize.Zero
     }
-    val zoom = rememberZoomState(full, onSingleTap = onTap, onHold = onHold)
+    val zoom = rememberZoomState(full, onSingleTap = onTap, onHold = onHold, pager = pager)
     LaunchedEffect(zoomKey) { zoom.reset() }
 
     // The loading indicator only when the screen decode takes over a second (SPEC §6.9)
@@ -133,7 +134,8 @@ fun PhotoPage(
 
     Box(Modifier.fillMaxSize().clipToBounds()) {
         Box(Modifier.fillMaxSize().zoomable(zoom), contentAlignment = Alignment.Center) {
-            (thumb as? Thumb.Image)?.let { Image(it.bitmap, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+            // The thumbnail only until the photo has faded in over it: two full-screen layers would be drawn every frame of a swipe
+            if (fade < 1f) (thumb as? Thumb.Image)?.let { Image(it.bitmap, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
             when (current) {
                 is Picture.Still -> {
                     val image = remember(current) { current.bitmap.asImageBitmap() }

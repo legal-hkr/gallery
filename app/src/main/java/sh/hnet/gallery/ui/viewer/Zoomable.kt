@@ -19,9 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.abs
@@ -37,7 +39,7 @@ import sh.hnet.gallery.model.ZoomMath
 /**
  * The viewer's zoom (SPEC §6.1, LOGIKA §13.2): News' zoom state, with the limits and the turn of
  * [ZoomMath] – up to the photo's own pixels, a double tap between fitted and filling the screen, the pager taking
- * over a drag at the image's edge, and a turn of the phone keeping the centre point and the pixel size.
+ * the rest of a drag at the zoomed image's edge ([PagerHandoff]), and a turn of the phone keeping the centre point and the pixel size.
  *
  * Everything the gesture handler needs is read from this state when a gesture happens, so the handler
  * never works with values from an earlier composition.
@@ -57,6 +59,7 @@ class ZoomState internal constructor() {
     internal var image = IntSize.Zero
     internal var onSingleTap: () -> Unit = {}
     internal var onHold: (Boolean) -> Unit = {}
+    internal var pager: PagerHandoff? = null
 
     private val containerDim get() = Dim(container.width.toFloat(), container.height.toFloat())
     private val imageDim get() = Dim(image.width.toFloat(), image.height.toFloat())
@@ -91,12 +94,12 @@ class ZoomState internal constructor() {
         scale = newScale
     }
 
-    /** Pans by [pan]; false when a mostly sideways drag meets the image's edge, so the pager takes it. */
-    internal fun panBy(pan: Offset): Boolean {
-        if (abs(pan.x) > abs(pan.y) && ZoomMath.atEdge(offset.vec(), scale, containerDim, imageDim, pan.x)) return false
+    internal fun panBy(pan: Offset) {
         offset = ZoomMath.constrain(offset.vec() + pan.vec(), scale, containerDim, imageDim).offset()
-        return true
     }
+
+    /** Whether the image's edge is reached in the direction of a sideways drag. */
+    internal fun atEdge(dx: Float): Boolean = ZoomMath.atEdge(offset.vec(), scale, containerDim, imageDim, dx)
 
     /** Double tap (owner, 19 Nov 2026): back to fitted when zoomed, else filling the screen around the tapped point; more is the pinch's. */
     internal suspend fun toggleZoom(tap: Offset) {
@@ -117,6 +120,18 @@ class ZoomState internal constructor() {
     }
 }
 
+/**
+ * A zoomed image's drag handed to the pages once the image's edge is reached (the owner, 19 Nov 2026):
+ * the image only says so ([active]); the rest of that drag is read and applied by the viewer above the
+ * pager ([pagerHandoff]), whose place doesn't move with the pages – read on the page, the finger's
+ * movement shrank by the page's own movement and the handover stalled.
+ */
+@Stable
+class PagerHandoff {
+    /** From the image reaching its edge until the pages have settled after the finger lifted. */
+    var active by mutableStateOf(false)
+}
+
 private fun Offset.vec() = Vec(x, y)
 
 private fun Vec.offset() = Offset(x, y)
@@ -127,19 +142,20 @@ private fun Vec.offset() = Offset(x, y)
  * @param onHold A press held still for a moment starts (true) and its release ends (false) – a motion photo plays meanwhile
  */
 @Composable
-fun rememberZoomState(image: IntSize, onSingleTap: () -> Unit = {}, onHold: (Boolean) -> Unit = {}): ZoomState {
+fun rememberZoomState(image: IntSize, onSingleTap: () -> Unit = {}, onHold: (Boolean) -> Unit = {}, pager: PagerHandoff? = null): ZoomState {
     val state = remember { ZoomState() }
     SideEffect {
         state.image = image
         state.onSingleTap = onSingleTap
         state.onHold = onHold
+        state.pager = pager
     }
     return state
 }
 
 /**
- * Pinch to zoom towards the fingers, pan when zoomed (the image always stays on screen, the pager takes over at
- * its edge), double tap between fitted and filling the screen, single tap after the double-tap timeout, press and hold.
+ * Pinch to zoom towards the fingers, pan when zoomed (the image always stays on screen; at its edge the rest of the
+ * drag moves the pages), double tap between fitted and filling the screen, single tap after the double-tap timeout, press and hold.
  * Gestures are read in the container's coordinates, before the zoom is applied. Single-finger drags at fitted
  * scale are left to the parent (the pager, the swipe down).
  */
@@ -174,6 +190,8 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
         var movement = 0f
         var holding = false
         var upTime = down.uptimeMillis
+        // Zoomed at the image's edge, the rest of the drag moves the pages
+        var paging = false
 
         while (true) {
             // Held still with one finger: after a moment it is a hold (SPEC §7.5)
@@ -202,8 +220,20 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
                 if (change.positionChanged()) {
                     val pan = change.position - change.previousPosition
                     movement += pan.getDistance()
-                    // At fitted scale the drag belongs to the parent; zoomed, it pans until the image's edge
-                    if (state.zoomed && !holding && state.panBy(pan)) {
+                    // At fitted scale the drag belongs to the parent (the pager, the swipe down); zoomed, it pans the image
+                    // until a sideways drag meets its edge, and from then on the whole rest of the drag moves the pages
+                    val pager = state.pager
+                    if (paging) {
+                        // Handed over: every move of this gesture stays consumed here, whatever becomes of the zoom, so the pager's own
+                        // drag never starts as well – both moving the pages took them two photos on (owner's phone test, 19 Nov 2026)
+                        change.consume()
+                    } else if (state.zoomed && !holding) {
+                        if (pager != null && abs(pan.x) > abs(pan.y) && state.atEdge(pan.x)) {
+                            paging = true
+                            pager.active = true
+                        } else {
+                            state.panBy(pan)
+                        }
                         transformed = true
                         change.consume()
                     }
@@ -213,6 +243,10 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
         }
         if (holding) {
             state.onHold(false)
+            lastTapTime = 0L
+            return@awaitEachGesture
+        }
+        if (paging) {
             lastTapTime = 0L
             return@awaitEachGesture
         }
@@ -237,3 +271,29 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
         }
     }
 }
+
+/**
+ * The viewer's side of [PagerHandoff], on an element that doesn't move with the pages: while the
+ * handoff is active it moves the pages by the finger's sideways movement, read before the page sees it,
+ * and on lifting settles them by how far and how fast ([onRelease] gets the velocity in pixels a second and ends
+ * the handoff once they have settled).
+ */
+fun Modifier.pagerHandoff(handoff: PagerHandoff, onDrag: (Float) -> Unit, onRelease: (Float) -> Unit): Modifier = pointerInput(handoff) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        val velocity = VelocityTracker()
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull() ?: break
+            if (handoff.active && event.changes.size == 1) {
+                velocity.addPosition(change.uptimeMillis, change.position)
+                val dx = change.position.x - change.previousPosition.x
+                if (dx != 0f) onDrag(dx)
+            }
+            if (event.changes.none { it.pressed }) break
+        }
+        // The viewer ends the handoff once the pages have settled
+        if (handoff.active) onRelease(velocity.calculateVelocity().x)
+    }
+}
+

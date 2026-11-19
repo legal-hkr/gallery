@@ -56,15 +56,18 @@ object PhotoDecoder {
     suspend fun screen(resolver: ContentResolver, item: MediaItem, longSide: Int): Picture = withContext(Dispatchers.IO) {
         try {
             val source = ImageDecoder.createSource(resolver, item.uri())
-            var sample = 1
             var full = IntSize.Zero
             val header = ImageDecoder.OnHeaderDecodedListener { decoder, info, _ ->
                 full = IntSize(info.size.width, info.size.height)
+                // Exactly the screen's long side (never more than the photo's own): a power-of-two sampling left a 50 MP
+                // photo at twice the pixels the screen shows (owner's test of S3 on the Pixel: frames dropped while swiping)
                 val longer = maxOf(info.size.width, info.size.height)
-                while (longer / (sample * 2) >= longSide) sample *= 2
-                decoder.setTargetSampleSize(sample)
-                // The region decoder's tiles and the flight need pixels in memory, not only on the GPU
-                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                if (longer > longSide) {
+                    val scale = longSide.toFloat() / longer
+                    decoder.setTargetSize((info.size.width * scale).roundToInt().coerceAtLeast(1), (info.size.height * scale).roundToInt().coerceAtLeast(1))
+                }
+                // The default allocator gives a hardware bitmap, uploaded to the GPU here on the decoding thread, not by the render thread
+                // while the pager moves; nothing reads its pixels (the tiles come from the file, the flight from the thumbnail)
             }
             if (item.mime in MAYBE_ANIMATED) {
                 val drawable = ImageDecoder.decodeDrawable(source, header)

@@ -2,7 +2,6 @@ package sh.hnet.gallery.model
 
 import java.util.Locale
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -80,22 +79,22 @@ class ZoomMathTest {
     }
 
     @Test
+    fun theEdgeHandsTheDragToThePager() {
+        val excess = (ZoomMath.fitted(portrait, photo).width * 2 - 1080f) / 2
+        // At the left edge (the image moved fully right), a drag to the right goes to the pager; to the left it pans
+        assertTrue(ZoomMath.atEdge(Vec(excess, 0f), 2f, portrait, photo, dx = 10f))
+        assertTrue(!ZoomMath.atEdge(Vec(excess, 0f), 2f, portrait, photo, dx = -10f))
+        // Not wider than the screen: every sideways drag is the pager's
+        assertTrue(ZoomMath.atEdge(Vec.ZERO, 1f, portrait, photo, dx = -10f))
+    }
+
+    @Test
     fun samplingGivesAtLeastOnePixelPerScreenPixel() {
         val fit = ZoomMath.fitScale(portrait, photo)
         // Fitted: 0.13 screen px per image px → 4× sampling (the next, 8×, would be too coarse)
         assertEquals(4, ZoomMath.sampleFor(1f, fit))
         assertEquals(1, ZoomMath.sampleFor(ZoomMath.maxScale(portrait, photo), fit))
         assertEquals(2, ZoomMath.sampleFor(3f, fit))
-    }
-
-    @Test
-    fun theEdgeHandsTheDragToThePager() {
-        val excess = (ZoomMath.fitted(portrait, photo).width * 2 - 1080f) / 2
-        // At the left edge (the image moved fully right), a drag to the right goes to the pager; to the left it pans
-        assertTrue(ZoomMath.atEdge(Vec(excess, 0f), 2f, portrait, photo, dx = 10f))
-        assertFalse(ZoomMath.atEdge(Vec(excess, 0f), 2f, portrait, photo, dx = -10f))
-        // Fitted: always the pager's
-        assertTrue(ZoomMath.atEdge(Vec.ZERO, 1f, portrait, photo, dx = -10f))
     }
 }
 

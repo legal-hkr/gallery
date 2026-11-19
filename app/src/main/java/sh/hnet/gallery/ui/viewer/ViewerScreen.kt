@@ -90,10 +90,14 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.GalleryApplication
@@ -165,7 +169,26 @@ fun ViewerScreen(
     val player = remember { ViewerPlayer(context) }
     DisposableEffect(player) { onDispose { player.release() } }
     val playback by player.state.collectAsStateWithLifecycle()
-    // Each use of the chrome or the card restarts its 3 s while a video plays (D9)
+    // A zoomed photo's drag past its edge moves the pages; released, they settle by how far and how fast (the owner, 19 Nov 2026)
+    val flingPx = with(density) { 400.dp.toPx() }
+    val handoff = remember { PagerHandoff() }
+    fun settlePages(vx: Float) {
+        scope.launch {
+            val position = pager.currentPage + pager.currentPageOffsetFraction
+            val target = when {
+                vx < -flingPx -> floor(position).toInt() + 1
+                vx > flingPx -> ceil(position).toInt() - 1
+                else -> position.roundToInt()
+            }.coerceIn(0, (pager.pageCount - 1).coerceAtLeast(0))
+            try {
+                pager.animateScrollToPage(target)
+            } finally {
+                // Only now is a page settled: the photo left behind goes back to fitted once off screen
+                handoff.active = false
+            }
+        }
+    }
+    // Each use of the chrome or the card restarts its 4 s while a video plays (D9)
     var touched by remember { mutableIntStateOf(0) }
 
     fun close() {
@@ -185,7 +208,10 @@ fun ViewerScreen(
     // change of the list that is the old index over the new list, and the check below must still find the item gone
     // (owner's test of S2a, 19 Nov 2026: a file deleted by another app moved the pager on without a word)
     LaunchedEffect(pager, pages) {
-        snapshotFlow { pager.settledPage }.drop(1).collect { page ->
+        // While the viewer itself moves the pages (a zoomed photo's drag past its edge, and its settling) the pager doesn't count
+        // as scrolling, so its settled page would follow the middle of the move: the photo left behind went back to fitted
+        // on screen, half-way (owner's phone test, 19 Nov 2026: "a third photo jumps in")
+        snapshotFlow { if (handoff.active) null else pager.settledPage }.filterNotNull().drop(1).collect { page ->
             pages.getOrNull(page)?.let { id ->
                 currentId = id
                 onPage(id)
@@ -269,6 +295,8 @@ fun ViewerScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface.copy(alpha = dismiss.backdropAlpha))
             .onSizeChanged { dismiss.containerHeight = it.height }
+            // Above the pager, so it doesn't move with the pages it moves
+            .pagerHandoff(handoff, onDrag = { dx -> pager.dispatchRawDelta(-dx) }, onRelease = ::settlePages)
             .viewerSwipeToDismiss(
                 state = dismiss,
                 // A video pauses while it is swiped (its frame stands in: D12) and goes on if the swipe settles back
@@ -325,6 +353,7 @@ fun ViewerScreen(
                         },
                         onOpenWith = { open(context, pageItem, Intent.ACTION_VIEW) },
                         zoomKey = isCurrent,
+                        pager = handoff,
                     )
                 }
             }

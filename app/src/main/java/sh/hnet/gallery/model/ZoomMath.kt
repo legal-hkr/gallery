@@ -93,6 +93,17 @@ object ZoomMath {
         return newScale to constrain(offset, newScale, new, image)
     }
 
+    /**
+     * Whether the zoomed image's edge is reached in the direction of a sideways drag ([dx] > 0: to the
+     * right, showing its left part): the rest of that drag moves the pager (the owner, 19 Nov 2026).
+     */
+    fun atEdge(offset: Vec, scale: Float, container: Dim, image: Dim, dx: Float): Boolean {
+        val fitted = fitted(container, image)
+        val excessX = max(fitted.width * scale - container.width, 0f) / 2f
+        if (excessX <= 0f) return true
+        return if (dx > 0f) offset.x >= excessX - 0.5f else offset.x <= -excessX + 0.5f
+    }
+
     /** The part of the image on screen, in image pixels, clipped to the image. */
     fun visibleRegion(scale: Float, offset: Vec, container: Dim, image: Dim): Box {
         val fit = fitScale(container, image)
@@ -116,18 +127,8 @@ object ZoomMath {
         return sample
     }
 
-    /** Whether an edge of the image is reached: a drag that way belongs to the pager (SPEC §6.1). */
-    fun atEdge(offset: Vec, scale: Float, container: Dim, image: Dim, dx: Float): Boolean {
-        val fitted = fitted(container, image)
-        val excessX = max(fitted.width * scale - container.width, 0f) / 2f
-        if (excessX <= 0f) return true
-        // Dragging right shows the left part: the offset grows towards +excess
-        return if (dx > 0f) offset.x >= excessX - EDGE_EPSILON else offset.x <= -excessX + EDGE_EPSILON
-    }
-
     const val MIN_MAX_SCALE = 3f
     const val DOUBLE_TAP_SCALE = 2f
-    private const val EDGE_EPSILON = 0.5f
 }
 
 /** One tile of the zoomed image (LOGIKA §13.2): its column and row at a sampling, and the part of the displayed image it covers. */

@@ -36,8 +36,11 @@ sealed interface PhotosState {
      *
      * @param partial With partial access: how many items the app may see (the card's count); null with full access
      * @param otherAlbums Albums outside the timeline, for the empty timeline's line
+     * @param days The timeline by day, @param months by month: both ready, so the pinch moves between them while the fingers move
      */
-    data class Shown(val timeline: Timeline, val partial: Int?, val anyMedia: Boolean, val otherAlbums: Int) : PhotosState
+    data class Shown(val days: Timeline, val months: Timeline, val partial: Int?, val anyMedia: Boolean, val otherAlbums: Int) : PhotosState {
+        fun timeline(step: GridStep): Timeline = if (step.months) months else days
+    }
 }
 
 /** The timeline (SPEC §4): the items of the folders shown in Photos, by day or by month, kept up to date. */
@@ -53,10 +56,8 @@ class PhotosViewModel(application: Application) : AndroidViewModel(application) 
     /** Only the offsets move items between days: the timeline isn't built again for every other fact read. */
     private val offsets = app.facts.facts.map { facts -> facts?.mapValues { it.value.offsetMinutes } ?: emptyMap() }.distinctUntilChanged()
 
-    private val months = step.map { it.months }.distinctUntilChanged()
-
-    val state: StateFlow<PhotosState> = combine(app.index.access, app.index.items, app.preferences.timeline, months, offsets) { access, items, choice, months, offsets ->
-        Input(access, items, choice, months, offsets)
+    val state: StateFlow<PhotosState> = combine(app.index.access, app.index.items, app.preferences.timeline, offsets) { access, items, choice, offsets ->
+        Input(access, items, choice, offsets)
     }
         .conflate()
         .mapLatest { input ->
@@ -67,9 +68,10 @@ class PhotosViewModel(application: Application) : AndroidViewModel(application) 
                     val all = input.items.filter { !it.trashed }
                     val shown = all.filter { input.choice.shown(it.folder) }
                     val zone = ZoneId.systemDefault()
-                    val timeline = Timeline.build(shown, input.months, zone) { input.offsets[it] }
+                    val days = Timeline.build(shown, months = false, zone) { input.offsets[it] }
+                    val months = Timeline.build(shown, months = true, zone) { input.offsets[it] }
                     val otherAlbums = if (shown.isEmpty()) Albums.of(all).size else 0
-                    PhotosState.Shown(timeline, if (input.access == Access.PARTIAL) all.size else null, all.isNotEmpty(), otherAlbums)
+                    PhotosState.Shown(days, months, if (input.access == Access.PARTIAL) all.size else null, all.isNotEmpty(), otherAlbums)
                 }
             }
         }
@@ -87,7 +89,6 @@ class PhotosViewModel(application: Application) : AndroidViewModel(application) 
         val access: Access,
         val items: List<MediaItem>?,
         val choice: TimelineChoice,
-        val months: Boolean,
         val offsets: Map<Long, Int?>,
     )
 }

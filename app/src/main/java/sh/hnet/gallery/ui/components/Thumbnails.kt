@@ -60,6 +60,12 @@ object Thumbnails {
         return if (synchronized(broken) { key in broken }) Thumb.Broken else null
     }
 
+    /** The largest thumbnail of the item already in memory, at any size (the pinch's layer reads nothing). */
+    fun peekAny(item: MediaItem): Thumb? {
+        for (size in STEPS.reversed()) (peek(item, size) as? Thumb.Image)?.let { return it }
+        return null
+    }
+
     suspend fun load(resolver: ContentResolver, item: MediaItem, px: Int): Thumb {
         peek(item, px)?.let { return it }
         val key = key(item, px)
