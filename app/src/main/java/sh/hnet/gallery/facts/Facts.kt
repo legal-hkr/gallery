@@ -1,15 +1,18 @@
 package sh.hnet.gallery.facts
 
 import android.content.Context
+import androidx.room3.AutoMigration
 import androidx.room3.Dao
 import androidx.room3.Database
 import androidx.room3.Entity
+import androidx.room3.Index
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
 import androidx.room3.Room
 import androidx.room3.RoomDatabase
 import androidx.room3.Upsert
 import androidx.sqlite.driver.AndroidSQLiteDriver
+import kotlinx.coroutines.flow.Flow
 
 /**
  * What the app read from one file, which MediaStore doesn't say (LOGIKA §2.3). Derived from
@@ -48,10 +51,74 @@ interface FactDao {
     suspend fun delete(ids: List<Long>)
 }
 
-/** The app's database: only data derived from MediaStore or the files, rebuilt if lost (LOGIKA §2.3). */
-@Database(entities = [Fact::class], version = 1)
+/**
+ * A folder's state (SPEC-albums §9.1, §9.12), by [sh.hnet.gallery.model.FolderKey.key]: given by the rules the
+ * first time the app sees it ([chosenByUser] false), the user's once set. [lastSeenAt]: a folder gone keeps its
+ * state for 90 days in case it comes back. Pins and sorts of its album come with S4b2.
+ */
+@Entity(tableName = "source")
+data class SourceRow(
+    @PrimaryKey val key: String,
+    val state: String,
+    val chosenByUser: Boolean,
+    val pinnedAt: Long? = null,
+    val sort: String? = null,
+    val lastSeenAt: Long,
+)
+
+/** A user album (SPEC-albums §9.12): a set kept by the app. Used from S4b2. */
+@Entity(tableName = "album")
+data class AlbumRow(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val createdAt: Long,
+    val lastAddedAt: Long,
+    val pinnedAt: Long? = null,
+    val sort: String? = null,
+)
+
+/**
+ * An item in a user album (SPEC-albums §9.12): by MediaStore id, and by [fingerprint] (name, date taken,
+ * size) to find it again after a rescan changed the ids or on another phone after a restore.
+ */
+@Entity(tableName = "album_item", primaryKeys = ["albumId", "mediaId"], indices = [Index("mediaId")])
+data class AlbumItemRow(
+    val albumId: Long,
+    val mediaId: Long,
+    val fingerprint: String,
+    val addedAt: Long,
+)
+
+@Dao
+interface SourceDao {
+    @Query("SELECT * FROM source")
+    fun watch(): Flow<List<SourceRow>>
+
+    @Query("SELECT * FROM source")
+    suspend fun all(): List<SourceRow>
+
+    @Upsert
+    suspend fun upsert(rows: List<SourceRow>)
+
+    @Query("UPDATE source SET sort = :sort WHERE `key` = :key")
+    suspend fun setSort(key: String, sort: String?)
+
+    @Query("UPDATE source SET pinnedAt = :pinnedAt WHERE `key` = :key")
+    suspend fun setPinned(key: String, pinnedAt: Long?)
+
+    @Query("DELETE FROM source WHERE `key` IN (:keys)")
+    suspend fun delete(keys: List<String>)
+}
+
+/**
+ * The app's database (LOGIKA §2.3, §15.3): facts derived from the files, rebuilt if lost; since version 2
+ * also the user's own data – the sources' states and the albums – which the backup carries.
+ */
+@Database(entities = [Fact::class, SourceRow::class, AlbumRow::class, AlbumItemRow::class], version = 2, autoMigrations = [AutoMigration(from = 1, to = 2)])
 abstract class GalleryDatabase : RoomDatabase() {
     abstract fun factDao(): FactDao
+
+    abstract fun sourceDao(): SourceDao
 
     companion object {
         fun create(context: Context): GalleryDatabase =

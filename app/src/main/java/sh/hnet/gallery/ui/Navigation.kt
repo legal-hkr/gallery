@@ -21,6 +21,8 @@ sealed interface Screen : NavKey {
     /** A collection of the Albums tab, by [sh.hnet.gallery.model.CollectionKind] name. */
     @Serializable data class Collection(val kind: String) : Screen
     @Serializable data object Trash : Screen
+    /** A source's album (SPEC-albums §9.10), by [sh.hnet.gallery.model.FolderKey.key]. */
+    @Serializable data class Folder(val key: String) : Screen
     @Serializable data object Settings : Screen
     @Serializable data object SettingsPhotos : Screen
     @Serializable data object SettingsViewer : Screen

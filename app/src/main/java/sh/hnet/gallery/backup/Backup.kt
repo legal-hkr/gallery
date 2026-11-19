@@ -35,8 +35,11 @@ data class BackupFile(
  * value as it is (family rule). Later stages add their settings here (SPEC §20.2's list).
  *
  * @param gridStep The grid's step by name (`LARGE`, `MEDIUM`, `SMALL`, `MONTHS`)
- * @param timelineOn Folders switched on in Photos, as `volume:path` (an SD card's volume is its own id, so it comes back only on that card)
- * @param timelineOff Default folders (camera, screenshots) switched off, the same way
+ * @param timelineOn Folders switched on in Photos, as `volume:path` – only read, from backups made before the sources (S1–S4a)
+ * @param timelineOff Default folders (camera, screenshots) switched off, the same way – only read
+ * @param newAlbumsInPhotos The old switch for albums made in the app – only read, and ignored
+ * @param newFoldersInPhotos Unknown new folders go In Photos (SPEC-albums §20.3)
+ * @param sources The states the user chose for sources, by `volume:path` (an SD card's volume is its own id, so it comes back only on that card)
  * @param mediaManagementOffers How many of the two offers of Media management were shown (SPEC §10.6)
  * @param autoplayMotion Motion photos play once when shown (Settings › Viewer)
  */
@@ -46,6 +49,8 @@ data class BackupSettings(
     val timelineOn: List<String>? = null,
     val timelineOff: List<String>? = null,
     val newAlbumsInPhotos: Boolean? = null,
+    val newFoldersInPhotos: Boolean? = null,
+    val sources: Map<String, String>? = null,
     val mediaManagementOffers: Int? = null,
     val autoplayMotion: Boolean? = null,
 )

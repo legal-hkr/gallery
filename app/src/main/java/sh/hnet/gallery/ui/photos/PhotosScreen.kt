@@ -125,7 +125,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 FilledTonalButton(onClick = onChooseAlbums) {
                                     Icon(painterResource(R.drawable.ic_tune), contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.button_choose_albums))
+                                    Text(stringResource(R.string.button_choose_folders))
                                 }
                             }
                         }

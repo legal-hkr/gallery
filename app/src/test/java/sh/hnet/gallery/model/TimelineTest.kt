@@ -44,18 +44,6 @@ class TimelineFoldersTest {
     }
 
     @Test
-    fun choiceOverridesDefaults() {
-        val camera = FolderKey("external_primary", "DCIM/Camera/")
-        val whatsapp = FolderKey("external_primary", "Pictures/WhatsApp/")
-        assertTrue(TimelineFolders.shown(camera, emptySet(), emptySet()))
-        assertFalse(TimelineFolders.shown(camera, emptySet(), setOf(camera.key)))
-        assertFalse(TimelineFolders.shown(whatsapp, emptySet(), emptySet()))
-        assertTrue(TimelineFolders.shown(whatsapp, setOf(whatsapp.key), emptySet()))
-        // The same path on an SD card is a folder of its own
-        assertTrue(TimelineFolders.shown(FolderKey("1234-5678", "DCIM/Camera/"), emptySet(), setOf(camera.key)))
-    }
-
-    @Test
     fun folderKeyRoundTrip() {
         val key = FolderKey("external_primary", "Pictures/A:B/")
         assertEquals(key, FolderKey.of(key.key))

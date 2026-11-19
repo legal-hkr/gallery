@@ -29,6 +29,8 @@ data class MediaItem(
     val expires: Long,
     val ours: Boolean,
     val generation: Long,
+    /** When MediaStore learned of the file (`DATE_ADDED`, ms): a source's album's "recent" (SPEC-albums §9.4). */
+    val added: Long = 0,
 ) {
     /** The folder it is in, the key of an album and of the timeline's choice (LOGIKA §2.5). */
     val folder: FolderKey get() = FolderKey(volume, path)

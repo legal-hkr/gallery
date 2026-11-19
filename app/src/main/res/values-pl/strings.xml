@@ -43,28 +43,23 @@
     <!-- Stage S1 -->
     <string name="button_allow_access">Zezwól na dostęp</string>
     <string name="button_allow_all">Zezwól na wszystkie</string>
-    <string name="button_choose_albums">Wybierz albumy</string>
     <string name="button_choose_more">Wybierz więcej</string>
     <string name="button_open_app_settings">Otwórz ustawienia aplikacji</string>
     <string name="content_description_favorite">Ulubione</string>
     <string name="content_description_motion_photo">Zdjęcie ruchome</string>
     <string name="content_description_settings">Ustawienia</string>
-    <string name="desc_new_albums_in_photos">Albumy utworzone w Galerii są od razu pokazywane w Zdjęciach.</string>
     <string name="desc_no_access">Zdjęcia pozostają w telefonie. Aplikacja tylko je pokazuje i zmienia za pośrednictwem systemu.</string>
     <string name="desc_no_media">Zdjęcia z aparatu i zrzuty ekranu pojawią się tutaj.</string>
     <string name="desc_partial_access">Aplikacja ma dostęp tylko do zdjęć i filmów wybranych w systemie (%1$d).</string>
-    <string name="desc_timeline_empty">Zdjęcia są w innych albumach (%1$d). Można je pokazać także tutaj.</string>
+    <string name="desc_timeline_empty">Zdjęcia są w innych folderach (%1$d). Można je pokazać także tutaj.</string>
     <string name="format_album_path">%1$s, %2$s</string>
     <string name="format_day">EEEE, d MMMM</string>
     <string name="format_day_year">EEEE, d MMMM y</string>
     <string name="format_month">LLLL</string>
     <string name="format_month_year">LLLL y</string>
-    <string name="header_albums_in_photos">Albumy w Zdjęciach</string>
-    <string name="header_other">Inne</string>
     <string name="label_camera">Aparat</string>
     <string name="label_downloads">Pobrane</string>
     <string name="label_internal_storage">Pamięć wewnętrzna</string>
-    <string name="label_new_albums_in_photos">Nowe albumy w Zdjęciach</string>
     <string name="label_raw">RAW</string>
     <string name="label_sd_card">Karta SD</string>
     <string name="label_today">Dzisiaj</string>
@@ -72,7 +67,7 @@
     <string name="msg_no_access">Bez dostępu do zdjęć i filmów nie ma tu nic do pokazania.</string>
     <string name="msg_no_media">Nie ma jeszcze żadnych zdjęć ani filmów.</string>
     <string name="msg_timeline_empty">Nie ma jeszcze zdjęć z aparatu ani zrzutów ekranu.</string>
-    <string name="settings_photos_desc">Albumy w Zdjęciach, Tego dnia</string>
+    <string name="settings_photos_desc">Źródła, Tego dnia</string>
     <string name="title_partial_access">Dostęp tylko do wybranych zdjęć</string>
     <!-- Stage S1b -->
     <string name="button_copy">Kopiuj</string>
@@ -240,4 +235,39 @@
     <!-- Stage S4a -->
     <string name="msg_favorited">Dodano do ulubionych: %1$d</string>
     <string name="msg_unfavorited">Usunięto z ulubionych: %1$d</string>
+    <!-- Stage S4b -->
+    <string name="button_show_all">Pokaż wszystkie (%1$d)</string>
+    <string name="content_description_choose_state">Wybierz stan</string>
+    <string name="content_description_clear_search">Wyczyść wyszukiwanie</string>
+    <string name="desc_hidden_folders">Głównie okładki albumów, pliki robocze aplikacji i naklejki.</string>
+    <string name="desc_new_folders_in_photos">Nowo wykryte foldery również trafiają na oś czasu.</string>
+    <string name="header_state_album_only">Tylko w albumie (%1$d)</string>
+    <string name="header_state_hidden">Ukryte (%1$d)</string>
+    <string name="header_state_in_photos">W Zdjęciach (%1$d)</string>
+    <string name="hint_search_folders">Szukaj folderów</string>
+    <string name="label_new_folders_in_photos">Nowe foldery w Zdjęciach</string>
+    <string name="msg_folder_hidden">Ukryto folder (%1$s). Można go ponownie pokazać w Ustawieniach › Zdjęcia.</string>
+    <string name="msg_source_album_only">Folder jest teraz widoczny tylko jako album (%1$s).</string>
+    <string name="msg_source_in_photos">Folder jest teraz w Zdjęciach (%1$s).</string>
+    <string name="state_album_only">Tylko w albumie</string>
+    <string name="state_hidden">Ukryty</string>
+    <string name="state_in_photos">W Zdjęciach</string>
+    <string name="title_hidden_folders">Ukryte foldery (%1$d)</string>
+    <!-- Stage S4b -->
+    <string name="action_hide_folder">Ukryj folder</string>
+    <string name="action_hide_screenshots">Ukryj zrzuty ekranu</string>
+    <string name="content_description_folder_album">Folder w telefonie</string>
+    <string name="desc_hide_folder">Przestanie być widoczny w Galerii. Można go ponownie pokazać w Ustawieniach › Zdjęcia.</string>
+    <string name="desc_hide_screenshots">Przestaną być widoczne w Galerii. Można je ponownie pokazać w Ustawieniach › Zdjęcia.</string>
+    <string name="desc_state_album_only">Tylko w tym albumie.</string>
+    <string name="desc_state_in_photos">Na osi czasu i w tym albumie.</string>
+    <string name="menu_pin">Przypnij na górze</string>
+    <string name="menu_unpin">Odepnij</string>
+    <string name="msg_folders_hidden">Ukryto foldery: %1$d. Można je ponownie pokazać w Ustawieniach › Zdjęcia.</string>
+    <string name="sort_count">Liczba elementów</string>
+    <string name="sort_file_name">Według nazwy pliku</string>
+    <string name="sort_name">Nazwa</string>
+    <string name="sort_recent">Ostatnio zmienione</string>
+    <!-- Stage S4b -->
+    <string name="button_choose_folders">Wybierz foldery</string>
 </resources>

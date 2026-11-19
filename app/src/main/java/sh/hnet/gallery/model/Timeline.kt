@@ -89,6 +89,20 @@ class Timeline(val entries: List<TimelineEntry>, val indexOf: Map<Long, Int>, va
             return Timeline(entries, indexOf, months)
         }
 
+        /**
+         * A grid without headers (SPEC-albums §9.7, §9.10: by file name, in the order added): the items as given,
+         * each its own tile; [date] only feeds the fast scroller.
+         */
+        fun plain(items: List<MediaItem>, zone: ZoneId): Timeline {
+            val entries = ArrayList<TimelineEntry>(items.size)
+            val indexOf = HashMap<Long, Int>(items.size * 2)
+            for (item in items) {
+                indexOf[item.id] = entries.size
+                entries.add(TimelineEntry.Tile(item, Instant.ofEpochMilli(item.taken).atZone(zone).toLocalDate()))
+            }
+            return Timeline(entries, indexOf, months = false)
+        }
+
         /** The day an item was taken on, in its own zone when known. */
         fun dateOf(item: MediaItem, zone: ZoneId, offsetMinutes: Int?): LocalDate {
             val instant = Instant.ofEpochMilli(item.taken)

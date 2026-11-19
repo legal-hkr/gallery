@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.BuildConfig
 import sh.hnet.gallery.GalleryApplication
+import sh.hnet.gallery.model.SourceRules
+import sh.hnet.gallery.model.SourceState
 
 /**
  * Backup and restore (SPEC §20.2), as Contacts': writes a file the user picked and reads one back;
@@ -66,13 +68,20 @@ class BackupManager(private val app: GalleryApplication, private val stamps: Sha
         }
     }
 
-    suspend fun restore(backup: BackupFile) = app.preferences.restore(backup.settings)
+    suspend fun restore(backup: BackupFile) {
+        val settings = backup.settings
+        app.preferences.restore(settings)
+        // The sources' states; a backup made before them has the timeline's choice instead
+        val chosen = settings.sources?.mapNotNull { (key, state) -> SourceState.of(state)?.let { key to it } }?.toMap()
+            ?: SourceRules.fromTimelineChoice(settings.timelineOn.orEmpty().toSet(), settings.timelineOff.orEmpty().toSet())
+        app.sources.restore(chosen, System.currentTimeMillis())
+    }
 
     private suspend fun snapshot(): BackupFile = BackupFile(
         appVersion = BuildConfig.VERSION_NAME.removePrefix("v"),
         appVersionCode = BuildConfig.VERSION_CODE.toLong(),
         createdAt = Instant.now().toString(),
-        settings = app.preferences.snapshot(),
+        settings = app.preferences.snapshot().copy(sources = app.sources.chosen().toSortedMap()),
     )
 
     /** The name the picker shows for [uri]; null when its provider doesn't say. Never logged. */

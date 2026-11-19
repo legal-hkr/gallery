@@ -105,10 +105,12 @@ import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.MainActivity
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.MediaWriter
+import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
+import sh.hnet.gallery.model.SourceState
 import sh.hnet.gallery.model.ViewerList
 import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
 import sh.hnet.gallery.ui.components.Consent
@@ -145,6 +147,7 @@ fun ViewerScreen(
     onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
     onRequestClose: (ViewerCloseFrom, Long) -> Boolean,
+    onOpenFolder: (MediaItem) -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.applicationContext as GalleryApplication
@@ -441,7 +444,20 @@ fun ViewerScreen(
                 )
             }
             if (info) {
-                InfoSheet(item, fact, hdr, landscape, playback.takeIf { it.item == item.id }, onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }, onDismiss = { info = false })
+                // The folder row opens the source's album over the viewer (SPEC-albums §3.3, §7.1); a hidden folder's opens nothing
+                val sources by app.sources.rows.collectAsStateWithLifecycle()
+                val newFolders by app.preferences.newFoldersInPhotos.collectAsStateWithLifecycle(false)
+                val folderShown = sources?.let { SourceStore.stateOf(item.folder, it, newFolders) != SourceState.HIDDEN } == true
+                InfoSheet(
+                    item, fact, hdr, landscape, playback.takeIf { it.item == item.id },
+                    onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) },
+                    onDismiss = { info = false },
+                    // The sheet is a window of its own, above anything the viewer's host lays over it: it closes as the album opens (owner's test of S4b1)
+                    onOpenFolder = if (folderShown && !trash) ({
+                        info = false
+                        onOpenFolder(item)
+                    }) else null,
+                )
             }
         }
 

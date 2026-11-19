@@ -27,6 +27,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedListItem
@@ -55,6 +56,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -85,11 +87,13 @@ import sh.hnet.gallery.facts.Fact
 import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
+import sh.hnet.gallery.model.TimelineFolders
 import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.TooltipIconButton
+import sh.hnet.gallery.ui.components.albumName
+import sh.hnet.gallery.ui.components.albumPath
 import sh.hnet.gallery.ui.components.groupShapes
 import sh.hnet.gallery.ui.components.settingsRowColors
-import sh.hnet.gallery.ui.components.storageName
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.formatDuration
 
@@ -120,7 +124,16 @@ private val DATE_WRITABLE = setOf("image/jpeg", "image/png", "image/webp")
  * @param onChangeDate The new date and time, in the phone's zone
  */
 @Composable
-fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, playback: ViewerPlayer.State?, onChangeDate: (LocalDate, LocalTime) -> Unit, onDismiss: () -> Unit) {
+fun InfoSheet(
+    item: MediaItem,
+    fact: Fact?,
+    hdr: Boolean,
+    landscape: Boolean,
+    playback: ViewerPlayer.State?,
+    onChangeDate: (LocalDate, LocalTime) -> Unit,
+    onDismiss: () -> Unit,
+    onOpenFolder: (() -> Unit)? = null,
+) {
     val context = LocalContext.current
     val resolver = context.contentResolver
     val locale = LocalConfiguration.current.locales[0]
@@ -160,11 +173,17 @@ fun InfoSheet(item: MediaItem, fact: Fact?, hdr: Boolean, landscape: Boolean, pl
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(stringResource(R.string.title_info), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp).semantics { heading() })
-            val rows = buildRows(item, fact, info, hdr, taken, locale)
+            val rows = buildRows(item, fact, info, hdr, taken, locale, onOpenFolder)
             rows.forEachIndexed { index, row ->
-                InfoRow(index, rows.size, row, trailing = if (row.date && !item.video && item.mime in DATE_WRITABLE) {
-                    { TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.content_description_edit_date), { pickingDate = true }) }
-                } else null)
+                InfoRow(index, rows.size, row, trailing = when {
+                    row.date && !item.video && item.mime in DATE_WRITABLE -> {
+                        { TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.content_description_edit_date), { pickingDate = true }) }
+                    }
+                    row.open != null -> {
+                        { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) }
+                    }
+                    else -> null
+                })
             }
             val lat = info?.latitude
             val lon = info?.longitude
@@ -215,10 +234,11 @@ private const val DAY_MILLIS = 86_400_000L
 private const val INFO_WAIT_MS = 300L
 
 /** One row of the sheet: its icon, title and supporting lines; [date] marks the row with the pencil. */
-private class Row(@DrawableRes val icon: Int, val title: String, val lines: List<String>, val date: Boolean = false)
+/** @param open What a tap opens (the folder row: its album, SPEC-albums §7.1); a long press still copies */
+private class Row(@DrawableRes val icon: Int, val title: String, val lines: List<String>, val date: Boolean = false, val open: (() -> Unit)? = null)
 
 @Composable
-private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolean, taken: ZonedDateTime, locale: Locale): List<Row> {
+private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolean, taken: ZonedDateTime, locale: Locale, onOpenFolder: (() -> Unit)?): List<Row> {
     val context = LocalContext.current
     val rows = ArrayList<Row>()
     val dateText = formatDate(stringResource(R.string.format_day_year), taken.toLocalDate(), locale)
@@ -261,7 +281,9 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
     val dims = if (item.width > 0 && item.height > 0) "${item.width} × ${item.height}" else null
     val details = if (dims != null) stringResource(R.string.format_file_details, size, dims, ExifText.megapixels(item.width, item.height, locale)) else size
     rows.add(Row(R.drawable.ic_description, item.name, listOf(details)))
-    rows.add(Row(R.drawable.ic_folder, item.path.trimEnd('/'), listOf(storageName(item.volume))))
+    // The source's album (SPEC-albums §7.1): its name, the storage and path; a tap opens it – not for a hidden folder
+    val folderTitle = if (TimelineFolders.isScreenshots(item.path)) stringResource(R.string.label_screenshots) else albumName(item.folder)
+    rows.add(Row(R.drawable.ic_folder, folderTitle, listOf(albumPath(item.folder)), open = onOpenFolder))
 
     if (!item.video && (hdr || fact?.gainmap == true)) rows.add(Row(R.drawable.ic_hdr_on, stringResource(R.string.title_hdr), listOf(stringResource(R.string.label_ultra_hdr))))
     if (fact?.motion == true) {
@@ -288,17 +310,19 @@ private fun InfoRow(index: Int, count: Int, row: Row, trailing: (@Composable () 
     SegmentedListItem(
         shapes = groupShapes(index, count),
         colors = settingsRowColors(),
+        onClick = row.open ?: {},
+        enabled = true,
         leadingContent = { RowIcon(row.icon) },
         trailingContent = trailing?.let { { it() } },
         supportingContent = if (row.lines.isEmpty()) null else {
             {
                 Column {
-                    row.lines.forEach { line -> Value(line, Modifier.combinedClickable(onLongClick = { copy(line) }, onClick = {})) }
+                    row.lines.forEach { line -> Value(line, Modifier.combinedClickable(onLongClick = { copy(line) }, onClick = row.open ?: {})) }
                 }
             }
         },
     ) {
-        Value(row.title, Modifier.combinedClickable(onLongClick = { copy(row.title) }, onClick = {}))
+        Value(row.title, Modifier.combinedClickable(onLongClick = { copy(row.title) }, onClick = row.open ?: {}))
     }
 }
 

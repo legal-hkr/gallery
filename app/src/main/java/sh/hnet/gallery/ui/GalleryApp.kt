@@ -14,6 +14,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
@@ -38,6 +39,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -68,8 +70,11 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.model.CollectionKind
+import sh.hnet.gallery.model.FolderKey
+import sh.hnet.gallery.model.TimelineFolders
+import sh.hnet.gallery.ui.albums.AlbumPage
 import sh.hnet.gallery.ui.albums.AlbumsScreen
-import sh.hnet.gallery.ui.albums.CollectionScreen
+import sh.hnet.gallery.ui.albums.PageKey
 import sh.hnet.gallery.ui.albums.TrashScreen
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
@@ -146,6 +151,7 @@ fun GalleryApp() {
     var wizard by rememberSaveable { mutableStateOf(!MediaAccess.wizardDone(appContext)) }
     // The viewer over everything, while open (LOGIKA §1); not kept over the process's death (SPEC §3.3)
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
+    var overViewer by remember { mutableStateOf<Screen?>(null) }
     val origins = remember { MediaOrigins() }
     val consent = rememberConsent()
     val actions = remember(consent) { MediaActions(appContext, MediaWriter(appContext), consent, snackbars, messages) }
@@ -252,10 +258,15 @@ fun GalleryApp() {
                         AlbumsScreen(
                             onOpenSettings = { currentStack.add(Screen.Settings) },
                             onOpenCollection = { currentStack.add(Screen.Collection(it.name)) },
+                            onOpenFolder = { currentStack.add(Screen.Folder(it.key)) },
                             onOpenTrash = { currentStack.add(Screen.Trash) },
                         )
                     }
-                    entry<Screen.Collection> { key -> CollectionScreen(CollectionKind.of(key.kind), onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Collection> { key -> AlbumPage(PageKey.Collection(CollectionKind.of(key.kind)), onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Folder> { key ->
+                        val folder = FolderKey.of(key.key)
+                        if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }
+                    }
                     entry<Screen.Trash> { TrashScreen(onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
                     entry<Screen.Settings> {
@@ -304,7 +315,38 @@ fun GalleryApp() {
         }
     }
     viewer?.let { request ->
-        ViewerHost(request, snackbars, messages, onClose = { viewer = null })
+        // A new opening (from a page over the viewer) is a new viewer, not this one's state over another list
+        key(request) {
+            ViewerHost(request, snackbars, messages, onClose = { viewer = null }, onOpenFolder = { item ->
+                overViewer = if (TimelineFolders.isScreenshots(item.path)) Screen.Collection(CollectionKind.SCREENSHOTS.name) else Screen.Folder(item.folder.key)
+            })
+        }
+    }
+    // An album opened from Info's folder row lies over the viewer; Back returns to the photo (the owner, over SPEC-albums §3.3's "with the sheet open": the row closes the sheet)
+    // In and out with the shared axis X of the app's pages (owner's test of S4b1: it came and went without a transition)
+    // The page last shown, kept for its way out (not state: written while composing)
+    val shownOver = remember { arrayOfNulls<Screen>(1) }
+    overViewer?.let { shownOver[0] = it }
+    AnimatedVisibility(
+        visible = viewer != null && overViewer != null,
+        enter = slideInHorizontally(spatial) { shift } + fadeIn(effects),
+        exit = slideOutHorizontally(spatial) { shift } + fadeOut(fastEffects),
+    ) {
+        val screen = shownOver[0] ?: return@AnimatedVisibility
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+            BackHandler(enabled = overViewer != null) { overViewer = null }
+            val page = when (screen) {
+                is Screen.Collection -> PageKey.Collection(CollectionKind.of(screen.kind))
+                is Screen.Folder -> FolderKey.of(screen.key)?.let { PageKey.Folder(it) }
+                else -> null
+            }
+            if (page != null) {
+                AlbumPage(page, onBack = { overViewer = null }, onOpen = { request ->
+                    overViewer = null
+                    viewer = request
+                })
+            }
+        }
     }
     if (offering) {
         val answered = {

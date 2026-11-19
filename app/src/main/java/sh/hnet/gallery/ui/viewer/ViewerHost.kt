@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
+import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.ui.components.Thumb
 import sh.hnet.gallery.ui.components.Thumbnails
 
@@ -93,7 +94,7 @@ private const val LANDING_WAIT_MS = 500L
  */
 @SuppressLint("SourceLockedOrientationActivity")
 @Composable
-fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScope: CoroutineScope, onClose: () -> Unit) {
+fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScope: CoroutineScope, onClose: () -> Unit, onOpenFolder: (MediaItem) -> Unit = {}) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val activity = LocalActivity.current
     val origins = LocalMediaOrigins.current
@@ -196,6 +197,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
                 },
                 onClose = onClose,
                 onRequestClose = requestClose,
+                onOpenFolder = onOpenFolder,
             )
         }
         flight?.let { FlightLayer(it) }

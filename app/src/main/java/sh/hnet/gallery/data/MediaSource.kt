@@ -143,6 +143,7 @@ class MediaSource(private val context: Context) {
                 expires = if (cursor.isNull(expires)) 0L else cursor.getLong(expires) * 1000,
                 ours = cursor.getString(owner) == own,
                 generation = cursor.getLong(generation),
+                added = cursor.getLong(added) * 1000,
             )
         }
     }
