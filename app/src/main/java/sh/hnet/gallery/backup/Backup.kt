@@ -38,6 +38,7 @@ data class BackupFile(
  * @param timelineOn Folders switched on in Photos, as `volume:path` (an SD card's volume is its own id, so it comes back only on that card)
  * @param timelineOff Default folders (camera, screenshots) switched off, the same way
  * @param mediaManagementOffers How many of the two offers of Media management were shown (SPEC §10.6)
+ * @param autoplayMotion Motion photos play once when shown (Settings › Viewer)
  */
 @Serializable
 data class BackupSettings(
@@ -46,6 +47,7 @@ data class BackupSettings(
     val timelineOff: List<String>? = null,
     val newAlbumsInPhotos: Boolean? = null,
     val mediaManagementOffers: Int? = null,
+    val autoplayMotion: Boolean? = null,
 )
 
 /** What a picked file turned out to be, before anything changes. */

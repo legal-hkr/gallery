@@ -48,6 +48,11 @@ class Preferences(private val context: Context) {
 
     suspend fun setNewAlbumsInPhotos(on: Boolean) = context.settings.edit { it[NEW_ALBUMS_IN_PHOTOS] = on }
 
+    /** A motion photo plays once when shown (Settings › Viewer, SPEC §20.4; on by default). */
+    val autoplayMotion: Flow<Boolean> = context.settings.data.map { it[AUTOPLAY_MOTION] ?: true }.distinctUntilChanged()
+
+    suspend fun setAutoplayMotion(on: Boolean) = context.settings.edit { it[AUTOPLAY_MOTION] = on }
+
     /** How many of the two offers of Media management were shown (SPEC §10.6): the wizard's, then one after the first system dialog. */
     val mediaManagementOffers: Flow<Int> = context.settings.data.map { it[MEDIA_MANAGEMENT_OFFERS] ?: 0 }.distinctUntilChanged()
 
@@ -62,6 +67,7 @@ class Preferences(private val context: Context) {
             timelineOff = p[TIMELINE_OFF].orEmpty().sorted(),
             newAlbumsInPhotos = p[NEW_ALBUMS_IN_PHOTOS] ?: true,
             mediaManagementOffers = p[MEDIA_MANAGEMENT_OFFERS] ?: 0,
+            autoplayMotion = p[AUTOPLAY_MOTION] ?: true,
         )
     }
 
@@ -72,6 +78,7 @@ class Preferences(private val context: Context) {
         backup.timelineOff?.let { p[TIMELINE_OFF] = it.filter { key -> FolderKey.of(key) != null }.toSet() }
         backup.newAlbumsInPhotos?.let { p[NEW_ALBUMS_IN_PHOTOS] = it }
         backup.mediaManagementOffers?.let { p[MEDIA_MANAGEMENT_OFFERS] = it.coerceIn(0, 2) }
+        backup.autoplayMotion?.let { p[AUTOPLAY_MOTION] = it }
     }
 
     /** Restore defaults (Settings › Reset): every setting of this store back to its default. */
@@ -83,5 +90,6 @@ class Preferences(private val context: Context) {
         val TIMELINE_OFF = stringSetPreferencesKey("timeline_off")
         val NEW_ALBUMS_IN_PHOTOS = booleanPreferencesKey("new_albums_in_photos")
         val MEDIA_MANAGEMENT_OFFERS = intPreferencesKey("media_management_offers")
+        val AUTOPLAY_MOTION = booleanPreferencesKey("autoplay_motion")
     }
 }

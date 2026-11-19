@@ -63,6 +63,7 @@ import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Timeline
 import sh.hnet.gallery.model.TimelineEntry
 import sh.hnet.gallery.ui.components.MediaThumbnail
+import sh.hnet.gallery.ui.viewer.mediaOrigin
 
 /** Where the grid should stand after a change of step: the item under the fingers, at their height (SPEC §4.4). */
 private data class Anchor(val id: Long, val y: Float, val months: Boolean)
@@ -257,7 +258,8 @@ fun formatDuration(ms: Long): String {
  */
 @Composable
 private fun Tile(item: MediaItem, fact: Fact?, px: Int, corner: Dp, marks: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.aspectRatio(1f).clip(RoundedCornerShape(corner)).clickable(onClick = onClick)) {
+    // The tile is where the viewer flies from and back to (SPEC §6.1)
+    Box(modifier.aspectRatio(1f).mediaOrigin(item.id.toString(), corner).clip(RoundedCornerShape(corner)).clickable(onClick = onClick)) {
         MediaThumbnail(item, px, Modifier.fillMaxSize())
         if (!marks) return@Box
         when {

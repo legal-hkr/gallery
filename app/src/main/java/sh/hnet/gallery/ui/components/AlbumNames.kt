@@ -19,7 +19,9 @@ fun albumName(folder: FolderKey): String = when {
  * own counts as an SD card until S4 tells SD cards and USB drives apart.
  */
 @Composable
-fun albumPath(folder: FolderKey): String {
-    val storage = stringResource(if (folder.volume == MediaStore.VOLUME_EXTERNAL_PRIMARY) R.string.label_internal_storage else R.string.label_sd_card)
-    return stringResource(R.string.format_album_path, storage, folder.path.trimEnd('/'))
-}
+fun albumPath(folder: FolderKey): String = stringResource(R.string.format_album_path, storageName(folder.volume), folder.path.trimEnd('/'))
+
+/** The storage a volume is (SPEC §7.1): the phone's own, else an SD card until S4 tells SD cards and USB drives apart. */
+@Composable
+fun storageName(volume: String): String =
+    stringResource(if (volume == MediaStore.VOLUME_EXTERNAL_PRIMARY) R.string.label_internal_storage else R.string.label_sd_card)

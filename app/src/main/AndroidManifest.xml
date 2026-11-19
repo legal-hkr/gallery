@@ -10,6 +10,16 @@
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- S1: the optional special access "Media management" (SPEC §10.6), offered in the wizard; declared so the system lists the app on its page -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+    <!-- Media3 merges this in for streaming; the app plays only local files (as Music) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
+    <!-- S2: Info's "Open in a maps app" shows only when an app answers geo: (package visibility) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
 
     <application
         android:name=".GalleryApplication"
@@ -26,9 +36,11 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
-            <!-- Portrait only (family rule): the layout has no landscape arrangement. Android 16+
-                 ignores it only on large screens (smallest width 600 dp and up), not on phones. -->
+            <!-- Portrait (family rule), except while the viewer is open: it turns with the phone when auto-rotate is on
+                 (owner's decisions of 18 Nov 2026, D1), and turning doesn't recreate the activity (LOGIKA §1). Android 16+
+                 ignores the lock only on large screens (smallest width 600 dp and up), not on phones. -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

@@ -1,12 +1,9 @@
 package sh.hnet.gallery.ui.components
 
 import android.content.ContentResolver
-import android.content.ContentUris
 import android.graphics.Bitmap
-import android.net.Uri
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
-import android.provider.MediaStore
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.foundation.Image
@@ -30,13 +27,8 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.R
+import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.MediaItem
-
-/** An item's address for the system and other apps: in its own collection (images or videos) on its own volume. */
-fun MediaItem.uri(): Uri = ContentUris.withAppendedId(
-    if (video) MediaStore.Video.Media.getContentUri(volume) else MediaStore.Images.Media.getContentUri(volume),
-    id,
-)
 
 /**
  * Thumbnails from the system's own cache (`loadThumbnail`), kept in memory only (SPEC §22.8): an LRU
@@ -109,13 +101,13 @@ sealed interface Thumb {
  * @param px The cell's size in pixels
  */
 @Composable
-fun MediaThumbnail(item: MediaItem, px: Int, modifier: Modifier = Modifier) {
+fun MediaThumbnail(item: MediaItem, px: Int, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
     val resolver = LocalContext.current.contentResolver
     val thumb by produceState(Thumbnails.peek(item, px), item.id, item.generation, Thumbnails.sizeFor(px)) {
         if (value == null) value = Thumbnails.load(resolver, item, px)
     }
     when (val current = thumb) {
-        is Thumb.Image -> Image(current.bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = modifier)
+        is Thumb.Image -> Image(current.bitmap, contentDescription = null, contentScale = contentScale, modifier = modifier)
         Thumb.Broken -> Box(modifier.background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
             Icon(painterResource(R.drawable.ic_broken_image), contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }

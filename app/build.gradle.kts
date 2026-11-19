@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.datastore.preferences)
     implementation(libs.exifinterface)
+    implementation(libs.media3.exoplayer)
 
     implementation(libs.room.runtime)
     implementation(libs.sqlite.framework)

@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,7 +54,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import java.time.LocalDate
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import sh.hnet.gallery.R
+import sh.hnet.gallery.model.TimelineEntry
 import sh.hnet.gallery.ui.components.EmptyState
 import sh.hnet.gallery.ui.components.GridFastScroller
 import sh.hnet.gallery.ui.components.MediaAccess
@@ -61,6 +64,7 @@ import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.rememberMediaAccessAsk
 import sh.hnet.gallery.ui.grid.MediaGrid
 import sh.hnet.gallery.ui.grid.formatDate
+import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
  * The Photos tab (SPEC §4): the timeline of the camera, the screenshots and the albums switched on,
@@ -69,13 +73,14 @@ import sh.hnet.gallery.ui.grid.formatDate
  * @param onChooseAlbums The empty timeline's button: Settings › Photos
  */
 @Composable
-fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, viewModel: PhotosViewModel = viewModel()) {
+fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen: (ViewerRequest) -> Unit, viewModel: PhotosViewModel = viewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
     val facts by viewModel.facts.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val grid = rememberLazyGridState()
     val today = remember(state) { LocalDate.now() }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.label_nav_photos), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
@@ -118,6 +123,17 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, viewMod
                                 current.partial?.let { count -> item(key = "card:partial", span = { GridItemSpan(maxLineSpan) }) { PartialAccessCard(count, onAnswer = viewModel::recheck) } }
                             },
                             topCount = topCount,
+                            onOpen = { item ->
+                                val timeline = current.timeline
+                                val ids = timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
+                                onOpen(ViewerRequest(ids, item.id) { id ->
+                                    // The grid under the viewer follows the item shown, so the flight back lands on its tile
+                                    val index = timeline.indexOf[id] ?: return@ViewerRequest
+                                    val target = index + topCount
+                                    val visible = grid.layoutInfo.visibleItemsInfo
+                                    if (visible.none { it.index == target }) scope.launch { grid.scrollToItem(target) }
+                                })
+                            },
                         )
                         // The bubble shows the month and year there; the month view's headers already say the month, so the year alone (SPEC §4.6)
                         GridFastScroller(grid, entries.size + topCount, label = { index ->

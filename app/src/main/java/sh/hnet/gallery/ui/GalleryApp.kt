@@ -31,6 +31,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,8 +60,10 @@ import kotlinx.coroutines.delay
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
+import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.MediaAccess
 import sh.hnet.gallery.ui.components.StatusCard
+import sh.hnet.gallery.ui.components.rememberConsent
 import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
@@ -70,7 +73,12 @@ import sh.hnet.gallery.ui.settings.LicensesScreen
 import sh.hnet.gallery.ui.settings.PhotosSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
+import sh.hnet.gallery.ui.settings.ViewerSettingsScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
+import sh.hnet.gallery.ui.viewer.LocalMediaOrigins
+import sh.hnet.gallery.ui.viewer.MediaOrigins
+import sh.hnet.gallery.ui.viewer.ViewerHost
+import sh.hnet.gallery.ui.viewer.ViewerRequest
 import sh.hnet.gallery.ui.welcome.WizardScreen
 
 /**
@@ -120,6 +128,10 @@ fun GalleryApp() {
     val messages = rememberCoroutineScope()
     // The first run (SPEC §19): the wizard lies over everything until it is done, as Contacts'
     var wizard by rememberSaveable { mutableStateOf(!MediaAccess.wizardDone(appContext)) }
+    // The viewer over everything, while open (LOGIKA §1); not kept over the process's death (SPEC §3.3)
+    var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
+    val origins = remember { MediaOrigins() }
+    val consent = rememberConsent()
 
     // Reading the files' facts (owner's decision D4): the status card once a reading takes over a second, never for a single new shot
     val reading by app.facts.progress.collectAsStateWithLifecycle()
@@ -133,11 +145,12 @@ fun GalleryApp() {
         }
     }
 
+    CompositionLocalProvider(LocalMediaOrigins provides origins, LocalConsent provides consent) {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = {
-            if (!wizard) SnackbarHost(snackbars) { data ->
+            if (!wizard && viewer == null) SnackbarHost(snackbars) { data ->
                 Snackbar(data, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.padding(horizontal = 12.dp))
             }
         },
@@ -197,6 +210,7 @@ fun GalleryApp() {
                                 currentStack.add(Screen.Settings)
                                 currentStack.add(Screen.SettingsPhotos)
                             },
+                            onOpen = { viewer = it },
                         )
                     }
                     entry<Screen.Albums> { PlaceholderScreen(stringResource(R.string.label_nav_albums), onOpenSettings = { currentStack.add(Screen.Settings) }) }
@@ -205,6 +219,7 @@ fun GalleryApp() {
                         SettingsRootScreen(
                             onBack = back,
                             onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
+                            onOpenViewer = { currentStack.add(Screen.SettingsViewer) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
@@ -220,6 +235,7 @@ fun GalleryApp() {
                         )
                     }
                     entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
+                    entry<Screen.SettingsViewer> { ViewerSettingsScreen(onBack = back) }
                     entry<Screen.SettingsBackup> { BackupScreen(onBack = back, snackbars = snackbars, messageScope = messages) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
                     entry<Screen.SettingsLanguage> { LanguageScreen(onBack = back) }
@@ -244,6 +260,9 @@ fun GalleryApp() {
         }
         }
     }
+    viewer?.let { request ->
+        ViewerHost(request, snackbars, messages, onClose = { viewer = null })
+    }
     if (wizard) {
         WizardScreen(snackbars, messages, onDone = {
             MediaAccess.markWizardDone(appContext)
@@ -253,6 +272,7 @@ fun GalleryApp() {
         SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) { data ->
             Snackbar(data, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.padding(horizontal = 12.dp))
         }
+    }
     }
     }
 }
