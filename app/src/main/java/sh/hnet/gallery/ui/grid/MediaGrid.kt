@@ -52,6 +52,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -66,6 +67,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.R
 import sh.hnet.gallery.facts.Fact
@@ -134,6 +136,7 @@ fun MediaGrid(
     val stepNow by rememberUpdatedState(step)
     val onStepChangeNow by rememberUpdatedState(onStepChange)
     val motion = MaterialTheme.motionScheme
+    val resolver = LocalContext.current.contentResolver
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Tablets get more columns at every step (SPEC §23)
@@ -157,6 +160,24 @@ fun MediaGrid(
         val geometries = remember(days, months, widthPx, headerPx, widthFactor) { HashMap<GridStep, GridGeometry>() }
         fun geometry(s: GridStep): GridGeometry = geometries.getOrPut(s) {
             GridGeometry.of((if (s.months) months else days).entries, columnsOf(s), widthPx, with(density) { gapOf(s).toPx() }, headerPx)
+        }
+
+        /**
+         * Reads the thumbnails of the tiles a change of step will show, at the new step's size: the grid then takes over
+         * with them in memory instead of reading them once on screen.
+         */
+        suspend fun prefetch(change: Morph) {
+            val from = geometry(change.from)
+            val to = geometry(change.to)
+            val fromEntries = (if (change.from.months) months else days).entries
+            val toEntries = (if (change.to.months) months else days).entries
+            val px = to.cell.toInt()
+            coroutineScope {
+                for (piece in Morphs.pieces(from, to, change.anchor, change.pivot.y, change.fy, heightPx, 1f)) {
+                    val entry = if (piece.inFrom) fromEntries[piece.index] else toEntries[piece.index]
+                    if (entry is TimelineEntry.Tile) launch { Thumbnails.load(resolver, entry.item, px) }
+                }
+            }
         }
 
         /** The tile under a point of the grid, or the nearest one, and how far down in it the point is (0–1). */
@@ -225,7 +246,10 @@ fun MediaGrid(
                                             val change = Morph(key, fy, centroid, stepNow, target)
                                             morph = change
                                             scope.launch {
+                                                // The new step's thumbnails read meanwhile, so the grid shows them sharp when it takes over
+                                                val prefetch = launch { prefetch(change) }
                                                 change.progress.animateTo(1f, motion.defaultSpatialSpec())
+                                                prefetch.cancel()
                                                 val geo = geometry(target)
                                                 val index = geo.index(change.anchor)
                                                 val top = if (index != null) Morphs.offset(geo, index, change.pivot.y, change.fy, heightPx) + geo.box(index).top else 0f

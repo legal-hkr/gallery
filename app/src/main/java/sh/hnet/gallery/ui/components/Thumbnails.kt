@@ -109,8 +109,10 @@ sealed interface Thumb {
 @Composable
 fun MediaThumbnail(item: MediaItem, px: Int, modifier: Modifier = Modifier, contentScale: ContentScale = ContentScale.Crop) {
     val resolver = LocalContext.current.contentResolver
-    val thumb by produceState(Thumbnails.peek(item, px), item.id, item.generation, Thumbnails.sizeFor(px)) {
-        if (value == null) value = Thumbnails.load(resolver, item, px)
+    // Until its own size is read, a size already in memory stands in: a tile that a pinch's change brought on screen
+    // went dark until its size was read, after the change's layer had shown it from memory (owner's phone test, 19 Nov 2026)
+    val thumb by produceState(Thumbnails.peek(item, px) ?: Thumbnails.peekAny(item), item.id, item.generation, Thumbnails.sizeFor(px)) {
+        if (Thumbnails.peek(item, px) == null) value = Thumbnails.load(resolver, item, px)
     }
     when (val current = thumb) {
         is Thumb.Image -> Image(current.bitmap, contentDescription = null, contentScale = contentScale, modifier = modifier)
