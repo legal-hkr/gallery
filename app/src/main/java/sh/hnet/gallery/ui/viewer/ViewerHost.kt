@@ -183,6 +183,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
                 request.ids, request.start, snackbars, messageScope,
                 trash = request.trash,
                 album = request.album,
+                revealed = shown,
                 onPage = {
                     current = it
                     request.onPage(it)

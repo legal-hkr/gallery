@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.onSizeChanged
@@ -185,6 +186,9 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
         val down = awaitFirstDown(requireUnconsumed = false)
         // A new touch takes over from a running double-tap animation
         animation?.cancel()
+        // A touch the pager took before us – to stop its pages still moving – is never a tap: the pager keeps the rest of
+        // that drag to itself, so the finger seemed not to move (owner's phone test: every second quick swipe toggled the chrome)
+        val stolen = down.isConsumed
         var transformed = false
         var multiTouch = false
         var movement = 0f
@@ -217,9 +221,10 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
                 event.changes.forEach { if (it.positionChanged()) it.consume() }
             } else {
                 val change = event.changes.first()
+                // The finger's way counts whoever moves with it
+                movement += change.positionChangeIgnoreConsumed().getDistance()
                 if (change.positionChanged()) {
                     val pan = change.position - change.previousPosition
-                    movement += pan.getDistance()
                     // At fitted scale the drag belongs to the parent (the pager, the swipe down); zoomed, it pans the image
                     // until a sideways drag meets its edge, and from then on the whole rest of the drag moves the pages
                     val pager = state.pager
@@ -251,7 +256,7 @@ private suspend fun PointerInputScope.zoomGestures(state: ZoomState) = coroutine
             return@awaitEachGesture
         }
 
-        val isTap = !transformed && !multiTouch && upTime - down.uptimeMillis < TAP_TIMEOUT_MS && movement < TAP_SLOP_PX
+        val isTap = !stolen && !transformed && !multiTouch && upTime - down.uptimeMillis < TAP_TIMEOUT_MS && movement < TAP_SLOP_PX
         pendingSingleTap?.cancel()
         when {
             !isTap -> lastTapTime = 0L

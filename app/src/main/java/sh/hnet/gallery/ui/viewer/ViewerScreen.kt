@@ -149,6 +149,7 @@ fun ViewerScreen(
     messageScope: CoroutineScope,
     trash: Boolean = false,
     album: Long? = null,
+    revealed: Boolean = true,
     onPage: (Long) -> Unit,
     onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
@@ -183,7 +184,8 @@ fun ViewerScreen(
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
     val dismiss = rememberViewerDismissState()
     var chrome by rememberSaveable { mutableStateOf(true) }
-    val chromeShown = chrome && !dismiss.active
+    // The chrome fades in once the flight has landed (owner: it jumped in) and goes while the viewer is swiped or flown away
+    val chromeShown = chrome && !dismiss.active && revealed
     var info by rememberSaveable { mutableStateOf(false) }
     // Items this viewer put in Trash (or restored, or deleted, from Trash): their leaving the pages is no news
     val ownTrashed = remember { HashSet<Long>() }
@@ -269,13 +271,15 @@ fun ViewerScreen(
         if (index >= 0 && pager.currentPage != index) pager.scrollToPage(index)
     }
 
-    // The chrome and the system bars together (SPEC §6.2); the bars come back when the viewer goes
+    // The system bars with the chrome the user toggles (SPEC §6.2) – not with its going away while the viewer closes: the
+    // bars disappeared for a moment on the way back to the grid (owner's phone test); they come back when the viewer goes
     val view = LocalView.current
     val window = activity?.window
-    LaunchedEffect(chromeShown, window) {
+    val barsShown = chrome || dismiss.active
+    LaunchedEffect(barsShown, window) {
         val controller = window?.let { WindowCompat.getInsetsController(it, view) } ?: return@LaunchedEffect
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        if (chromeShown) controller.show(WindowInsetsCompat.Type.systemBars()) else controller.hide(WindowInsetsCompat.Type.systemBars())
+        if (barsShown) controller.show(WindowInsetsCompat.Type.systemBars()) else controller.hide(WindowInsetsCompat.Type.systemBars())
     }
     DisposableEffect(window) {
         onDispose {
