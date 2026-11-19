@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,11 +61,16 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.model.TimelineEntry
 import sh.hnet.gallery.ui.components.EmptyState
 import sh.hnet.gallery.ui.components.GridFastScroller
+import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.MediaAccess
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.rememberMediaAccessAsk
 import sh.hnet.gallery.ui.grid.MediaGrid
+import sh.hnet.gallery.ui.grid.MediaSelectionToolbar
+import sh.hnet.gallery.ui.grid.SelectionEffects
+import sh.hnet.gallery.ui.grid.SelectionTopBar
 import sh.hnet.gallery.ui.grid.formatDate
+import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -81,12 +88,28 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
     val grid = rememberLazyGridState()
     val today = remember(state) { LocalDate.now() }
     val scope = rememberCoroutineScope()
+    // Selecting (SPEC §5): the items shown, by id; what went away meanwhile leaves the selection
+    val selection = rememberSelection()
+    SelectionEffects(selection)
+    val actions = LocalMediaActions.current
+    val shownItems = remember(state, step) {
+        (state as? PhotosState.Shown)?.timeline(step)?.entries.orEmpty().mapNotNull { (it as? TimelineEntry.Tile)?.item }
+    }
+    val allIds = remember(shownItems) { shownItems.map { it.id } }
+    LaunchedEffect(allIds) {
+        val present = allIds.toHashSet()
+        if (selection.selected.any { it !in present }) selection.selected = selection.selected.filterTo(HashSet()) { it in present }
+    }
     Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.label_nav_photos), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
-            actions = { TooltipIconButton(R.drawable.ic_settings, stringResource(R.string.content_description_settings), onOpenSettings) },
-            scrollBehavior = scrollBehavior,
-        )
+        if (selection.active) {
+            SelectionTopBar(selection, allIds)
+        } else {
+            TopAppBar(
+                title = { Text(stringResource(R.string.label_nav_photos), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
+                actions = { TooltipIconButton(R.drawable.ic_settings, stringResource(R.string.content_description_settings), onOpenSettings) },
+                scrollBehavior = scrollBehavior,
+            )
+        }
         when (val current = state) {
             PhotosState.Loading -> Loading()
             PhotosState.NoAccess -> NoAccess(onAnswer = viewModel::recheck)
@@ -125,6 +148,8 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 current.partial?.let { count -> item(key = "card:partial", span = { GridItemSpan(maxLineSpan) }) { PartialAccessCard(count, onAnswer = viewModel::recheck) } }
                             },
                             topCount = topCount,
+                            selection = selection,
+                            bottomPadding = if (selection.active) 96.dp else 0.dp,
                             onOpen = { item ->
                                 val ids = timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
                                 onOpen(ViewerRequest(ids, item.id) { id ->
@@ -141,6 +166,16 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                             val month = entries[(index - topCount).coerceIn(0, entries.lastIndex)].month
                             if (timeline.months) month.year.toString() else formatDate(monthYear, month.atDay(1), locale)
                         }, modifier = Modifier.align(Alignment.TopEnd))
+                        if (selection.active) {
+                            val chosen = shownItems.filter { it.id in selection.selected }
+                            MediaSelectionToolbar(
+                                chosen,
+                                // Both end the selection once done (owner's test of S4a, over SPEC §5.4: as in the family's other apps)
+                                onFavorite = { favorite -> actions.favorite(chosen, favorite, say = true) { selection.clear() } },
+                                onDelete = { actions.trash(chosen) { selection.clear() } },
+                                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -200,12 +235,12 @@ internal fun NoAccess(onAnswer: () -> Unit) {
  * @param count The items the app may see
  */
 @Composable
-internal fun PartialAccessCard(count: Int, onAnswer: () -> Unit) {
+internal fun PartialAccessCard(count: Int, onAnswer: () -> Unit, sides: Dp = 16.dp) {
     val ask = rememberMediaAccessAsk(onAnswer)
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = sides, vertical = 8.dp)
             .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp))
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
     ) {

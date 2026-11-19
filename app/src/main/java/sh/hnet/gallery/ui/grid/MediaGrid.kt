@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
@@ -12,6 +13,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,7 +48,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -54,8 +58,10 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -76,6 +82,7 @@ import sh.hnet.gallery.model.GridStep
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Morphs
 import sh.hnet.gallery.model.PinchSteps
+import sh.hnet.gallery.model.Selection
 import sh.hnet.gallery.model.Timeline
 import sh.hnet.gallery.model.TimelineEntry
 import sh.hnet.gallery.model.lerp
@@ -126,9 +133,17 @@ fun MediaGrid(
     modifier: Modifier = Modifier,
     top: LazyGridScope.() -> Unit = {},
     topCount: Int = 0,
+    selection: SelectionState? = null,
+    bottomPadding: Dp = 0.dp,
     onOpen: (MediaItem) -> Unit = {},
 ) {
     val timeline = if (step.months) months else days
+    // Selecting (SPEC §5.3): the tiles in reading order, and each header's tiles
+    val order = remember(timeline) { timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id } }
+    val orderIndex = remember(order) { order.withIndex().associate { (i, id) -> id to i } }
+    val groups = remember(timeline) { Selection.groups(timeline.entries) }
+    var drag by remember { mutableStateOf<DragRun?>(null) }
+    val haptics = LocalHapticFeedback.current
     var anchor by remember { mutableStateOf<Anchor?>(null) }
     var morph by remember { mutableStateOf<Morph?>(null) }
     var settle by remember { mutableStateOf<Settle?>(null) }
@@ -183,6 +198,39 @@ fun MediaGrid(
             }
         }
 
+        /** The tile under a point of the grid, if any (a header or a gap: none). */
+        fun tileUnder(point: Offset): Long? = state.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+            point.x >= info.offset.x && point.x < info.offset.x + info.size.width && point.y >= info.offset.y && point.y < info.offset.y + info.size.height
+        }?.let { (it.key as? String)?.toLongOrNull() }
+
+        /** The drag's run reaching the tile under the finger (SPEC §5.3). */
+        fun dragTo(run: DragRun, point: Offset) {
+            val id = tileUnder(point) ?: return
+            val index = orderIndex[id] ?: return
+            selection?.selected = Selection.run(run.base, order, run.anchor, index, run.select)
+        }
+
+        // Near the top or bottom 64 dp the grid scrolls by itself while a drag selects, faster closer to the edge (SPEC §5.3)
+        val edgePx = with(density) { 64.dp.toPx() }
+        val fastestPx = with(density) { 24.dp.toPx() }
+        LaunchedEffect(drag) {
+            val run = drag ?: return@LaunchedEffect
+            while (true) {
+                withFrameNanos { }
+                if (!run.pointer.isSpecified) continue
+                val y = run.pointer.y
+                val speed = when {
+                    y < edgePx -> -fastestPx * (1f - (y / edgePx).coerceIn(0f, 1f))
+                    y > heightPx - edgePx -> fastestPx * (1f - ((heightPx - y) / edgePx).coerceIn(0f, 1f))
+                    else -> 0f
+                }
+                if (speed != 0f) {
+                    state.scrollBy(speed)
+                    dragTo(run, run.pointer)
+                }
+            }
+        }
+
         /** The card's height before the entries, when it and the first entry are on screen. */
         fun measureLead() {
             if (topCount == 0) return
@@ -232,6 +280,8 @@ fun MediaGrid(
             state = state,
             horizontalArrangement = Arrangement.spacedBy(gap),
             verticalArrangement = Arrangement.spacedBy(gap),
+            // Room under the last line for the selection's toolbar (as Contacts')
+            contentPadding = PaddingValues(bottom = bottomPadding),
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
@@ -277,6 +327,24 @@ fun MediaGrid(
                         }
                     }
                 }
+                // A drag after a long press selects a run (SPEC §5.3): read before the grid scrolls with the finger
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val run = drag
+                            if (run != null && event.changes.size == 1) {
+                                val change = event.changes.first()
+                                run.pointer = change.position
+                                dragTo(run, change.position)
+                                change.consume()
+                            }
+                            if (event.changes.none { it.pressed }) break
+                        }
+                        drag = null
+                    }
+                }
                 // The layer draws the grid while a change of step is under way
                 .graphicsLayer { alpha = if (morph != null) 0f else 1f },
         ) {
@@ -288,16 +356,35 @@ fun MediaGrid(
                 contentType = { it::class },
             ) { entry ->
                 when (entry) {
-                    is TimelineEntry.Day -> DayHeader(entry.date, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height })
-                    is TimelineEntry.Month -> MonthHeader(entry.month, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height })
+                    is TimelineEntry.Day, is TimelineEntry.Month -> {
+                        val group = groups[entry.key].orEmpty()
+                        val pick = if (selection?.active == true && group.isNotEmpty()) {
+                            HeaderPick(selected = selection.selected.containsAll(group)) { selection.selected = Selection.toggleGroup(selection.selected, group) }
+                        } else null
+                        val measured = Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height }
+                        if (entry is TimelineEntry.Day) DayHeader(entry.date, today, measured, pick) else MonthHeader((entry as TimelineEntry.Month).month, today, measured, pick)
+                    }
                     is TimelineEntry.Tile -> Tile(
                         entry.item,
                         facts[entry.item.id],
                         cellPx.toInt(),
                         corner,
                         marks = !step.months,
+                        selecting = selection?.active == true,
+                        selected = selection?.selected?.contains(entry.item.id) == true,
+                        onLongClick = if (selection == null) null else ({
+                            // Selecting starts with this tile, or a long press while selecting flips it; keeping the finger down drags a run
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val base = selection.selected
+                            val select = entry.item.id !in base
+                            selection.selected = if (select) base + entry.item.id else base - entry.item.id
+                            orderIndex[entry.item.id]?.let { index -> drag = DragRun(index, base, select) }
+                        }),
                         onClick = {
-                            if (step.months) {
+                            if (selection?.active == true) {
+                                // While selecting a tap toggles, it never opens the viewer (SPEC §5.2)
+                                selection.toggle(entry.item.id)
+                            } else if (step.months) {
                                 // A tile of the month view opens step 2 at its day, not the viewer (SPEC §4.4)
                                 val info = state.layoutInfo.visibleItemsInfo.firstOrNull { it.key == entry.key }
                                 val y = info?.let { it.offset.y + it.size.height / 2f } ?: 0f
@@ -361,32 +448,50 @@ private fun MorphTile(item: MediaItem, modifier: Modifier) {
 
 /** A day's header (SPEC §4.3): "Today", "Yesterday", the date with the weekday, the year only when it isn't this one. */
 @Composable
-private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier) {
+private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val text = when (date) {
         today -> stringResource(R.string.label_today)
         today.minusDays(1) -> stringResource(R.string.label_yesterday)
         else -> formatDate(stringResource(if (date.year == today.year) R.string.format_day else R.string.format_day_year), date, locale)
     }
-    Header(text, modifier)
+    Header(text, modifier, pick)
 }
 
 /** A month's header in the month view (SPEC §4.4). */
 @Composable
-private fun MonthHeader(month: YearMonth, today: LocalDate, modifier: Modifier = Modifier) {
+private fun MonthHeader(month: YearMonth, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null) {
     val locale = LocalConfiguration.current.locales[0]
-    Header(formatDate(stringResource(if (month.year == today.year) R.string.format_month else R.string.format_month_year), month.atDay(1), locale), modifier)
+    Header(formatDate(stringResource(if (month.year == today.year) R.string.format_month else R.string.format_month_year), month.atDay(1), locale), modifier, pick)
+}
+
+/** A header's circle while selecting (SPEC §5.3): its group all selected or not, and the toggle. */
+private class HeaderPick(val selected: Boolean, val toggle: () -> Unit)
+
+/** A drag selecting a run (SPEC §5.3): the first tile's place in reading order, the selection before, the state the run takes. */
+private class DragRun(val anchor: Int, val base: Set<Long>, val select: Boolean) {
+    /** Where the finger is; unknown until it first moves (owner's test of S4a: taken as the top corner, the grid ran up selecting everything). */
+    var pointer by mutableStateOf(Offset.Unspecified)
 }
 
 @Composable
-private fun Header(text: String, modifier: Modifier) {
-    Text(
-        text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurface,
-        maxLines = 1,
-        modifier = modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp).semantics { heading() },
-    )
+private fun Header(text: String, modifier: Modifier, pick: HeaderPick? = null) {
+    Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
+        if (pick != null) {
+            val label = stringResource(R.string.content_description_select_day)
+            Box(
+                Modifier.size(24.dp).clickable(onClickLabel = label, onClick = pick.toggle).semantics { contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) { SelectionMark(pick.selected) }
+        }
+    }
 }
 
 /** A date by a CLDR pattern in the app's language, its first letter capitalized (SPEC §4.3). */
@@ -407,11 +512,29 @@ fun formatDuration(ms: Long): String {
  * marks: at the top end the video's length, a motion photo or RAW; at the bottom start a favorite.
  */
 @Composable
-private fun Tile(item: MediaItem, fact: Fact?, px: Int, corner: Dp, marks: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun Tile(
+    item: MediaItem,
+    fact: Fact?,
+    px: Int,
+    corner: Dp,
+    marks: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    selecting: Boolean = false,
+    selected: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+) {
     // The tile is where the viewer flies from and back to (SPEC §6.1)
-    Box(modifier.aspectRatio(1f).mediaOrigin(item.id.toString(), corner).clip(RoundedCornerShape(corner)).clickable(onClick = onClick)) {
+    SelectableFrame(
+        selecting,
+        selected,
+        corner,
+        // The ripple keeps the tile's corners
+        modifier.aspectRatio(1f).mediaOrigin(item.id.toString(), corner).clip(RoundedCornerShape(corner)).combinedClickable(onLongClick = onLongClick, onClick = onClick),
+    ) {
         MediaThumbnail(item, px, Modifier.fillMaxSize())
-        if (!marks) return@Box
+        // Marks are hidden while selecting: the circle takes the corner
+        if (!marks || selecting) return@SelectableFrame
         when {
             item.video -> Mark(Modifier.align(Alignment.TopEnd)) {
                 Text(formatDuration(item.duration), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
@@ -433,7 +556,7 @@ private fun Tile(item: MediaItem, fact: Fact?, px: Int, corner: Dp, marks: Boole
 
 /** A small opaque pill over the tile (SPEC §4.5): `surface-container`, 20 dp high, 10 dp corners. */
 @Composable
-private fun Mark(modifier: Modifier, content: @Composable () -> Unit) {
+internal fun Mark(modifier: Modifier, content: @Composable () -> Unit) {
     Row(
         modifier
             .padding(4.dp)

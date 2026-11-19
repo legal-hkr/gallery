@@ -16,6 +16,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
  */
 class Consent internal constructor(private val launch: (PendingIntent, () -> Unit) -> Unit) {
     fun ask(request: PendingIntent, then: () -> Unit) = launch(request, then)
+
+    /** The user agreed in the system's dialog (the second offer of Media management follows the first time, SPEC §10.6). */
+    var onConfirmed: () -> Unit = {}
 }
 
 val LocalConsent = staticCompositionLocalOf<Consent> { error("No consent provided") }
@@ -23,15 +26,19 @@ val LocalConsent = staticCompositionLocalOf<Consent> { error("No consent provide
 @Composable
 fun rememberConsent(): Consent {
     val pending = remember { arrayOfNulls<() -> Unit>(1) }
+    val holder = remember { arrayOfNulls<Consent>(1) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val then = pending[0]
         pending[0] = null
-        if (result.resultCode == Activity.RESULT_OK) then?.invoke()
+        if (result.resultCode == Activity.RESULT_OK) {
+            then?.invoke()
+            holder[0]?.onConfirmed?.invoke()
+        }
     }
     return remember(launcher) {
         Consent { request, then ->
             pending[0] = then
             launcher.launch(IntentSenderRequest.Builder(request).build())
-        }
+        }.also { holder[0] = it }
     }
 }

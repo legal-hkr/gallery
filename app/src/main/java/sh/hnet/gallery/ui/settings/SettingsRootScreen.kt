@@ -1,10 +1,16 @@
 package sh.hnet.gallery.ui.settings
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import sh.hnet.gallery.BuildConfig
 import sh.hnet.gallery.R
+import sh.hnet.gallery.ui.components.MediaManagement
 import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
 import sh.hnet.gallery.ui.components.SettingsPage
@@ -26,6 +32,23 @@ fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewe
             }
             row { shapes ->
                 SettingsNavigationRow(shapes, R.drawable.ic_imagesmode, stringResource(R.string.settings_viewer), stringResource(R.string.settings_viewer_desc), onClick = onOpenViewer)
+            }
+        }
+        // Media management (SPEC §20.1, LOGIKA §15.11): whether it is given, and the system's page; read again on every return
+        var granted by remember { mutableStateOf(MediaManagement.granted(context)) }
+        LifecycleResumeEffect(Unit) {
+            granted = MediaManagement.granted(context)
+            onPauseOrDispose {}
+        }
+        SettingsGroup {
+            row { shapes ->
+                SettingsNavigationRow(
+                    shapes,
+                    R.drawable.ic_folder_managed,
+                    stringResource(R.string.title_media_management),
+                    stringResource(if (granted) R.string.settings_media_granted else R.string.settings_media_not_granted),
+                    onClick = { MediaManagement.openSettings(context) },
+                )
             }
         }
         SettingsGroup(stringResource(R.string.title_settings_group_app)) {

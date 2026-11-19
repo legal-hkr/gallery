@@ -89,7 +89,7 @@
     <string name="desc_start_fresh">Ustawienia domyślne.</string>
     <string name="label_step">Krok %1$d z %2$d</string>
     <string name="msg_wizard_access">Aplikacja pokazuje zdjęcia i filmy zapisane w telefonie i zmienia je za pośrednictwem systemu. Potrzebuje do tego dostępu do nich.</string>
-    <string name="msg_wizard_media_management">Aplikacja może przenosić pliki innych aplikacji, na przykład aparatu, do kosza lub innych albumów, zmieniać ich nazwy i dodawać je do ulubionych. Bez tego dostępu system pyta o zgodę przy każdej takiej zmianie.</string>
+    <string name="msg_wizard_media_management">Aplikacja może przenosić pliki innych aplikacji, na przykład aparatu, do kosza, zmieniać ich nazwy i dodawać je do ulubionych. Bez tego dostępu system pyta o zgodę przy każdej takiej zmianie.</string>
     <string name="title_location_in_photos">Lokalizacja w zdjęciach</string>
     <string name="title_media_management">Zarządzanie multimediami</string>
     <string name="title_no_internet">Bez Internetu</string>
@@ -124,7 +124,7 @@
     <string name="status_reading">Odczytywanie zdjęć…</string>
     <!-- Stage S2 -->
     <string name="action_add_to_album">Dodaj do albumu</string>
-    <string name="action_delete">Usuń</string>
+    <string name="action_delete">Przenieś do kosza</string>
     <string name="action_edit">Edytuj</string>
     <string name="action_favorite">Dodaj do ulubionych</string>
     <string name="action_info">Informacje</string>
@@ -153,7 +153,7 @@
     <string name="label_ultra_hdr">Ultra HDR (mapa wzmocnienia)</string>
     <string name="menu_edit_in_another_app">Edytuj w innej aplikacji</string>
     <string name="menu_open_with">Otwórz za pomocą</string>
-    <string name="menu_rename">Zmień nazwę</string>
+    <string name="menu_rename">Zmień nazwę pliku</string>
     <string name="menu_set_as">Ustaw jako</string>
     <string name="menu_slideshow_from_here">Pokaz slajdów od tego miejsca</string>
     <string name="msg_deleted_elsewhere">Ten element został usunięty w innej aplikacji.</string>
@@ -181,4 +181,63 @@
     <string name="label_sound_mono">dźwięk mono</string>
     <string name="label_sound_stereo">dźwięk stereo</string>
     <string name="label_speed">%1$s×</string>
+    <!-- Stage S4a -->
+    <string name="action_delete_forever">Usuń na zawsze</string>
+    <string name="action_restore">Przywróć</string>
+    <string name="action_slideshow">Pokaz slajdów</string>
+    <string name="content_description_clear_selection">Odznacz wszystko</string>
+    <string name="content_description_end_selection">Zakończ zaznaczanie</string>
+    <string name="content_description_select_all">Zaznacz wszystko</string>
+    <string name="content_description_select_day">Zaznacz dzień</string>
+    <string name="msg_moved_to_trash">Przeniesiono do kosza: %1$d</string>
+    <string name="msg_restored">Przywrócono: %1$d</string>
+    <string name="msg_restored_one">Przywrócono</string>
+    <string name="title_selected">Zaznaczone: %1$d</string>
+    <string name="button_delete_forever">Usuń na zawsze</string>
+    <string name="button_rename">Zmień nazwę</string>
+    <string name="desc_delete_forever">Tej operacji nie można cofnąć.</string>
+    <string name="error_file_exists">W tym samym folderze w telefonie jest już plik o tej nazwie.</string>
+    <string name="error_name_characters">Ten nośnik nie obsługuje tych znaków (%1$s).</string>
+    <string name="error_name_empty">Wpisz nazwę.</string>
+    <string name="label_file_name">Nazwa pliku</string>
+    <string name="msg_renamed">Zmieniono nazwę</string>
+    <string name="title_delete_forever_one">Usunąć na zawsze?</string>
+    <string name="title_rename">Zmień nazwę</string>
+    <string name="button_empty_trash">Opróżnij kosz</string>
+    <string name="content_description_new_album">Nowy album</string>
+    <string name="desc_empty_trash">Elementy w koszu (%1$d) zostaną usunięte na zawsze. Tej operacji nie można cofnąć.</string>
+    <string name="desc_trash_empty">Usunięte zdjęcia i filmy pozostają tu przez 30 dni. Potem system usuwa je na zawsze.</string>
+    <string name="desc_trash_note">System usuwa elementy z kosza na zawsze po 30 dniach od ich przeniesienia.</string>
+    <string name="label_favorites">Ulubione</string>
+    <string name="label_folders_count">Foldery: %1$d</string>
+    <string name="label_places">Miejsca</string>
+    <string name="label_screenshots">Zrzuty ekranu</string>
+    <string name="label_today_left">Dzisiaj</string>
+    <string name="label_trash">Kosz</string>
+    <string name="label_vault">Sejf</string>
+    <string name="label_videos">Filmy</string>
+    <string name="menu_empty_trash">Opróżnij kosz</string>
+    <string name="menu_restore_all">Przywróć wszystko</string>
+    <string name="msg_no_favorites">Nie ma jeszcze ulubionych.</string>
+    <string name="msg_no_screenshots">Nie ma zrzutów ekranu.</string>
+    <string name="msg_no_videos">Nie ma filmów.</string>
+    <string name="msg_trash_empty">Kosz jest pusty.</string>
+    <string name="sort_newest">Od najnowszych</string>
+    <string name="sort_oldest">Od najstarszych</string>
+    <string name="title_delete_forever">Usunąć na zawsze (%1$d)?</string>
+    <string name="title_empty_trash">Opróżnić kosz?</string>
+    <string name="desc_media_management_offer">Aplikacja może przenosić pliki innych aplikacji, na przykład aparatu, do kosza, zmieniać ich nazwy i dodawać je do ulubionych. Bez dostępu „Zarządzanie multimediami” system pyta o zgodę przy każdej takiej zmianie.</string>
+    <string name="desc_media_management_revoke">Dostęp można wyłączyć w każdej chwili w ustawieniach systemu.</string>
+    <string name="settings_media_granted">Przyznano. Aplikacja zmienia pliki bez pytania o zgodę za każdym razem.</string>
+    <string name="settings_media_not_granted">Nie przyznano. System pyta o zgodę przed zmianą plików innych aplikacji.</string>
+    <string name="title_media_management_offer">Mniej pytań od systemu</string>
+    <plurals name="label_days_left">
+        <item quantity="one">%d dzień</item>
+        <item quantity="few">%d dni</item>
+        <item quantity="many">%d dni</item>
+        <item quantity="other">%d dnia</item>
+    </plurals>
+    <!-- Stage S4a -->
+    <string name="msg_favorited">Dodano do ulubionych: %1$d</string>
+    <string name="msg_unfavorited">Usunięto z ulubionych: %1$d</string>
 </resources>

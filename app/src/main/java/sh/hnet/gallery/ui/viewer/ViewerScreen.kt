@@ -48,7 +48,6 @@ import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
@@ -80,6 +79,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -110,9 +110,13 @@ import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.model.ViewerList
+import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
 import sh.hnet.gallery.ui.components.Consent
 import sh.hnet.gallery.ui.components.LocalConsent
+import sh.hnet.gallery.ui.components.LocalMediaActions
+import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MenuItem
+import sh.hnet.gallery.ui.components.RenameDialog
 import sh.hnet.gallery.ui.components.TooltipIconButton
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
@@ -128,6 +132,7 @@ private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
  * @param onPage The item settled on (the list under it scrolls there, so the flight back lands on its tile)
  * @param onLoaded An item's picture is drawn (the flight in hands over to it), with the photo decoded for the screen
  * @param onRequestClose Asked first on closing: true when the host flies the item back to its tile, else the viewer fades
+ * @param trash Opened from Trash (SPEC §6.6): its pages are the trashed items, its toolbar Restore, Info, Delete for good
  */
 @Composable
 fun ViewerScreen(
@@ -135,6 +140,7 @@ fun ViewerScreen(
     start: Long,
     snackbars: SnackbarHostState,
     messageScope: CoroutineScope,
+    trash: Boolean = false,
     onPage: (Long) -> Unit,
     onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
@@ -150,15 +156,18 @@ fun ViewerScreen(
     val facts by app.facts.facts.collectAsStateWithLifecycle()
     val autoplay by app.preferences.autoplayMotion.collectAsStateWithLifecycle(true)
     val byId = remember(items) { items.orEmpty().associateBy { it.id } }
-    val pages = remember(byId) { ViewerList.pages(opened, byId) }
+    val pages = remember(byId) { ViewerList.pages(opened, byId, trash) }
     var currentId by rememberSaveable { mutableLongStateOf(start) }
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
     val dismiss = rememberViewerDismissState()
     var chrome by rememberSaveable { mutableStateOf(true) }
     val chromeShown = chrome && !dismiss.active
     var info by rememberSaveable { mutableStateOf(false) }
-    // Items this viewer put in Trash: their leaving the pages is no news
+    // Items this viewer put in Trash (or restored, or deleted, from Trash): their leaving the pages is no news
     val ownTrashed = remember { HashSet<Long>() }
+    val actions = LocalMediaActions.current
+    var renaming by remember { mutableStateOf<Pair<MediaItem, List<String>>?>(null) }
+    var deleting by remember { mutableStateOf<MediaItem?>(null) }
     val hdrOf = remember { mutableStateMapOf<Long, Boolean>() }
     var sdr by remember(currentId) { mutableStateOf(false) }
     var motion by remember(currentId) { mutableStateOf(false) }
@@ -373,15 +382,24 @@ fun ViewerScreen(
                 )
             }
             val toolbar: @Composable () -> Unit = {
-                Toolbar(
-                    item,
-                    onFavorite = { scope.launch { change(writer.favorite(listOf(item), !item.favorite), consent) {} } },
-                    onInfo = { info = true },
-                    onDelete = { trash(item, writer, consent, snackbars, messageScope, ownTrashed, context) },
-                    onSetAs = { open(context, item, Intent.ACTION_ATTACH_DATA) },
-                    onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
-                    onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
-                )
+                if (trash) {
+                    TrashToolbar(
+                        onRestore = { actions.restore(listOf(item)) { ownTrashed.add(item.id) } },
+                        onInfo = { info = true },
+                        onDeleteForever = { deleting = item },
+                    )
+                } else {
+                    Toolbar(
+                        item,
+                        onFavorite = { actions.favorite(listOf(item), !item.favorite) },
+                        onInfo = { info = true },
+                        onDelete = { actions.trash(listOf(item)) { ownTrashed.add(item.id) } },
+                        onRename = { scope.launch { renaming = item to writer.namesBeside(item, items.orEmpty()) } },
+                        onSetAs = { open(context, item, Intent.ACTION_ATTACH_DATA) },
+                        onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
+                        onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
+                    )
+                }
             }
             val bottomInsets = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
             if (video && landscape) {
@@ -402,6 +420,25 @@ fun ViewerScreen(
                 AnimatedVisibility(chromeShown, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter).then(bottomInsets).offset(y = -FloatingToolbarDefaults.ScreenOffset)) {
                     toolbar()
                 }
+            }
+            renaming?.let { (target, taken) ->
+                RenameDialog(target.name, taken, onDismiss = { renaming = null }) { name ->
+                    renaming = null
+                    rename(context, target, name, writer, consent, actions, messageScope)
+                }
+            }
+            deleting?.let { target ->
+                ConfirmDestructiveDialog(
+                    R.drawable.ic_delete_forever,
+                    stringResource(R.string.title_delete_forever_one),
+                    AnnotatedString(stringResource(R.string.desc_delete_forever)),
+                    stringResource(R.string.button_delete_forever),
+                    onConfirm = {
+                        deleting = null
+                        actions.deleteForever(listOf(target)) { ownTrashed.add(target.id) }
+                    },
+                    onDismiss = { deleting = null },
+                )
             }
             if (info) {
                 InfoSheet(item, fact, hdr, landscape, playback.takeIf { it.item == item.id }, onChangeDate = { date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }, onDismiss = { info = false })
@@ -476,6 +513,7 @@ private fun Toolbar(
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
     onDelete: () -> Unit,
+    onRename: () -> Unit,
     onSetAs: () -> Unit,
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
@@ -493,7 +531,7 @@ private fun Toolbar(
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         Box {
             TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { more = true })
-            MoreMenu(more, onDismiss = { more = false }, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
+            MoreMenu(more, onDismiss = { more = false }, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
         }
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
@@ -501,11 +539,11 @@ private fun Toolbar(
 
 /** More (SPEC §6.3), in three groups; what later stages bring is shown disabled (D5). */
 @Composable
-private fun MoreMenu(expanded: Boolean, onDismiss: () -> Unit, onSetAs: () -> Unit, onEditElsewhere: () -> Unit, onOpenWith: () -> Unit) {
+private fun MoreMenu(expanded: Boolean, onDismiss: () -> Unit, onRename: () -> Unit, onSetAs: () -> Unit, onEditElsewhere: () -> Unit, onOpenWith: () -> Unit) {
     DropdownMenuPopup(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 3)) {
             MenuItem(stringResource(R.string.action_add_to_album), R.drawable.ic_library_add, 0, 2, enabled = false) {}
-            MenuItem(stringResource(R.string.menu_rename), R.drawable.ic_drive_file_rename_outline, 1, 2, enabled = false) {}
+            MenuItem(stringResource(R.string.menu_rename), R.drawable.ic_drive_file_rename_outline, 1, 2) { onDismiss(); onRename() }
         }
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(1, 3)) {
@@ -521,33 +559,36 @@ private fun MoreMenu(expanded: Boolean, onDismiss: () -> Unit, onSetAs: () -> Un
     }
 }
 
-/** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal or a failure changes nothing. */
-private fun change(change: MediaWriter.Change, consent: Consent, then: () -> Unit) {
-    when (change) {
-        MediaWriter.Change.Done -> then()
-        is MediaWriter.Change.Ask -> consent.ask(change.request, then)
-        is MediaWriter.Change.Failed -> {}
+/** The viewer opened from Trash (SPEC §6.6): Restore, Info, Delete for good – last, in the error colour, asking first. */
+@Composable
+private fun TrashToolbar(onRestore: () -> Unit, onInfo: () -> Unit, onDeleteForever: () -> Unit) {
+    HorizontalFloatingToolbar(expanded = true) {
+        TooltipIconButton(R.drawable.ic_restore_from_trash, stringResource(R.string.action_restore), onRestore)
+        TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
+        TooltipIconButton(R.drawable.ic_delete_forever, stringResource(R.string.action_delete_forever), onDeleteForever, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
 }
 
 /**
- * Delete in the viewer (SPEC §6.4, §5.5): to Trash at once, the pager moves on by itself, and the
- * family's snackbar offers Undo, which puts it back (asking the system again for another app's file).
+ * A file's new name (SPEC §10.3): the app's own file at once, another app's after the system's consent;
+ * the snackbar says it (a failure – e.g. a file of that name MediaStore didn't show – says that instead).
  */
-private fun trash(item: MediaItem, writer: MediaWriter, consent: Consent, snackbars: SnackbarHostState, messageScope: CoroutineScope, ownTrashed: MutableSet<Long>, context: Context) {
-    val moved = context.getString(R.string.msg_moved_to_trash_one)
-    val undo = context.getString(R.string.button_undo)
-    messageScope.launch {
-        change(writer.trash(listOf(item), true), consent) {
-            ownTrashed.add(item.id)
-            messageScope.launch {
-                snackbars.currentSnackbarData?.dismiss()
-                if (snackbars.showSnackbar(moved, actionLabel = undo, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
-                    change(writer.trash(listOf(item), false), consent) {}
-                }
+private fun rename(context: Context, item: MediaItem, name: String, writer: MediaWriter, consent: Consent, actions: MediaActions, messageScope: CoroutineScope) {
+    val write = {
+        messageScope.launch {
+            // Asked again just before writing: the folder may have changed while the dialog was open, and a taken name would replace that file
+            val known = (context.applicationContext as GalleryApplication).index.items.value.orEmpty()
+            if (writer.namesBeside(item, known).any { it.equals(name, ignoreCase = true) }) {
+                actions.say(context.getString(R.string.error_file_exists), undo = null)
+                return@launch
             }
+            val done = writer.rename(item, name)
+            actions.say(if (done) context.getString(R.string.msg_renamed) else context.getString(R.string.error_save_failed, item.name), undo = null)
         }
+        Unit
     }
+    val request = writer.writeRequest(listOf(item))
+    if (request == null) write() else consent.ask(request, write)
 }
 
 /**

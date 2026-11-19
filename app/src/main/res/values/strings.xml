@@ -90,7 +90,7 @@
     <string name="desc_start_fresh">Default settings.</string>
     <string name="label_step">Step %1$d of %2$d</string>
     <string name="msg_wizard_access">Gallery shows the photos and videos saved on the phone and changes them through the system. To do that, it needs access to them.</string>
-    <string name="msg_wizard_media_management">Gallery can move files made by other apps, such as the camera, to Trash or to other albums, rename them and add them to favorites. Without this access, the system asks for permission for each such change.</string>
+    <string name="msg_wizard_media_management">Gallery can move files made by other apps, such as the camera, to Trash, rename them and add them to favorites. Without this access, the system asks for permission for each such change.</string>
     <string name="title_location_in_photos">Location in photos</string>
     <string name="title_media_management">Media management</string>
     <string name="title_no_internet">No Internet</string>
@@ -125,7 +125,7 @@
     <string name="status_reading">Reading photos…</string>
     <!-- Stage S2 -->
     <string name="action_add_to_album">Add to album</string>
-    <string name="action_delete">Delete</string>
+    <string name="action_delete">Move to Trash</string>
     <string name="action_edit">Edit</string>
     <string name="action_favorite">Add to favorites</string>
     <string name="action_info">Info</string>
@@ -154,7 +154,7 @@
     <string name="label_ultra_hdr">Ultra HDR (gain map)</string>
     <string name="menu_edit_in_another_app">Edit in another app</string>
     <string name="menu_open_with">Open with</string>
-    <string name="menu_rename">Rename</string>
+    <string name="menu_rename">Rename file</string>
     <string name="menu_set_as">Set as</string>
     <string name="menu_slideshow_from_here">Slideshow from here</string>
     <string name="msg_deleted_elsewhere">This item was deleted in another app.</string>
@@ -182,4 +182,61 @@
     <string name="label_sound_mono">mono sound</string>
     <string name="label_sound_stereo">stereo sound</string>
     <string name="label_speed">%1$s×</string>
+    <!-- Stage S4a -->
+    <string name="action_delete_forever">Delete permanently</string>
+    <string name="action_restore">Restore</string>
+    <string name="action_slideshow">Slideshow</string>
+    <string name="content_description_clear_selection">Clear selection</string>
+    <string name="content_description_end_selection">Exit selection</string>
+    <string name="content_description_select_all">Select all</string>
+    <string name="content_description_select_day">Select the day</string>
+    <string name="msg_moved_to_trash">Moved to Trash: %1$d</string>
+    <string name="msg_restored">Restored: %1$d</string>
+    <string name="msg_restored_one">Restored</string>
+    <string name="title_selected">Selected: %1$d</string>
+    <string name="button_delete_forever">Delete permanently</string>
+    <string name="button_rename">Rename</string>
+    <string name="desc_delete_forever">This can’t be undone.</string>
+    <string name="error_file_exists">There’s already a file with this name in the same folder on the phone.</string>
+    <string name="error_name_characters">This storage doesn’t support these characters (%1$s).</string>
+    <string name="error_name_empty">Enter a name.</string>
+    <string name="label_file_name">File name</string>
+    <string name="msg_renamed">Renamed</string>
+    <string name="title_delete_forever_one">Delete permanently?</string>
+    <string name="title_rename">Rename</string>
+    <string name="button_empty_trash">Empty Trash</string>
+    <string name="content_description_new_album">New album</string>
+    <string name="desc_empty_trash">Items in Trash (%1$d) will be deleted permanently. This can’t be undone.</string>
+    <string name="desc_trash_empty">Deleted photos and videos stay here for 30 days. Then the system deletes them permanently.</string>
+    <string name="desc_trash_note">The system permanently deletes items in Trash 30 days after they were moved there.</string>
+    <string name="label_favorites">Favorites</string>
+    <string name="label_folders_count">Folders: %1$d</string>
+    <string name="label_places">Places</string>
+    <string name="label_screenshots">Screenshots</string>
+    <string name="label_today_left">Today</string>
+    <string name="label_trash">Trash</string>
+    <string name="label_vault">Vault</string>
+    <string name="label_videos">Videos</string>
+    <string name="menu_empty_trash">Empty Trash</string>
+    <string name="menu_restore_all">Restore all</string>
+    <string name="msg_no_favorites">No favorites yet.</string>
+    <string name="msg_no_screenshots">No screenshots.</string>
+    <string name="msg_no_videos">No videos.</string>
+    <string name="msg_trash_empty">Trash is empty.</string>
+    <string name="sort_newest">Newest first</string>
+    <string name="sort_oldest">Oldest first</string>
+    <string name="title_delete_forever">Delete permanently (%1$d)?</string>
+    <string name="title_empty_trash">Empty Trash?</string>
+    <string name="desc_media_management_offer">Gallery can move files made by other apps, such as the camera, to Trash, rename them and add them to favorites. Without “Media management”, the system asks for permission for each such change.</string>
+    <string name="desc_media_management_revoke">This access can be turned off at any time in the system settings.</string>
+    <string name="settings_media_granted">Granted. Gallery changes files without asking for permission each time.</string>
+    <string name="settings_media_not_granted">Not granted. The system asks for permission before changes to other apps’ files.</string>
+    <string name="title_media_management_offer">Fewer questions from the system</string>
+    <plurals name="label_days_left">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
+    <!-- Stage S4a -->
+    <string name="msg_favorited">Added to favorites: %1$d</string>
+    <string name="msg_unfavorited">Removed from favorites: %1$d</string>
 </resources>

@@ -5,8 +5,11 @@ package sh.hnet.gallery.model
  * order, kept by id. Items deleted or trashed meanwhile drop out; one put back (Undo) returns to its place.
  */
 object ViewerList {
-    /** The pages now: the opening order, only what still exists and isn't trashed. */
-    fun pages(opened: List<Long>, items: Map<Long, MediaItem>): List<Long> = opened.filter { id -> items[id]?.trashed == false }
+    /**
+     * The pages now: the opening order, only what still exists and isn't trashed – or, opened from Trash ([trash]),
+     * only what still is in it (a restored item leaves, SPEC §6.6).
+     */
+    fun pages(opened: List<Long>, items: Map<Long, MediaItem>, trash: Boolean = false): List<Long> = opened.filter { id -> items[id]?.trashed == trash }
 
     /**
      * The item to show after the pages changed: [current] while it is still there; else the next one

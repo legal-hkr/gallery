@@ -55,7 +55,7 @@ import sh.hnet.gallery.ui.components.Thumbnails
  * What opens the viewer: the list's ids in its order, the item tapped, and how the list follows
  * the item shown (it scrolls there, so the flight back lands on its tile).
  */
-class ViewerRequest(val ids: List<Long>, val start: Long, val onPage: (Long) -> Unit)
+class ViewerRequest(val ids: List<Long>, val start: Long, val trash: Boolean = false, val onPage: (Long) -> Unit)
 
 /**
  * The item flying between its tile and the viewer: its picture, cropped to a moving rect, over a
@@ -180,6 +180,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (shown) 1f else 0f }) {
             ViewerScreen(
                 request.ids, request.start, snackbars, messageScope,
+                trash = request.trash,
                 onPage = {
                     current = it
                     request.onPage(it)

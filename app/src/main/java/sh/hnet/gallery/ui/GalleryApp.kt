@@ -4,10 +4,13 @@ package sh.hnet.gallery.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -33,10 +36,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,13 +62,24 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
+import sh.hnet.gallery.data.MediaWriter
+import sh.hnet.gallery.model.CollectionKind
+import sh.hnet.gallery.ui.albums.AlbumsScreen
+import sh.hnet.gallery.ui.albums.CollectionScreen
+import sh.hnet.gallery.ui.albums.TrashScreen
 import sh.hnet.gallery.ui.components.LocalConsent
+import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.MediaAccess
+import sh.hnet.gallery.ui.components.MediaActions
+import sh.hnet.gallery.ui.components.MediaManagement
+import sh.hnet.gallery.ui.components.MediaManagementOfferSheet
 import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.components.rememberConsent
+import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
 import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
@@ -132,6 +148,16 @@ fun GalleryApp() {
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
     val origins = remember { MediaOrigins() }
     val consent = rememberConsent()
+    val actions = remember(consent) { MediaActions(appContext, MediaWriter(appContext), consent, snackbars, messages) }
+    // The second offer of Media management (SPEC §10.6): once, after the first system dialog the user confirmed
+    val offers by app.preferences.mediaManagementOffers.collectAsStateWithLifecycle(2)
+    var offering by remember { mutableStateOf(false) }
+    val offersNow by rememberUpdatedState(offers)
+    SideEffect {
+        consent.onConfirmed = { if (offersNow < 2 && !MediaManagement.granted(appContext)) offering = true }
+    }
+    // A tab's root selecting items: the selection's toolbar takes the navigation bar's place (SPEC §5.1)
+    val hideNavigationBar = remember { mutableStateOf(false) }
 
     // Reading the files' facts (owner's decision D4): the status card once a reading takes over a second, never for a single new shot
     val reading by app.facts.progress.collectAsStateWithLifecycle()
@@ -145,7 +171,12 @@ fun GalleryApp() {
         }
     }
 
-    CompositionLocalProvider(LocalMediaOrigins provides origins, LocalConsent provides consent) {
+    CompositionLocalProvider(
+        LocalMediaOrigins provides origins,
+        LocalConsent provides consent,
+        LocalMediaActions provides actions,
+        LocalHideNavigationBar provides hideNavigationBar,
+    ) {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -155,8 +186,12 @@ fun GalleryApp() {
             }
         },
         bottomBar = {
-            // Only on a tab's root: pages pushed over it have Back (SPEC §9.4)
-            if (stack.size == 1) ShortNavigationBar {
+            // Only on a tab's root: pages pushed over it have Back (SPEC §9.4); while selecting, the selection's toolbar is there (as ComfyChair's)
+            AnimatedVisibility(
+                visible = stack.size == 1 && !hideNavigationBar.value,
+                enter = expandVertically(expandFrom = Alignment.Top),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top),
+            ) { ShortNavigationBar {
                 Tab.entries.forEach { item ->
                     val selected = item == tab
                     ShortNavigationBarItem(
@@ -169,7 +204,7 @@ fun GalleryApp() {
                         label = { Text(stringResource(item.label), maxLines = 1) },
                     )
                 }
-            }
+            } }
         },
     ) { padding ->
         Box(Modifier.fillMaxSize()) {
@@ -213,7 +248,15 @@ fun GalleryApp() {
                             onOpen = { viewer = it },
                         )
                     }
-                    entry<Screen.Albums> { PlaceholderScreen(stringResource(R.string.label_nav_albums), onOpenSettings = { currentStack.add(Screen.Settings) }) }
+                    entry<Screen.Albums> {
+                        AlbumsScreen(
+                            onOpenSettings = { currentStack.add(Screen.Settings) },
+                            onOpenCollection = { currentStack.add(Screen.Collection(it.name)) },
+                            onOpenTrash = { currentStack.add(Screen.Trash) },
+                        )
+                    }
+                    entry<Screen.Collection> { key -> CollectionScreen(CollectionKind.of(key.kind), onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Trash> { TrashScreen(onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
                     entry<Screen.Settings> {
                         SettingsRootScreen(
@@ -254,7 +297,7 @@ fun GalleryApp() {
                 // Above the navigation bar on a tab's root (the content ends there), above the system's navigation on pages
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .then(if (stack.size == 1) Modifier else Modifier.navigationBarsPadding())
+                    .then(if (stack.size == 1 && !hideNavigationBar.value) Modifier else Modifier.navigationBarsPadding())
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp + padding.calculateBottomPadding()),
             )
         }
@@ -262,6 +305,17 @@ fun GalleryApp() {
     }
     viewer?.let { request ->
         ViewerHost(request, snackbars, messages, onClose = { viewer = null })
+    }
+    if (offering) {
+        val answered = {
+            offering = false
+            messages.launch { app.preferences.endMediaManagementOffers() }
+            Unit
+        }
+        MediaManagementOfferSheet(onNotNow = answered, onOpenSettings = {
+            answered()
+            MediaManagement.openSettings(appContext)
+        })
     }
     if (wizard) {
         WizardScreen(snackbars, messages, onDone = {

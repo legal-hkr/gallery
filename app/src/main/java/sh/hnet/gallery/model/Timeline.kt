@@ -64,10 +64,12 @@ class Timeline(val entries: List<TimelineEntry>, val indexOf: Map<Long, Int>, va
          * Groups [items] by the day they were taken – in the zone they were taken in, from the photo's
          * own offset when [offsetMinutes] knows it, else in [zone] (LOGIKA §2.4) – or by month, newest
          * first. Within a day the newest comes first; a day reached twice (travel across zones) is one group.
+         * [oldestFirst] turns all of it round (an album's "Oldest first", SPEC §9.4).
          */
-        fun build(items: List<MediaItem>, months: Boolean, zone: ZoneId, offsetMinutes: (Long) -> Int?): Timeline {
-            val dated = items.map { item -> item to dateOf(item, zone, offsetMinutes(item.id)) }
+        fun build(items: List<MediaItem>, months: Boolean, zone: ZoneId, oldestFirst: Boolean = false, offsetMinutes: (Long) -> Int?): Timeline {
+            val newest = items.map { item -> item to dateOf(item, zone, offsetMinutes(item.id)) }
                 .sortedWith(compareByDescending<Pair<MediaItem, LocalDate>> { it.second }.thenComparator { a, b -> MediaItem.NEWEST_FIRST.compare(a.first, b.first) })
+            val dated = if (oldestFirst) newest.asReversed() else newest
             val entries = ArrayList<TimelineEntry>(dated.size + dated.size / 8 + 1)
             val indexOf = HashMap<Long, Int>(dated.size * 2)
             var lastDay: LocalDate? = null

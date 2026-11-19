@@ -53,10 +53,21 @@ class Preferences(private val context: Context) {
 
     suspend fun setAutoplayMotion(on: Boolean) = context.settings.edit { it[AUTOPLAY_MOTION] = on }
 
+    /** The collections shown oldest first (their sort chip, remembered per collection; LOGIKA §15.11), by [CollectionKind] name. */
+    val collectionsOldestFirst: Flow<Set<String>> = context.settings.data.map { it[COLLECTIONS_OLDEST_FIRST].orEmpty() }.distinctUntilChanged()
+
+    suspend fun setCollectionOldestFirst(kind: String, oldest: Boolean) = context.settings.edit {
+        val now = it[COLLECTIONS_OLDEST_FIRST].orEmpty()
+        it[COLLECTIONS_OLDEST_FIRST] = if (oldest) now + kind else now - kind
+    }
+
     /** How many of the two offers of Media management were shown (SPEC §10.6): the wizard's, then one after the first system dialog. */
     val mediaManagementOffers: Flow<Int> = context.settings.data.map { it[MEDIA_MANAGEMENT_OFFERS] ?: 0 }.distinctUntilChanged()
 
     suspend fun markMediaManagementOffered() = context.settings.edit { it[MEDIA_MANAGEMENT_OFFERS] = ((it[MEDIA_MANAGEMENT_OFFERS] ?: 0) + 1).coerceAtMost(2) }
+
+    /** The last offer was answered (SPEC §10.6): none ever again, also when the wizard's was skipped. */
+    suspend fun endMediaManagementOffers() = context.settings.edit { it[MEDIA_MANAGEMENT_OFFERS] = 2 }
 
     /** Every setting as the backup holds it (SPEC §20.2). */
     suspend fun snapshot(): BackupSettings {
@@ -91,5 +102,6 @@ class Preferences(private val context: Context) {
         val NEW_ALBUMS_IN_PHOTOS = booleanPreferencesKey("new_albums_in_photos")
         val MEDIA_MANAGEMENT_OFFERS = intPreferencesKey("media_management_offers")
         val AUTOPLAY_MOTION = booleanPreferencesKey("autoplay_motion")
+        val COLLECTIONS_OLDEST_FIRST = stringSetPreferencesKey("collections_oldest_first")
     }
 }
