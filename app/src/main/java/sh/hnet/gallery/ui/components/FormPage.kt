@@ -128,8 +128,8 @@ fun AppLogo(titleInset: Dp, modifier: Modifier = Modifier) {
 
 private val LOGO_SIZE = 144.dp
 
-/** Where the photo frame starts in ic_launcher_foreground (the owner's icon), as a share of its width (x 96 on the 512 grid, moved by 128 on the 768-unit canvas). */
-private const val LOGO_MARK_START = (128f + 96f) / 768f
+/** Where the mark starts in ic_launcher_foreground (the owner's icon v2: the front mountain's foot), as a share of its width (x 91.3 on the 512 grid, moved by 128 on the 768-unit canvas). */
+private const val LOGO_MARK_START = (128f + 91.3f) / 768f
 
-/** The empty band below the frame, as a share of the height (the frame ends at y 386 on the 512 grid). */
-private const val LOGO_EMPTY_BELOW = (768f - 128f - 386f) / 768f
+/** The empty band below the mark, as a share of the height (the mountains end at y 376.1 on the 512 grid). */
+private const val LOGO_EMPTY_BELOW = (768f - 128f - 376.1f) / 768f
