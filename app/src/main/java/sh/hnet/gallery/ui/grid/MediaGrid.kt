@@ -178,7 +178,7 @@ fun MediaGrid(
             coroutineScope {
                 for (piece in Morphs.pieces(from, to, change.anchor, change.pivot.y, change.fy, heightPx, 1f)) {
                     val entry = if (piece.inFrom) fromEntries[piece.index] else toEntries[piece.index]
-                    if (entry is TimelineEntry.Tile) launch { Thumbnails.load(resolver, entry.item, px) }
+                    if (entry is TimelineEntry.Tile) launch { Thumbnails.load(resolver, entry.item, px, crop = true) }
                 }
             }
         }

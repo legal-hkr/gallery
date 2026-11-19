@@ -121,7 +121,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
     /** The thumbnail already in memory for an item, the largest there is. */
     fun still(id: Long): ImageBitmap? {
         val item = app.index.items.value?.firstOrNull { it.id == id } ?: return null
-        return (Thumbnails.peekAny(item) as? Thumb.Image)?.bitmap
+        return (Thumbnails.peekAny(item, whole = true) as? Thumb.Image)?.bitmap
     }
 
     // Fly out of the tile on open
