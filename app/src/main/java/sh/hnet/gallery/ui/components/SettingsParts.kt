@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +30,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonColors
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemColors
 import androidx.compose.material3.ListItemDefaults
@@ -36,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
@@ -57,10 +62,11 @@ import androidx.compose.ui.unit.dp
 import sh.hnet.gallery.R
 
 /**
- * A settings page: on the Settings root a large flexible bar collapsing on scroll, on the pages it
- * opens a small bar with Back; under it a scrolling column of groups.
+ * A settings page, as Music's: a small bar with Back (a large flexible one without [onBack]) and
+ * under it a scrolling column of groups. Settings open over the destinations, without the navigation
+ * bar, so the content keeps clear of the system's navigation area itself.
  *
- * @param onBack Null on the root (a tab has no Back)
+ * @param onBack Null for a page without Back
  */
 @Composable
 fun SettingsPage(
@@ -69,7 +75,7 @@ fun SettingsPage(
     subtitle: String? = null,
     /** False when the page is drawn inside something that already took the status bar's inset. */
     topInsets: Boolean = true,
-    /** Stays under the top bar while the content scrolls (the equalizer's response curve). */
+    /** Stays under the top bar while the content scrolls. */
     pinned: (@Composable () -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -102,7 +108,7 @@ fun SettingsPage(
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
-                .padding(top = 8.dp, bottom = 24.dp),
+                .padding(top = 8.dp, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             content = content,
         )
@@ -131,7 +137,7 @@ fun LazySettingsPage(
         LazyColumn(
             state = state,
             modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
             content = content,
         )
     }
@@ -153,13 +159,13 @@ fun SettingsGroupHeader(title: String) {
 
 /** An icon-only button with its label as content description and as a tooltip on long press. */
 @Composable
-fun TooltipIconButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit, enabled: Boolean = true) {
+fun TooltipIconButton(@DrawableRes icon: Int, label: String, onClick: () -> Unit, enabled: Boolean = true, colors: IconButtonColors = IconButtonDefaults.iconButtonColors()) {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
         tooltip = { PlainTooltip { Text(label) } },
         state = rememberTooltipState(),
     ) {
-        IconButton(onClick = onClick, enabled = enabled) {
+        IconButton(onClick = onClick, enabled = enabled, colors = colors) {
             Icon(painterResource(icon), contentDescription = label)
         }
     }
@@ -229,7 +235,10 @@ fun RowIcon(@DrawableRes icon: Int, error: Boolean = false) {
     }
 }
 
-/** A row opening a page; [badge] (e.g. "New") before the chevron, as in ComfyChair. */
+/**
+ * A row opening a page; [badge] (e.g. "New") before the chevron, as in ComfyChair. With [error]
+ * the row reports a problem: its icon box, supporting line and badge take the error roles.
+ */
 @Composable
 fun SettingsNavigationRow(
     shapes: ListItemShapes,
@@ -237,30 +246,34 @@ fun SettingsNavigationRow(
     title: String,
     supporting: String? = null,
     badge: String? = null,
+    error: Boolean = false,
     onClick: () -> Unit,
 ) {
     SegmentedListItem(
         onClick = onClick,
         shapes = shapes,
         colors = settingsRowColors(),
-        leadingContent = { RowIcon(icon) },
+        leadingContent = { RowIcon(icon, error) },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 badge?.let {
-                    Badge(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) {
+                    Badge(
+                        containerColor = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        contentColor = if (error) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary,
+                    ) {
                         Text(it, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
                 Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null)
             }
         },
-        supportingContent = supporting?.let { { Text(it) } },
+        supportingContent = supporting?.let { { Text(it, color = if (error) MaterialTheme.colorScheme.error else Color.Unspecified) } },
     ) {
         Text(title)
     }
 }
 
-/** A row handing an address to another app (the browser): it leaves Music, so `open_in_new`, not a chevron. */
+/** A row handing an address to another app (the browser): it leaves the app, so `open_in_new`, not a chevron. */
 @Composable
 fun SettingsLinkRow(shapes: ListItemShapes, @DrawableRes icon: Int, title: String, supporting: String? = null, onClick: () -> Unit) {
     SegmentedListItem(
@@ -269,6 +282,29 @@ fun SettingsLinkRow(shapes: ListItemShapes, @DrawableRes icon: Int, title: Strin
         colors = settingsRowColors(),
         leadingContent = { RowIcon(icon) },
         trailingContent = { Icon(painterResource(R.drawable.ic_open_in_new), contentDescription = null) },
+        supportingContent = supporting?.let { { Text(it) } },
+    ) {
+        Text(title)
+    }
+}
+
+/** A boolean setting: the whole row toggles, the switch shows the state. */
+@Composable
+fun SettingsSwitchRow(
+    shapes: ListItemShapes,
+    @DrawableRes icon: Int,
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    supporting: String? = null,
+) {
+    SegmentedListItem(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        shapes = shapes,
+        colors = settingsRowColors(),
+        leadingContent = { RowIcon(icon) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
         supportingContent = supporting?.let { { Text(it) } },
     ) {
         Text(title)

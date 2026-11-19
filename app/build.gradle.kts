@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -48,6 +50,10 @@ android {
     }
 }
 
+room3 {
+    schemaDirectory("$projectDir/schemas")
+}
+
 // Disable baseline profile generation for F-Droid reproducible builds
 // https://f-droid.org/docs/Reproducible_Builds/
 tasks.configureEach {
@@ -61,6 +67,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.viewmodel.navigation3)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -74,6 +81,11 @@ dependencies {
     implementation(libs.kotlinx.serialization.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.datastore.preferences)
+    implementation(libs.exifinterface)
+
+    implementation(libs.room.runtime)
+    implementation(libs.sqlite.framework)
+    ksp(libs.room.compiler)
 
     testImplementation(libs.junit)
 }

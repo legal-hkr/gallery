@@ -42,29 +42,38 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
+import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
 import sh.hnet.gallery.ui.settings.LanguageScreen
 import sh.hnet.gallery.ui.settings.LicensesScreen
+import sh.hnet.gallery.ui.settings.PhotosSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
 
-/** The app's shell (as Music's): one back stack per navigation bar destination, snackbars. */
+/**
+ * The app's shell (as Music's, SPEC §3): one back stack per navigation bar destination, snackbars.
+ * Pages pushed over a tab's root (Settings, an album) hide the navigation bar.
+ */
 @Composable
 fun GalleryApp() {
     var tab by rememberSaveable { mutableStateOf(Tab.PHOTOS) }
     val stacks: Map<Tab, NavBackStack<NavKey>> = Tab.entries.associateWith { rememberNavBackStack(it.root) }
-    // Kept here, outside the tab's content, so a tab's pages keep their state while another tab shows
+    // Kept here, outside the tab's content, so a tab's pages keep their state while another tab shows; view models belong to their entry (as Contacts')
     val decorators = Tab.entries.associateWith { rememberSaveableStateHolderNavEntryDecorator<NavKey>() }
+    val viewModels = Tab.entries.associateWith { rememberViewModelStoreNavEntryDecorator<NavKey>() }
     val stack = stacks.getValue(tab)
 
     // A destination's root goes back to Photos, Photos' root leaves the app
@@ -75,14 +84,20 @@ fun GalleryApp() {
     val updatedTo = stringResource(R.string.whats_new_updated_snackbar)
     val whatsNew = stringResource(R.string.whats_new_title)
     val appContext = LocalContext.current.applicationContext
+    val app = appContext as GalleryApplication
+    // Access may have been given or taken in the system meanwhile, and a partial selection changed (SPEC §19.4)
+    LifecycleResumeEffect(Unit) {
+        app.index.recheck()
+        onPauseOrDispose {}
+    }
     LaunchedEffect(Unit) {
         val version = WhatsNew.takeUpdateNotice(appContext) ?: return@LaunchedEffect
         if (snackbars.showSnackbar(updatedTo.format(version), actionLabel = whatsNew, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
-            tab = Tab.SETTINGS
-            val settings = stacks.getValue(Tab.SETTINGS)
-            while (settings.size > 1) settings.removeAt(settings.lastIndex)
-            settings.add(Screen.SettingsAbout)
-            settings.add(Screen.SettingsWhatsNew)
+            val current = stacks.getValue(tab)
+            while (current.size > 1) current.removeAt(current.lastIndex)
+            current.add(Screen.Settings)
+            current.add(Screen.SettingsAbout)
+            current.add(Screen.SettingsWhatsNew)
         }
     }
 
@@ -100,7 +115,8 @@ fun GalleryApp() {
             }
         },
         bottomBar = {
-            ShortNavigationBar {
+            // Only on a tab's root: pages pushed over it have Back (SPEC §9.4)
+            if (stack.size == 1) ShortNavigationBar {
                 Tab.entries.forEach { item ->
                     val selected = item == tab
                     ShortNavigationBarItem(
@@ -131,7 +147,7 @@ fun GalleryApp() {
             NavDisplay(
                 backStack = currentStack,
                 onBack = { if (currentStack.size > 1) currentStack.removeAt(currentStack.lastIndex) },
-                entryDecorators = listOf(decorators.getValue(current)),
+                entryDecorators = listOf(decorators.getValue(current), viewModels.getValue(current)),
                 // Shared axis X between a list and its pages
                 transitionSpec = {
                     (slideInHorizontally(spatial) { shift } + fadeIn(effects)) togetherWith
@@ -146,11 +162,21 @@ fun GalleryApp() {
                         (slideOutHorizontally(spatial) { shift } + fadeOut(fastEffects))
                 },
                 entryProvider = entryProvider {
-                    entry<Screen.Photos> { PlaceholderScreen(stringResource(R.string.label_nav_photos)) }
-                    entry<Screen.Albums> { PlaceholderScreen(stringResource(R.string.label_nav_albums)) }
+                    entry<Screen.Photos> {
+                        PhotosScreen(
+                            onOpenSettings = { currentStack.add(Screen.Settings) },
+                            onChooseAlbums = {
+                                currentStack.add(Screen.Settings)
+                                currentStack.add(Screen.SettingsPhotos)
+                            },
+                        )
+                    }
+                    entry<Screen.Albums> { PlaceholderScreen(stringResource(R.string.label_nav_albums), onOpenSettings = { currentStack.add(Screen.Settings) }) }
                     entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
                     entry<Screen.Settings> {
                         SettingsRootScreen(
+                            onBack = back,
+                            onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
                             onOpenAbout = { currentStack.add(Screen.SettingsAbout) },
@@ -164,6 +190,7 @@ fun GalleryApp() {
                             onOpenLicenses = { currentStack.add(Screen.SettingsLicenses) },
                         )
                     }
+                    entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
                     entry<Screen.SettingsLanguage> { LanguageScreen(onBack = back) }
                     entry<Screen.SettingsReset> { ResetScreen(onBack = back) }

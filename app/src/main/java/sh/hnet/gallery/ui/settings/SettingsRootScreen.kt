@@ -9,13 +9,22 @@ import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
 import sh.hnet.gallery.ui.components.SettingsPage
 
-/** The Settings root, grouped as the family's: App (language), Data (reset), then About on its own. The app's own groups come with the handoff. */
+/**
+ * The Settings root (SPEC §20.1), grouped as the family's: the app's own groups (Photos so far; the
+ * rest come with their stages), App (language), Data (reset), then About on its own. Opened over a
+ * tab by the top bar's icon, so with Back.
+ */
 @Composable
-fun SettingsRootScreen(onOpenLanguage: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenLanguage: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     val version = BuildConfig.VERSION_NAME.removePrefix("v")
     val language = appLanguages.firstOrNull { it.tag == currentLanguageTag(context) } ?: appLanguages.first()
-    SettingsPage(title = stringResource(R.string.title_settings), onBack = null) {
+    SettingsPage(title = stringResource(R.string.title_settings), onBack = onBack) {
+        SettingsGroup {
+            row { shapes ->
+                SettingsNavigationRow(shapes, R.drawable.ic_photo_library, stringResource(R.string.label_nav_photos), stringResource(R.string.settings_photos_desc), onClick = onOpenPhotos)
+            }
+        }
         SettingsGroup(stringResource(R.string.title_settings_group_app)) {
             row { shapes ->
                 SettingsNavigationRow(shapes, R.drawable.ic_translate, stringResource(R.string.title_settings_language), stringResource(language.name), onClick = onOpenLanguage)

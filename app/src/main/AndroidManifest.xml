@@ -2,7 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Privacy: no permissions yet. Each one is added with the stage that needs it and listed in CLAUDE.md. -->
+    <!-- Privacy: each permission is added with the stage that needs it and listed in CLAUDE.md. -->
+    <!-- S1: photos and videos (the system may give only those the user selects), and the location saved in them (SPEC §2.2) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
 
     <application
         android:name=".GalleryApplication"

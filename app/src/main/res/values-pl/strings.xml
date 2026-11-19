@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">Galeria</string>
     <string name="label_nav_search">Szukaj</string>
-    <string name="label_nav_settings">Ustawienia</string>
     <string name="content_description_back">Wstecz</string>
     <string name="title_settings">Ustawienia</string>
     <string name="title_settings_about">O aplikacji</string>
@@ -41,4 +40,38 @@
     <string name="label_nav_photos">Zdjęcia</string>
     <string name="label_nav_albums">Albumy</string>
     <string name="msg_in_development">W budowie.</string>
+    <!-- Stage S1 -->
+    <string name="button_allow_access">Zezwól na dostęp</string>
+    <string name="button_allow_all">Zezwól na wszystkie</string>
+    <string name="button_choose_albums">Wybierz albumy</string>
+    <string name="button_choose_more">Wybierz więcej</string>
+    <string name="button_open_app_settings">Otwórz ustawienia aplikacji</string>
+    <string name="content_description_favorite">Ulubione</string>
+    <string name="content_description_motion_photo">Zdjęcie ruchome</string>
+    <string name="content_description_settings">Ustawienia</string>
+    <string name="desc_new_albums_in_photos">Albumy utworzone w Galerii są od razu pokazywane w Zdjęciach.</string>
+    <string name="desc_no_access">Zdjęcia pozostają w telefonie. Aplikacja tylko je pokazuje i zmienia za pośrednictwem systemu.</string>
+    <string name="desc_no_media">Zdjęcia z aparatu i zrzuty ekranu pojawią się tutaj.</string>
+    <string name="desc_partial_access">Aplikacja ma dostęp tylko do zdjęć i filmów wybranych w systemie (%1$d).</string>
+    <string name="desc_timeline_empty">Zdjęcia są w innych albumach (%1$d). Można je pokazać także tutaj.</string>
+    <string name="format_album_path">%1$s, %2$s</string>
+    <string name="format_day">EEEE, d MMMM</string>
+    <string name="format_day_year">EEEE, d MMMM y</string>
+    <string name="format_month">LLLL</string>
+    <string name="format_month_year">LLLL y</string>
+    <string name="header_albums_in_photos">Albumy w Zdjęciach</string>
+    <string name="header_other">Inne</string>
+    <string name="label_camera">Aparat</string>
+    <string name="label_downloads">Pobrane</string>
+    <string name="label_internal_storage">Pamięć wewnętrzna</string>
+    <string name="label_new_albums_in_photos">Nowe albumy w Zdjęciach</string>
+    <string name="label_raw">RAW</string>
+    <string name="label_sd_card">Karta SD</string>
+    <string name="label_today">Dzisiaj</string>
+    <string name="label_yesterday">Wczoraj</string>
+    <string name="msg_no_access">Bez dostępu do zdjęć i filmów nie ma tu nic do pokazania.</string>
+    <string name="msg_no_media">Nie ma jeszcze żadnych zdjęć ani filmów.</string>
+    <string name="msg_timeline_empty">Nie ma jeszcze zdjęć z aparatu ani zrzutów ekranu.</string>
+    <string name="settings_photos_desc">Albumy w Zdjęciach, Tego dnia</string>
+    <string name="title_partial_access">Dostęp tylko do wybranych zdjęć</string>
 </resources>
