@@ -2,18 +2,23 @@ package sh.hnet.gallery.data
 
 import android.Manifest
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.Context
 import android.content.pm.PackageManager
 import android.database.ContentObserver
 import android.database.Cursor
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.provider.OpenableColumns
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.StoragePaths
 
 /** How much of the media the app may see (SPEC §4.7): all, only what the user selected (Android 14+), or nothing. */
 enum class Access { FULL, PARTIAL, NONE }
@@ -48,14 +53,15 @@ class MediaSource(private val context: Context) {
      * @param volume One volume, or all of them
      * @param since Only rows changed after this generation of [volume]
      */
-    fun items(limit: Int? = null, volume: String = MediaStore.VOLUME_EXTERNAL, since: Long? = null): List<MediaItem> {
+    fun items(limit: Int? = null, volume: String = MediaStore.VOLUME_EXTERNAL, since: Long? = null, path: String? = null): List<MediaItem> {
         val selection = buildString {
             append("${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})")
             if (since != null) append(" AND ${MediaStore.MediaColumns.GENERATION_MODIFIED} > ?")
+            if (path != null) append(" AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ?")
         }
         val args = Bundle().apply {
             putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
-            if (since != null) putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, arrayOf(since.toString()))
+            listOfNotNull(since?.toString(), path).takeIf { it.isNotEmpty() }?.let { putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, it.toTypedArray()) }
             putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
             if (limit != null) {
                 putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${MediaStore.MediaColumns.DATE_TAKEN} DESC")
@@ -69,6 +75,144 @@ class MediaSource(private val context: Context) {
             while (cursor.moveToNext()) list.add(c.item(cursor, own))
             list
         }.orEmpty()
+    }
+
+    /**
+     * The MediaStore item an address from another app names (SPEC §17.1, §17.3), tried in turn: `content://media/…`
+     * itself; a document – Downloads' `msf:<MediaStore id>` or `raw:<path>`, Files' and the media's own through
+     * [MediaStore.getMediaUri]; a path in the address (a `file://` one, Files by Google's); last, the one item of the
+     * same name and size. Null when none fits – an attachment, another app's file – or the app may not read it.
+     * (Owner's test of S5b: a photo opened from Files came as "Outside Gallery".)
+     */
+    fun resolve(uri: Uri): MediaItem? {
+        if (uri.authority == MediaStore.AUTHORITY) return mediaItem(uri)
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+            val document = DocumentsContract.getDocumentId(uri)
+            when {
+                document.startsWith("msf:") -> document.removePrefix("msf:").toLongOrNull()?.let { item(it) }?.let { return it }
+                document.startsWith("raw:") -> byPath(document.removePrefix("raw:"))?.let { return it }
+            }
+            try {
+                MediaStore.getMediaUri(context, uri)?.let(::mediaItem)?.let { return it }
+            } catch (_: Exception) {
+                // Not one of the providers it knows
+            }
+        }
+        val path = uri.path.orEmpty()
+        val storage = path.indexOf("/storage/")
+        if (uri.scheme == "file" || storage >= 0) byPath(if (storage >= 0) path.substring(storage) else path)?.let { return it }
+        return bySameFile(uri)
+    }
+
+    private fun mediaItem(media: Uri): MediaItem? {
+        val id = try {
+            ContentUris.parseId(media)
+        } catch (_: Exception) {
+            return null
+        }
+        val volume = try {
+            MediaStore.getVolumeName(media)
+        } catch (_: Exception) {
+            MediaStore.VOLUME_EXTERNAL
+        }
+        return item(id, volume)
+    }
+
+    /** A path on shared storage (`/storage/emulated/0/Download/a.jpg`, `/storage/1234-5678/…`) as its volume, folder and name. */
+    private fun byPath(path: String): MediaItem? {
+        val (volume, folder, name) = StoragePaths.split(path, MediaStore.VOLUME_EXTERNAL_PRIMARY) ?: return null
+        return one("${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?", arrayOf(folder, name), volume)
+    }
+
+    /** The one item whose name and size are those the address's provider gives; none when several fit. */
+    private fun bySameFile(uri: Uri): MediaItem? {
+        var name: String? = null
+        var size = -1L
+        try {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    name = cursor.getString(0)
+                    if (!cursor.isNull(1)) size = cursor.getLong(1)
+                }
+            }
+        } catch (_: Exception) {
+            return null
+        }
+        val named = name ?: return null
+        if (size < 0) return null
+        return one("${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.SIZE} = ?", arrayOf(named, size.toString()), MediaStore.VOLUME_EXTERNAL)
+    }
+
+    /** The item a selection finds, when it finds exactly one. */
+    private fun one(selection: String, values: Array<String>, volume: String): MediaItem? {
+        val args = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, values)
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+        }
+        return try {
+            resolver.query(MediaStore.Files.getContentUri(volume), PROJECTION, args, null)?.use { cursor ->
+                if (cursor.count == 1 && cursor.moveToFirst()) Columns(cursor).item(cursor, context.packageName) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** One item by its id, trashed included; null when MediaStore has none the app may see. */
+    fun item(id: Long, volume: String = MediaStore.VOLUME_EXTERNAL): MediaItem? {
+        val args = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns._ID} = ?")
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, arrayOf(id.toString()))
+            putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+        }
+        return try {
+            resolver.query(MediaStore.Files.getContentUri(volume), PROJECTION, args, null)?.use { cursor ->
+                if (cursor.moveToFirst()) Columns(cursor).item(cursor, context.packageName) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * A file from outside MediaStore as an item (SPEC §17.2): its name and size from its provider, its type from the
+     * provider or the intent; a negative id of its own, no folder; "taken" is when it was opened.
+     */
+    fun outside(uri: Uri, type: String?): MediaItem {
+        var name = uri.lastPathSegment?.substringAfterLast('/').orEmpty()
+        var size = 0L
+        try {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    cursor.getString(0)?.let { name = it }
+                    if (!cursor.isNull(1)) size = cursor.getLong(1)
+                }
+            }
+        } catch (_: Exception) {
+            // A provider that doesn't say: the address's last part and an unknown size
+        }
+        val mime = (try { resolver.getType(uri) } catch (_: Exception) { null }) ?: type ?: "image/*"
+        return MediaItem(
+            id = -(uri.toString().hashCode().toLong() and 0x7FFFFFFFL) - 1,
+            video = mime.startsWith("video/"),
+            mime = mime,
+            taken = System.currentTimeMillis(),
+            name = name,
+            bucketId = 0,
+            path = "",
+            volume = "",
+            size = size,
+            width = 0,
+            height = 0,
+            duration = 0,
+            favorite = false,
+            trashed = false,
+            expires = 0,
+            ours = false,
+            generation = 0,
+            source = uri.toString(),
+        )
     }
 
     /** Every id MediaStore still has (one column only, cheap): what is missing from it was deleted (LOGIKA §2.2). */

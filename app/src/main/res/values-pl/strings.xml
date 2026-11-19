@@ -323,4 +323,10 @@
     <string name="settings_sharing">Udostępnianie</string>
     <string name="settings_sharing_included">Lokalizacja: dołączana</string>
     <string name="settings_sharing_removed">Lokalizacja: usuwana</string>
+    <!-- Stage S5b -->
+    <string name="action_save_to_phone">Zapisz w telefonie</string>
+    <string name="content_description_close">Zamknij</string>
+    <string name="label_outside_gallery">Spoza Galerii</string>
+    <!-- Stage S5b -->
+    <string name="msg_saved_to_downloads">Zapisano w Pobranych</string>
 </resources>

@@ -61,6 +61,9 @@ class GalleryApplication : Application() {
     /** The share sheet's location action (SPEC §14.2), for the shell to share again; kept for a shell not composed yet. */
     val shareAgain = MutableStateFlow<ShareAgain?>(null)
 
+    /** A folder's album to open (from the outside viewer), as a [sh.hnet.gallery.model.FolderKey.key]. */
+    val openFolder = MutableStateFlow<String?>(null)
+
     /** Shares without location (SPEC §14, LOGIKA §16). */
     val sharing: ShareMaker by lazy { ShareMaker(this) }
 

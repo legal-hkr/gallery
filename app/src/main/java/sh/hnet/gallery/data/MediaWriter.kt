@@ -1,9 +1,11 @@
 package sh.hnet.gallery.data
 
 import android.app.PendingIntent
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import android.provider.MediaStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -80,6 +82,33 @@ class MediaWriter(private val context: Context) {
             resolver.update(item.uri(), ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, name) }, null) > 0
         } catch (_: Exception) {
             false
+        }
+    }
+
+    /**
+     * A file from outside saved into `Download/` (SPEC-albums §17.2): a new item of the app's own, written while
+     * pending and shown once whole; MediaStore numbers a name already there. The new item's id, or null.
+     */
+    suspend fun saveToDownloads(item: MediaItem): Long? = withContext(Dispatchers.IO) {
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, item.name.ifBlank { "file" })
+            put(MediaStore.MediaColumns.MIME_TYPE, item.mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val target = try {
+            resolver.insert(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), values)
+        } catch (_: Exception) {
+            null
+        } ?: return@withContext null
+        try {
+            resolver.openInputStream(item.uri())?.use { from -> resolver.openOutputStream(target)?.use { to -> from.copyTo(to, 256 * 1024) } } ?: error("No stream")
+            resolver.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null)
+            ContentUris.parseId(target)
+        } catch (_: Exception) {
+            // Half a copy is no file: it goes
+            try { resolver.delete(target, null) } catch (_: Exception) { }
+            null
         }
     }
 

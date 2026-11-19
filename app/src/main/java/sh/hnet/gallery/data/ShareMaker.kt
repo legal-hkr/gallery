@@ -65,7 +65,8 @@ class ShareMaker(private val context: Context) {
             for (item in items) {
                 ensureActive()
                 when (plan.ways.getValue(item.id)) {
-                    ShareWay.ORIGINAL -> uris += item.uri()
+                    // A file from outside goes as a copy too: its grant was the viewer's, not one to pass on
+                    ShareWay.ORIGINAL -> uris += if (item.outside) FileProvider.getUriForFile(context, "${context.packageName}.files", copy(item, session)) else item.uri()
                     ShareWay.STRIPPED, ShareWay.WITH_LOCATION -> {
                         val strip = plan.ways.getValue(item.id) == ShareWay.STRIPPED
                         try {
@@ -91,7 +92,7 @@ class ShareMaker(private val context: Context) {
         if (!item.video) return fact?.latitude != null && fact.longitude != null || fact == null && photoLocated(item)
         return try {
             MediaMetadataRetriever().use { retriever ->
-                resolver.openFileDescriptor(MediaStore.setRequireOriginal(item.uri()), "r")?.use { retriever.setDataSource(it.fileDescriptor) }
+                resolver.openFileDescriptor(item.originalUri(), "r")?.use { retriever.setDataSource(it.fileDescriptor) }
                 !retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_LOCATION).isNullOrBlank()
             }
         } catch (_: Exception) {
@@ -101,7 +102,7 @@ class ShareMaker(private val context: Context) {
 
     /** A photo whose facts weren't read yet: asked of the file itself. */
     private fun photoLocated(item: MediaItem): Boolean = try {
-        resolver.openFileDescriptor(MediaStore.setRequireOriginal(item.uri()), "r")?.use { ExifInterface(it.fileDescriptor).latLong != null } == true
+        resolver.openFileDescriptor(item.originalUri(), "r")?.use { ExifInterface(it.fileDescriptor).latLong != null } == true
     } catch (_: Exception) {
         false
     }
@@ -115,7 +116,7 @@ class ShareMaker(private val context: Context) {
             file = File(session, if (dot > 0) item.name.substring(0, dot) + " ($n)" + item.name.substring(dot) else item.name + " ($n)")
             n++
         }
-        val input = resolver.openInputStream(MediaStore.setRequireOriginal(item.uri())) ?: error("No stream")
+        val input = resolver.openInputStream(item.originalUri()) ?: error("No stream")
         input.use { from -> file.outputStream().use { to -> from.copyTo(to, 256 * 1024) } }
         return file
     }

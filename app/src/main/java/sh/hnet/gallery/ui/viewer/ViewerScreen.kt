@@ -111,6 +111,7 @@ import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.ExifText
+import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.model.SourceState
@@ -125,6 +126,7 @@ import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.RenameDialog
 import sh.hnet.gallery.ui.components.TooltipIconButton
+import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.grid.ShareButton
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
@@ -151,6 +153,10 @@ fun ViewerScreen(
     trash: Boolean = false,
     album: Long? = null,
     revealed: Boolean = true,
+    extra: List<MediaItem> = emptyList(),
+    locked: Boolean = false,
+    unlock: (() -> Unit) -> Unit = { it() },
+    onSaveToPhone: ((MediaItem) -> Unit)? = null,
     onPage: (Long) -> Unit,
     onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
@@ -167,7 +173,9 @@ fun ViewerScreen(
     val items by app.index.items.collectAsStateWithLifecycle()
     val facts by app.facts.facts.collectAsStateWithLifecycle()
     val autoplay by app.preferences.autoplayMotion.collectAsStateWithLifecycle(true)
-    val byId = remember(items) { items.orEmpty().associateBy { it.id } }
+    // Items another app opened (SPEC §17): read on their own, so they show before – or without – the index; the index's
+    // own copy wins once it has one
+    val byId = remember(items, extra) { extra.associateBy { it.id } + items.orEmpty().associateBy { it.id } }
     // Opened from a user album, an item removed from it leaves the pages as a trashed one does (SPEC-albums §9.8)
     val members by app.albums.members.collectAsStateWithLifecycle()
     val inAlbum = remember(members, album) { album?.let { id -> members.orEmpty().filter { it.albumId == id }.mapTo(HashSet()) { it.mediaId } } }
@@ -401,6 +409,7 @@ fun ViewerScreen(
                 TopBar(
                     item, hdr = hdr && (!video || toneMaps), sdr = sdr, motionPhoto = fact?.motion == true,
                     onBack = { close() },
+                    folderName = (!item.outside && extra.isNotEmpty()).takeIf { it }?.let { item.folder },
                     onSdr = { value ->
                         sdr = value
                         if (video) player.setSdr(value)
@@ -409,7 +418,15 @@ fun ViewerScreen(
                 )
             }
             val toolbar: @Composable () -> Unit = {
-                if (trash) {
+                if (item.outside) {
+                    // A file from outside (SPEC §17.2, SPEC-albums §17.2): Share, Save to phone, Info, Open with – nothing that changes it
+                    OutsideToolbar(
+                        onShare = { actions.share(listOf(item)) },
+                        onSave = { onSaveToPhone?.invoke(item) },
+                        onInfo = { info = true },
+                        onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
+                    )
+                } else if (trash) {
                     TrashToolbar(
                         onRestore = { actions.restore(listOf(item)) { ownTrashed.add(item.id) } },
                         onInfo = { info = true },
@@ -418,7 +435,10 @@ fun ViewerScreen(
                 } else {
                     Toolbar(
                         item,
-                        onShare = { actions.share(listOf(item)) },
+                        // On a locked phone Share and More ask to unlock first (SPEC §17.3); Move to Trash works at once
+                        onShare = { unlock { actions.share(listOf(item)) } },
+                        locked = locked,
+                        unlock = unlock,
                         onFavorite = { actions.favorite(listOf(item), !item.favorite) },
                         onInfo = { info = true },
                         onDelete = { actions.trash(listOf(item)) { ownTrashed.add(item.id) } },
@@ -518,16 +538,27 @@ private const val MOTION_SETTLE_MS = 300L
  * (the place under it comes with S6), and the state toggles – HDR on HDR photos, play on motion photos.
  */
 @Composable
-private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boolean, onBack: () -> Unit, onSdr: (Boolean) -> Unit, onPlayMotion: () -> Unit) {
+private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boolean, onBack: () -> Unit, onSdr: (Boolean) -> Unit, onPlayMotion: () -> Unit, folderName: FolderKey? = null) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val facts by app.facts.facts.collectAsStateWithLifecycle()
     TopAppBar(
         title = {
             Column {
-                Text(viewerTitle(item, facts?.get(item.id)), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A file from outside: its name and "Outside Gallery" (SPEC §17.2); one another app opened in its folder: the
+                // date and the folder's album (SPEC §17.1, §17.3)
+                Text(if (item.outside) item.name else viewerTitle(item, facts?.get(item.id)), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val subtitle = when {
+                    item.outside -> stringResource(R.string.label_outside_gallery)
+                    folderName != null -> albumName(folderName)
+                    else -> null
+                }
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         },
-        navigationIcon = { TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack) },
+        navigationIcon = {
+            if (item.outside) TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_close), onBack)
+            else TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack)
+        },
         actions = {
             if (hdr) {
                 val label = stringResource(if (!sdr) R.string.content_description_show_sdr else R.string.content_description_show_hdr)
@@ -569,6 +600,8 @@ private fun Tooltip(label: String, content: @Composable () -> Unit) {
 private fun Toolbar(
     item: MediaItem,
     onShare: () -> Unit,
+    locked: Boolean,
+    unlock: (() -> Unit) -> Unit,
     onFavorite: () -> Unit,
     onInfo: () -> Unit,
     onDelete: () -> Unit,
@@ -592,7 +625,7 @@ private fun Toolbar(
         )
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         Box {
-            TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { more = true })
+            TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { if (locked) unlock { more = true } else more = true })
             MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
         }
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
@@ -640,6 +673,17 @@ private fun MoreMenu(
             MenuItem(stringResource(R.string.menu_edit_in_another_app), R.drawable.ic_edit_square, 0, 2) { onDismiss(); onEditElsewhere() }
             MenuItem(stringResource(R.string.menu_open_with), R.drawable.ic_open_in_new, 1, 2) { onDismiss(); onOpenWith() }
         }
+    }
+}
+
+/** A file from outside Gallery (SPEC §17.2, SPEC-albums §17.2): Share, Save to phone, Info, Open with. */
+@Composable
+private fun OutsideToolbar(onShare: () -> Unit, onSave: () -> Unit, onInfo: () -> Unit, onOpenWith: () -> Unit) {
+    HorizontalFloatingToolbar(expanded = true) {
+        ShareButton(onShare)
+        TooltipIconButton(R.drawable.ic_download, stringResource(R.string.action_save_to_phone), onSave)
+        TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
+        TooltipIconButton(R.drawable.ic_open_in_new, stringResource(R.string.menu_open_with), onOpenWith)
     }
 }
 

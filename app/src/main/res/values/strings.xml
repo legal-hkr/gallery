@@ -322,4 +322,10 @@
     <string name="settings_sharing">Sharing</string>
     <string name="settings_sharing_included">Location: included</string>
     <string name="settings_sharing_removed">Location: removed</string>
+    <!-- Stage S5b -->
+    <string name="action_save_to_phone">Save to phone</string>
+    <string name="content_description_close">Close</string>
+    <string name="label_outside_gallery">Outside Gallery</string>
+    <!-- Stage S5b -->
+    <string name="msg_saved_to_downloads">Saved to Downloads</string>
 </resources>

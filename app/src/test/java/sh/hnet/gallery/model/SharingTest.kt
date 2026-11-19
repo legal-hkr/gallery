@@ -98,3 +98,14 @@ class SharingTest {
         assertEquals(0, including.kept)
     }
 }
+
+class StoragePathsTest {
+    @Test
+    fun pathsAsMediaStoreNamesThem() {
+        assertEquals(Triple("external_primary", "Download/", "TEST_F1.jpg"), StoragePaths.split("/storage/emulated/0/Download/TEST_F1.jpg", "external_primary"))
+        assertEquals(Triple("external_primary", "DCIM/Camera/", "a.jpg"), StoragePaths.split("/storage/emulated/0/DCIM/Camera/a.jpg", "external_primary"))
+        assertEquals(Triple("1234-5678", "2024/", "a.jpg"), StoragePaths.split("/storage/1234-5678/2024/a.jpg", "external_primary"))
+        assertEquals(Triple("external_primary", "", "a.jpg"), StoragePaths.split("/storage/emulated/0/a.jpg", "external_primary"))
+        assertEquals(null, StoragePaths.split("/data/user/0/x/a.jpg", "external_primary"))
+    }
+}

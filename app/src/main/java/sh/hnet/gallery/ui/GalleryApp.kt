@@ -167,6 +167,17 @@ fun GalleryApp() {
         actions.start = { intent -> activity?.startActivity(intent) }
         actions.showError = { errorShown = it }
     }
+    // A folder's album asked for by the outside viewer: on the Albums tab, over its root
+    LaunchedEffect(Unit) {
+        app.openFolder.filterNotNull().collect { key ->
+            app.openFolder.value = null
+            viewer = null
+            tab = Tab.ALBUMS
+            val albums = stacks.getValue(Tab.ALBUMS)
+            while (albums.size > 1) albums.removeAt(albums.lastIndex)
+            albums.add(Screen.Folder(key))
+        }
+    }
     // The share sheet's Include / Remove location: the same items again with the other choice (SPEC §14.2)
     LaunchedEffect(actions) {
         app.shareAgain.filterNotNull().collect { again ->

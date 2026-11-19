@@ -31,7 +31,15 @@ data class MediaItem(
     val generation: Long,
     /** When MediaStore learned of the file (`DATE_ADDED`, ms): a source's album's "recent" (SPEC-albums §9.4). */
     val added: Long = 0,
+    /**
+     * A file from outside MediaStore (an attachment, another app's file; SPEC §17.2): its own address. Such an item
+     * has a negative id, no folder, and is read through that address alone.
+     */
+    val source: String? = null,
 ) {
+    /** From outside MediaStore (SPEC §17.2). */
+    val outside: Boolean get() = source != null
+
     /** The folder it is in, the key of an album and of the timeline's choice (LOGIKA §2.5). */
     val folder: FolderKey get() = FolderKey(volume, path)
 
@@ -62,5 +70,20 @@ data class FolderKey(val volume: String, val path: String) {
             if (colon <= 0) return null
             return FolderKey(key.substring(0, colon), key.substring(colon + 1))
         }
+    }
+}
+
+/** A file's path on shared storage as MediaStore names it (LOGIKA §16.4): volume, `RELATIVE_PATH` and name. */
+object StoragePaths {
+    /**
+     * `/storage/emulated/0/Download/a.jpg` is ([primary], `Download/`, `a.jpg`); `/storage/1234-5678/DCIM/a.jpg` is
+     * (`1234-5678`, `DCIM/`, `a.jpg`) – an SD card's volume is its id in lower case. Null for anything else.
+     */
+    fun split(path: String, primary: String): Triple<String, String, String>? {
+        val emulated = Regex("/storage/emulated/\\d+/(.*/)?([^/]+)").matchEntire(path)
+        if (emulated != null) return Triple(primary, emulated.groupValues[1], emulated.groupValues[2])
+        val card = Regex("/storage/([^/]+)/(.*/)?([^/]+)").matchEntire(path) ?: return null
+        if (card.groupValues[1] == "emulated" || card.groupValues[1] == "self") return null
+        return Triple(card.groupValues[1].lowercase(), card.groupValues[2], card.groupValues[3])
     }
 }

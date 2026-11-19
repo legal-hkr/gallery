@@ -50,6 +50,34 @@
         </activity>
 
 
+        <!-- Ways in from other apps (SPEC §17, LOGIKA §16.4–§16.5): a file opened from Files or an attachment, the camera's
+             last shot, also on a locked phone. A task of its own: Back returns to the app that opened it. No fixed orientation:
+             it turns with the phone as the system's rotation setting says (D1), and turning doesn't recreate it -->
+        <activity
+            android:name=".ui.outside.ViewerActivity"
+            android:exported="true"
+            android:documentLaunchMode="intoExisting"
+            android:excludeFromRecents="true"
+            android:taskAffinity="sh.hnet.gallery.viewer"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:theme="@style/Theme.Gallery">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.provider.action.REVIEW" />
+                <action android:name="android.provider.action.REVIEW_SECURE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
         <!-- Hands the copies made for a share to the app the user picks; nothing else is reachable -->
         <provider
             android:name="androidx.core.content.FileProvider"

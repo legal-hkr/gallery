@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.graphics.Rect
+import android.media.MediaMetadataRetriever
 import android.os.CancellationSignal
 import android.os.OperationCanceledException
 import android.util.LruCache
@@ -102,7 +103,8 @@ object Thumbnails {
             val signal = CancellationSignal()
             val handle = currentCoroutineContext().job.invokeOnCompletion { signal.cancel() }
             try {
-                val whole = cache.get(key) ?: stored(resolver.loadThumbnail(item.uri(), Size(size, size), signal)).also { cache.put(key, it) }
+                // The system makes thumbnails of MediaStore's items only: a file from outside is decoded here (SPEC §17.2)
+                val whole = cache.get(key) ?: stored(if (item.outside) decodeOutside(resolver, item, size) else resolver.loadThumbnail(item.uri(), Size(size, size), signal)).also { cache.put(key, it) }
                 if (crop && thinForTile(whole, item, px)) {
                     decodeSquare(resolver, item, size, signal)?.let(::stored)?.let { square ->
                         cache.put(squareKey(item, px), square)
@@ -162,6 +164,21 @@ private fun decodeSquare(resolver: ContentResolver, item: MediaItem, size: Int, 
     throw e
 } catch (_: Exception) {
     null
+}
+
+/** A file from outside fitted in [size] × [size]: a photo by `ImageDecoder`, a video's frame by `MediaMetadataRetriever`. */
+private fun decodeOutside(resolver: ContentResolver, item: MediaItem, size: Int): Bitmap {
+    if (item.video) {
+        return MediaMetadataRetriever().use { retriever ->
+            resolver.openFileDescriptor(item.uri(), "r")?.use { retriever.setDataSource(it.fileDescriptor) } ?: error("No file")
+            retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, size, size) ?: error("No frame")
+        }
+    }
+    return ImageDecoder.decodeBitmap(ImageDecoder.createSource(resolver, item.uri())) { decoder, info, _ ->
+        val scale = minOf(1f, size.toFloat() / maxOf(info.size.width, info.size.height))
+        if (scale < 1f) decoder.setTargetSize(maxOf(1, (info.size.width * scale).roundToInt()), maxOf(1, (info.size.height * scale).roundToInt()))
+        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+    }
 }
 
 /**

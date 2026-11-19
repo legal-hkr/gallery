@@ -9,7 +9,6 @@ import android.media.MediaDataSource
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
-import android.provider.MediaStore
 import android.text.format.DateFormat
 import android.text.format.Formatter
 import androidx.annotation.DrawableRes
@@ -85,6 +84,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
+import sh.hnet.gallery.data.originalUri
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.facts.Fact
 import sh.hnet.gallery.model.ExifText
@@ -290,8 +290,10 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
     val details = if (dims != null) stringResource(R.string.format_file_details, size, dims, ExifText.megapixels(item.width, item.height, locale)) else size
     rows.add(Row(R.drawable.ic_description, item.name, listOf(details)))
     // The source's album (SPEC-albums §7.1): its name, the storage and path; a tap opens it – not for a hidden folder
-    val folderTitle = if (TimelineFolders.isScreenshots(item.path)) stringResource(R.string.label_screenshots) else albumName(item.folder)
-    rows.add(Row(R.drawable.ic_folder, folderTitle, listOf(albumPath(item.folder)), open = onOpenFolder))
+    if (!item.outside) {
+        val folderTitle = if (TimelineFolders.isScreenshots(item.path)) stringResource(R.string.label_screenshots) else albumName(item.folder)
+        rows.add(Row(R.drawable.ic_folder, folderTitle, listOf(albumPath(item.folder)), open = onOpenFolder))
+    }
 
     if (!item.video && (hdr || fact?.gainmap == true)) rows.add(Row(R.drawable.ic_hdr_on, stringResource(R.string.title_hdr), listOf(stringResource(R.string.label_ultra_hdr))))
     if (fact?.motion == true) {
@@ -461,7 +463,7 @@ private fun readVideo(resolver: ContentResolver, item: MediaItem, location: Bool
     var latitude: Double? = null
     var longitude: Double? = null
     try {
-        val uri = if (location) MediaStore.setRequireOriginal(item.uri()) else item.uri()
+        val uri = if (location) item.originalUri() else item.uri()
         resolver.openFileDescriptor(uri, "r")?.use { descriptor ->
             val retriever = MediaMetadataRetriever()
             try {
