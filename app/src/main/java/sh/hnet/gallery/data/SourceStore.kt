@@ -68,6 +68,21 @@ class SourceStore(private val dao: SourceDao, scope: CoroutineScope) {
     /** Pinned on top of the albums (SPEC-albums §9.4), in pinning order; null unpins. */
     suspend fun setPinned(folder: FolderKey, pinnedAt: Long?) = dao.setPinned(folder.key, pinnedAt)
 
+    /** Sources' albums pinned and sorted, for the backup (SPEC-albums §20.2). */
+    suspend fun pins(): Map<String, Long> = dao.all().mapNotNull { row -> row.pinnedAt?.let { row.key to it } }.toMap()
+
+    suspend fun sorts(): Map<String, String> = dao.all().mapNotNull { row -> row.sort?.let { row.key to it } }.toMap()
+
+    /** A backup's pins and sorts: on the sources this phone has, or will have (stored as unseen until then). */
+    suspend fun restoreLooks(pins: Map<String, Long>, sorts: Map<String, String>, newFoldersInPhotos: Boolean, now: Long) {
+        val known = dao.all().associateBy { it.key }
+        val keys = (pins.keys + sorts.keys).filter { FolderKey.of(it) != null }
+        dao.upsert(keys.map { key ->
+            val base = known[key] ?: SourceRow(key, SourceRules.classify(FolderKey.of(key)!!.path, newFoldersInPhotos).name, chosenByUser = false, lastSeenAt = now)
+            base.copy(pinnedAt = pins[key] ?: base.pinnedAt, sort = sorts[key] ?: base.sort)
+        })
+    }
+
     /** The states the user chose, for the backup (SPEC-albums §20.2). */
     suspend fun chosen(): Map<String, String> = dao.all().filter { it.chosenByUser }.associate { it.key to it.state }
 

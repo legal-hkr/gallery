@@ -68,20 +68,39 @@ class BackupManager(private val app: GalleryApplication, private val stamps: Sha
         }
     }
 
-    suspend fun restore(backup: BackupFile) {
+    /**
+     * Restores [backup] (SPEC-albums §20.2): the settings, the sources' states, pins and sorts, and the albums –
+     * their items matched here by fingerprint. The albums' items not on this phone, by album name (none: empty).
+     */
+    suspend fun restore(backup: BackupFile): Map<String, Int> {
         val settings = backup.settings
+        val now = System.currentTimeMillis()
         app.preferences.restore(settings)
         // The sources' states; a backup made before them has the timeline's choice instead
         val chosen = settings.sources?.mapNotNull { (key, state) -> SourceState.of(state)?.let { key to it } }?.toMap()
             ?: SourceRules.fromTimelineChoice(settings.timelineOn.orEmpty().toSet(), settings.timelineOff.orEmpty().toSet())
-        app.sources.restore(chosen, System.currentTimeMillis())
+        app.sources.restore(chosen, now)
+        app.sources.restoreLooks(settings.sourcePins.orEmpty(), settings.sourceSorts.orEmpty(), settings.newFoldersInPhotos ?: false, now)
+        val items = app.index.items.value.orEmpty().filter { !it.trashed }
+        val missing = LinkedHashMap<String, Int>()
+        for (album in backup.albums.orEmpty()) {
+            if (album.name.isBlank()) continue
+            val lost = app.albums.restore(album.name, album.createdAt, album.pinnedAt, album.sort, album.items, items, now)
+            if (lost > 0) missing[album.name.trim()] = lost
+        }
+        return missing
     }
 
     private suspend fun snapshot(): BackupFile = BackupFile(
         appVersion = BuildConfig.VERSION_NAME.removePrefix("v"),
         appVersionCode = BuildConfig.VERSION_CODE.toLong(),
         createdAt = Instant.now().toString(),
-        settings = app.preferences.snapshot().copy(sources = app.sources.chosen().toSortedMap()),
+        settings = app.preferences.snapshot().copy(
+            sources = app.sources.chosen().toSortedMap(),
+            sourcePins = app.sources.pins().toSortedMap(),
+            sourceSorts = app.sources.sorts().toSortedMap(),
+        ),
+        albums = app.albums.snapshot().map { (album, prints) -> BackupAlbum(album.name, album.createdAt, album.pinnedAt, album.sort, prints) },
     )
 
     /** The name the picker shows for [uri]; null when its provider doesn't say. Never logged. */

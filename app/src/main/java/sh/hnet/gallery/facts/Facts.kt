@@ -6,6 +6,7 @@ import androidx.room3.Dao
 import androidx.room3.Database
 import androidx.room3.Entity
 import androidx.room3.Index
+import androidx.room3.Insert
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
 import androidx.room3.Room
@@ -110,6 +111,60 @@ interface SourceDao {
     suspend fun delete(keys: List<String>)
 }
 
+@Dao
+interface AlbumDao {
+    @Query("SELECT * FROM album")
+    fun watchAlbums(): Flow<List<AlbumRow>>
+
+    @Query("SELECT * FROM album_item")
+    fun watchItems(): Flow<List<AlbumItemRow>>
+
+    @Query("SELECT * FROM album")
+    suspend fun albums(): List<AlbumRow>
+
+    @Query("SELECT * FROM album_item")
+    suspend fun items(): List<AlbumItemRow>
+
+    @Query("SELECT * FROM album_item WHERE albumId = :album")
+    suspend fun itemsOf(album: Long): List<AlbumItemRow>
+
+    @Insert
+    suspend fun insert(album: AlbumRow): Long
+
+    @Upsert
+    suspend fun upsertAlbums(albums: List<AlbumRow>)
+
+    @Upsert
+    suspend fun upsertItems(items: List<AlbumItemRow>)
+
+    @Query("UPDATE album SET name = :name WHERE id = :id")
+    suspend fun rename(id: Long, name: String)
+
+    @Query("UPDATE album SET sort = :sort WHERE id = :id")
+    suspend fun setSort(id: Long, sort: String?)
+
+    @Query("UPDATE album SET pinnedAt = :pinnedAt WHERE id = :id")
+    suspend fun setPinned(id: Long, pinnedAt: Long?)
+
+    @Query("UPDATE album SET lastAddedAt = :at WHERE id = :id")
+    suspend fun touched(id: Long, at: Long)
+
+    @Query("DELETE FROM album WHERE id IN (:ids)")
+    suspend fun deleteAlbums(ids: List<Long>)
+
+    @Query("DELETE FROM album_item WHERE albumId IN (:ids)")
+    suspend fun deleteItemsOfAlbums(ids: List<Long>)
+
+    @Query("DELETE FROM album_item WHERE albumId = :album AND mediaId IN (:media)")
+    suspend fun removeItems(album: Long, media: List<Long>)
+
+    @Query("DELETE FROM album_item WHERE mediaId IN (:media)")
+    suspend fun forget(media: List<Long>)
+
+    @Query("UPDATE album_item SET mediaId = :to, fingerprint = :fingerprint WHERE mediaId = :from")
+    suspend fun relink(from: Long, to: Long, fingerprint: String)
+}
+
 /**
  * The app's database (LOGIKA §2.3, §15.3): facts derived from the files, rebuilt if lost; since version 2
  * also the user's own data – the sources' states and the albums – which the backup carries.
@@ -119,6 +174,8 @@ abstract class GalleryDatabase : RoomDatabase() {
     abstract fun factDao(): FactDao
 
     abstract fun sourceDao(): SourceDao
+
+    abstract fun albumDao(): AlbumDao
 
     companion object {
         fun create(context: Context): GalleryDatabase =

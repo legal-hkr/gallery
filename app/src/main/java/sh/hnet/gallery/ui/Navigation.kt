@@ -23,6 +23,8 @@ sealed interface Screen : NavKey {
     @Serializable data object Trash : Screen
     /** A source's album (SPEC-albums §9.10), by [sh.hnet.gallery.model.FolderKey.key]. */
     @Serializable data class Folder(val key: String) : Screen
+    /** A user album (SPEC-albums §9.7), by its id. */
+    @Serializable data class Album(val id: Long) : Screen
     @Serializable data object Settings : Screen
     @Serializable data object SettingsPhotos : Screen
     @Serializable data object SettingsViewer : Screen

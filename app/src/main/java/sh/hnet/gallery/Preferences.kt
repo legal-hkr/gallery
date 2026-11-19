@@ -79,6 +79,8 @@ class Preferences(private val context: Context) {
         return BackupSettings(
             gridStep = GridStep.of(p[GRID_STEP]).name,
             newFoldersInPhotos = p[NEW_FOLDERS_IN_PHOTOS] ?: false,
+            albumSort = p[ALBUM_SORT] ?: "RECENT",
+            collectionsOldestFirst = p[COLLECTIONS_OLDEST_FIRST].orEmpty().sorted(),
             mediaManagementOffers = p[MEDIA_MANAGEMENT_OFFERS] ?: 0,
             autoplayMotion = p[AUTOPLAY_MOTION] ?: true,
         )
@@ -89,6 +91,8 @@ class Preferences(private val context: Context) {
         backup.gridStep?.let { p[GRID_STEP] = GridStep.of(it).name }
         // The timeline's choice of older backups goes to the sources' states (BackupManager); the old switch meant something else
         backup.newFoldersInPhotos?.let { p[NEW_FOLDERS_IN_PHOTOS] = it }
+        backup.albumSort?.takeIf { it in setOf("RECENT", "NAME", "COUNT") }?.let { p[ALBUM_SORT] = it }
+        backup.collectionsOldestFirst?.let { p[COLLECTIONS_OLDEST_FIRST] = it.toSet() }
         backup.mediaManagementOffers?.let { p[MEDIA_MANAGEMENT_OFFERS] = it.coerceIn(0, 2) }
         backup.autoplayMotion?.let { p[AUTOPLAY_MOTION] = it }
     }

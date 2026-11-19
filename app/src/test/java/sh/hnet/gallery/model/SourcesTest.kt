@@ -71,3 +71,30 @@ class SourcesTest {
         assertEquals(4, Mosaic.cells(7).size)
     }
 }
+
+class FingerprintsTest {
+    private fun item(id: Long, name: String, taken: Long = 1000, size: Long = 5) =
+        MediaItem(id, false, "image/jpeg", taken, name, 0, "DCIM/Camera/", "external_primary", size, 1, 1, 0, false, false, 0, false, 1)
+
+    @Test
+    fun relinksByNameDateAndSize() {
+        val items = listOf(item(10, "A.jpg"), item(11, "B.jpg"), item(12, "B.jpg", size = 6))
+        val orphans = mapOf(1L to Fingerprints.of(item(0, "A.jpg")), 2L to Fingerprints.of(item(0, "B.jpg", size = 6)), 3L to Fingerprints.of(item(0, "C.jpg")))
+        assertEquals(mapOf(1L to 10L, 2L to 12L), Fingerprints.relink(orphans, items))
+    }
+
+    @Test
+    fun aBackupsItemsFoundAndMissing() {
+        val items = listOf(item(10, "A.jpg"), item(11, "B.jpg"))
+        val (found, missing) = Fingerprints.match(listOf(Fingerprints.of(item(0, "A.jpg")), Fingerprints.of(item(0, "Z.jpg"))), items)
+        assertEquals(listOf(10L), found)
+        assertEquals(1, missing)
+    }
+
+    @Test
+    fun albumNames() {
+        assertEquals(AlbumNames.Problem.Empty, AlbumNames.problem("  ", emptyList()))
+        assertEquals(AlbumNames.Problem.Exists, AlbumNames.problem(" aparat ", listOf("Aparat")))
+        assertEquals(null, AlbumNames.problem("Wakacje: Chorwacja/2025", listOf("Aparat")))
+    }
+}

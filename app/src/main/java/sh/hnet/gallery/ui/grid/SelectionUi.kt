@@ -71,28 +71,37 @@ val LocalHideNavigationBar = compositionLocalOf<MutableState<Boolean>?> { null }
 
 /** Reports [selecting] to the shell, and Back ends the selection (SPEC §5.1). */
 @Composable
-fun SelectionEffects(selection: SelectionState) {
+fun SelectionEffects(selection: SelectionState) = SelectionEffects(selection.active, selection::clear)
+
+/** [SelectionEffects] for a selection of other things than items (the Albums tab's albums, SPEC-albums §9.5). */
+@Composable
+fun SelectionEffects(active: Boolean, onClear: () -> Unit) {
     val hide = LocalHideNavigationBar.current
-    val active = selection.active
     DisposableEffect(hide, active) {
         hide?.value = active
         onDispose { hide?.value = false }
     }
-    BackHandler(enabled = active) { selection.clear() }
+    BackHandler(enabled = active, onBack = onClear)
 }
 
 /** The selection's top bar (SPEC §5.1, as Contacts'): Close, "Selected: 3", Select all – again, when all are: clear. */
 @Composable
 fun SelectionTopBar(selection: SelectionState, all: List<Long>) {
     val allSelected = all.isNotEmpty() && selection.selected.containsAll(all)
+    SelectionTopBar(selection.selected.size, allSelected, selection::clear) { selection.selected = if (allSelected) emptySet() else all.toSet() }
+}
+
+/** [SelectionTopBar] by its parts: the count, whether all are selected, Close, and Select all (or clear). */
+@Composable
+fun SelectionTopBar(count: Int, allSelected: Boolean, onClose: () -> Unit, onSelectAll: () -> Unit) {
     TopAppBar(
-        title = { Text(stringResource(R.string.title_selected, selection.selected.size), maxLines = 1) },
-        navigationIcon = { TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_end_selection), selection::clear) },
+        title = { Text(stringResource(R.string.title_selected, count), maxLines = 1) },
+        navigationIcon = { TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_end_selection), onClose) },
         actions = {
             TooltipIconButton(
                 R.drawable.ic_select_all,
                 stringResource(if (allSelected) R.string.content_description_clear_selection else R.string.content_description_select_all),
-                { selection.selected = if (allSelected) emptySet() else all.toSet() },
+                onSelectAll,
                 colors = if (allSelected) IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary) else IconButtonDefaults.iconButtonColors(),
             )
         },
@@ -105,11 +114,19 @@ fun SelectionTopBar(selection: SelectionState, all: List<Long>) {
  * Move to Trash last in the error colour. Actions of later stages are shown disabled (D5).
  */
 @Composable
-fun MediaSelectionToolbar(items: List<MediaItem>, onFavorite: (Boolean) -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
+fun MediaSelectionToolbar(
+    items: List<MediaItem>,
+    onFavorite: (Boolean) -> Unit,
+    onAddToAlbum: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
+    onRemoveFromAlbum: (() -> Unit)? = null,
+) {
     val allFavorite = items.isNotEmpty() && items.all { it.favorite }
+    val scheme = MaterialTheme.colorScheme
     HorizontalFloatingToolbar(
         expanded = true,
-        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(toolbarContainerColor = MaterialTheme.colorScheme.surfaceContainer),
+        colors = FloatingToolbarDefaults.standardFloatingToolbarColors(toolbarContainerColor = scheme.surfaceContainer),
         expandedShadowElevation = 3.dp,
         modifier = modifier,
     ) {
@@ -120,16 +137,14 @@ fun MediaSelectionToolbar(items: List<MediaItem>, onFavorite: (Boolean) -> Unit,
             stringResource(if (allFavorite) R.string.action_unfavorite else R.string.action_favorite),
             { onFavorite(!allFavorite) },
         )
-        // S4b, S8, S8
-        TooltipIconButton(R.drawable.ic_library_add, stringResource(R.string.action_add_to_album), {}, enabled = false)
+        TooltipIconButton(R.drawable.ic_library_add, stringResource(R.string.action_add_to_album), onAddToAlbum)
+        // Remove from album on the toolbar in every grid, enabled only in a user album (the owner, over SPEC-albums §9.8's FAB),
+        // after Add to album and far from Move to Trash
+        TooltipIconButton(R.drawable.ic_library_remove, stringResource(R.string.action_remove_from_album), onRemoveFromAlbum ?: {}, enabled = onRemoveFromAlbum != null)
+        // S8, S8
         TooltipIconButton(R.drawable.ic_slideshow, stringResource(R.string.action_slideshow), {}, enabled = false)
         TooltipIconButton(R.drawable.ic_lock, stringResource(R.string.action_move_to_vault), {}, enabled = false)
-        TooltipIconButton(
-            R.drawable.ic_delete,
-            stringResource(R.string.action_delete),
-            onDelete,
-            colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error),
-        )
+        TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = scheme.error))
     }
 }
 

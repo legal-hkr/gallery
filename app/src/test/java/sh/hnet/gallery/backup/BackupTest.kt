@@ -44,4 +44,16 @@ class BackupTest {
         val check = Backup.check("""{"format":"sh.hnet.gallery.backup","formatVersion":1,"appVersion":"0.1.0","appVersionCode":1,"createdAt":"x","settings":{"gridStep":"LARGE"},"extra":1}""")
         assertEquals(BackupSettings(gridStep = "LARGE"), (check as BackupCheck.Valid).backup.settings)
     }
+
+    @Test
+    fun albumsRoundTrip() {
+        val file = BackupFile(
+            appVersion = "0.1.0", appVersionCode = 1, createdAt = "2026-11-19T20:00:00Z",
+            settings = BackupSettings(sources = mapOf("external_primary:Download/" to "IN_PHOTOS"), sourcePins = mapOf("external_primary:DCIM/Camera/" to 5L)),
+            albums = listOf(BackupAlbum("Wakacje", 1L, pinnedAt = 2L, sort = "ORDER_ADDED", items = listOf("A.jpg|1000|5"))),
+        )
+        val back = (Backup.check(Backup.encode(file)) as BackupCheck.Valid).backup
+        assertEquals(file.albums, back.albums)
+        assertEquals(file.settings, back.settings)
+    }
 }

@@ -78,6 +78,7 @@ import sh.hnet.gallery.ui.albums.PageKey
 import sh.hnet.gallery.ui.albums.TrashScreen
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
+import sh.hnet.gallery.ui.components.LocalOpenAlbum
 import sh.hnet.gallery.ui.components.MediaAccess
 import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MediaManagement
@@ -182,6 +183,8 @@ fun GalleryApp() {
         LocalConsent provides consent,
         LocalMediaActions provides actions,
         LocalHideNavigationBar provides hideNavigationBar,
+        // Show in a snackbar, a chip in Info: the album's page over the viewer when it is open, else on the current tab
+        LocalOpenAlbum provides { id -> if (viewer != null) overViewer = Screen.Album(id) else stacks.getValue(tab).add(Screen.Album(id)) },
     ) {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -259,10 +262,12 @@ fun GalleryApp() {
                             onOpenSettings = { currentStack.add(Screen.Settings) },
                             onOpenCollection = { currentStack.add(Screen.Collection(it.name)) },
                             onOpenFolder = { currentStack.add(Screen.Folder(it.key)) },
+                            onOpenAlbum = { currentStack.add(Screen.Album(it)) },
                             onOpenTrash = { currentStack.add(Screen.Trash) },
                         )
                     }
                     entry<Screen.Collection> { key -> AlbumPage(PageKey.Collection(CollectionKind.of(key.kind)), onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Album> { key -> AlbumPage(PageKey.User(key.id), onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.Folder> { key ->
                         val folder = FolderKey.of(key.key)
                         if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }
@@ -333,11 +338,16 @@ fun GalleryApp() {
         exit = slideOutHorizontally(spatial) { shift } + fadeOut(fastEffects),
     ) {
         val screen = shownOver[0] ?: return@AnimatedVisibility
+        // Tiles of its own: the viewer under it hides the tile of the photo it shows (for the flight back), which here
+        // left a gap in the album (owner's test of S4b2)
+        val pageOrigins = remember { MediaOrigins() }
+        CompositionLocalProvider(LocalMediaOrigins provides pageOrigins) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             BackHandler(enabled = overViewer != null) { overViewer = null }
             val page = when (screen) {
                 is Screen.Collection -> PageKey.Collection(CollectionKind.of(screen.kind))
                 is Screen.Folder -> FolderKey.of(screen.key)?.let { PageKey.Folder(it) }
+                is Screen.Album -> PageKey.User(screen.id)
                 else -> null
             }
             if (page != null) {
@@ -346,6 +356,7 @@ fun GalleryApp() {
                     viewer = request
                 })
             }
+        }
         }
     }
     if (offering) {

@@ -58,7 +58,9 @@ import java.time.LocalDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.R
+import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.TimelineEntry
+import sh.hnet.gallery.ui.albums.AddToAlbumSheet
 import sh.hnet.gallery.ui.components.EmptyState
 import sh.hnet.gallery.ui.components.GridFastScroller
 import sh.hnet.gallery.ui.components.LocalMediaActions
@@ -92,6 +94,13 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
     val selection = rememberSelection()
     SelectionEffects(selection)
     val actions = LocalMediaActions.current
+    var adding by remember { mutableStateOf<List<MediaItem>?>(null) }
+    adding?.let { items ->
+        AddToAlbumSheet(items, onDismiss = { adding = null }, onAdded = {
+            adding = null
+            selection.clear()
+        })
+    }
     val shownItems = remember(state, step) {
         (state as? PhotosState.Shown)?.timeline(step)?.entries.orEmpty().mapNotNull { (it as? TimelineEntry.Tile)?.item }
     }
@@ -172,6 +181,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 chosen,
                                 // Both end the selection once done (owner's test of S4a, over SPEC §5.4: as in the family's other apps)
                                 onFavorite = { favorite -> actions.favorite(chosen, favorite, say = true) { selection.clear() } },
+                                onAddToAlbum = { adding = chosen },
                                 onDelete = { actions.trash(chosen) { selection.clear() } },
                                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
                             )

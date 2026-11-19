@@ -18,10 +18,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -133,6 +136,8 @@ fun InfoSheet(
     onChangeDate: (LocalDate, LocalTime) -> Unit,
     onDismiss: () -> Unit,
     onOpenFolder: (() -> Unit)? = null,
+    albums: List<Pair<Long, String>> = emptyList(),
+    onOpenAlbum: (Long) -> Unit = {},
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -174,8 +179,10 @@ fun InfoSheet(
         ) {
             Text(stringResource(R.string.title_info), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 8.dp, bottom = 12.dp).semantics { heading() })
             val rows = buildRows(item, fact, info, hdr, taken, locale, onOpenFolder)
+            // The user albums holding the item, last (SPEC-albums §7.1); absent when it is in none
+            val count = rows.size + if (albums.isNotEmpty()) 1 else 0
             rows.forEachIndexed { index, row ->
-                InfoRow(index, rows.size, row, trailing = when {
+                InfoRow(index, count, row, trailing = when {
                     row.date && !item.video && item.mime in DATE_WRITABLE -> {
                         { TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.content_description_edit_date), { pickingDate = true }) }
                     }
@@ -185,6 +192,7 @@ fun InfoSheet(
                     else -> null
                 })
             }
+            if (albums.isNotEmpty()) AlbumsRow(rows.size, count, albums, onOpenAlbum)
             val lat = info?.latitude
             val lon = info?.longitude
             if (lat != null && lon != null) MapsButton(lat, lon)
@@ -323,6 +331,29 @@ private fun InfoRow(index: Int, count: Int, row: Row, trailing: (@Composable () 
         },
     ) {
         Value(row.title, Modifier.combinedClickable(onLongClick = { copy(row.title) }, onClick = row.open ?: {}))
+    }
+}
+
+/** "In albums" (SPEC-albums §7.1): the user albums as chips in one line that scrolls sideways; a chip opens its album. */
+@Composable
+private fun AlbumsRow(index: Int, count: Int, albums: List<Pair<Long, String>>, onOpen: (Long) -> Unit) {
+    SegmentedListItem(
+        shapes = groupShapes(index, count),
+        colors = settingsRowColors(),
+        leadingContent = { RowIcon(R.drawable.ic_photo_album) },
+        supportingContent = {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((id, name) in albums) {
+                    AssistChip(
+                        onClick = { onOpen(id) },
+                        label = { Text(name, maxLines = 1) },
+                        leadingIcon = { Icon(painterResource(R.drawable.ic_photo_album), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    )
+                }
+            }
+        },
+    ) {
+        Text(stringResource(R.string.title_in_albums), maxLines = 1)
     }
 }
 

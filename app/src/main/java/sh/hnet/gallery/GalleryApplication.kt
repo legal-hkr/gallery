@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.backup.BackupManager
+import sh.hnet.gallery.data.AlbumStore
 import sh.hnet.gallery.data.MediaIndex
 import sh.hnet.gallery.data.MediaSource
 import sh.hnet.gallery.data.SourceStore
@@ -52,6 +53,9 @@ class GalleryApplication : Application() {
         }.flowOn(Dispatchers.Default).stateIn(appScope, SharingStarted.Eagerly, null)
     }
 
+    /** User albums (SPEC-albums §9.12). */
+    val albums: AlbumStore by lazy { AlbumStore(database.albumDao(), appScope) }
+
     /** Backup and restore of the settings (SPEC §20.2). */
     val backup: BackupManager by lazy { BackupManager(this, getSharedPreferences("stamps", MODE_PRIVATE)) }
 
@@ -59,6 +63,8 @@ class GalleryApplication : Application() {
         super.onCreate()
         // Every new list of items is checked for files not read yet
         appScope.launch { index.items.filterNotNull().collect { facts.update(it) } }
+        // Album members whose ids a rescan changed are found again by fingerprint (SPEC-albums §9.12)
+        appScope.launch { index.items.filterNotNull().collect { albums.relink(it) } }
         // Every folder the index shows has a state: new ones are classified once (SPEC-albums §22.2)
         appScope.launch {
             index.items.filterNotNull().map { items -> items.mapTo(HashSet()) { it.folder } }.distinctUntilChanged().collect { folders ->

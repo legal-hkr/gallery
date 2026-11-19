@@ -76,7 +76,7 @@
     <string name="button_show">Pokaż</string>
     <string name="button_skip">Pomiń</string>
     <string name="button_start">Zacznij</string>
-    <string name="desc_backup_contents">Kopia obejmuje ustawienia aplikacji. Nie zawiera zdjęć, filmów ani sejfu.</string>
+    <string name="desc_backup_contents">Kopia obejmuje ustawienia, albumy utworzone w aplikacji wraz z listą ich elementów, wybrane stany folderów, przypięcia i kolejność albumów. Nie zawiera zdjęć, filmów ani sejfu.</string>
     <string name="desc_location_in_photos">Potrzebna do pokazywania miejsc i mapy. Przy udostępnianiu jest domyślnie usuwana.</string>
     <string name="desc_no_internet">Aplikacja nigdy nie łączy się z Internetem. Zdjęcia pozostają w telefonie.</string>
     <string name="desc_optional_access">Aplikacja działa bez niego. Można go później włączyć lub wyłączyć w ustawieniach.</string>
@@ -95,7 +95,6 @@
     <!-- Stage S1b: the family's backup texts (as Contacts'), mine for the reading step and its card -->
     <string name="button_next">Dalej</string>
     <string name="title_backup">Kopia zapasowa</string>
-    <string name="desc_backup_row">Ustawienia w jednym pliku</string>
     <string name="label_create_backup">Utwórz kopię</string>
     <string name="label_last_backup">Ostatnia kopia: %s</string>
     <string name="label_no_backup">Nie utworzono jeszcze kopii</string>
@@ -270,4 +269,43 @@
     <string name="sort_recent">Ostatnio zmienione</string>
     <!-- Stage S4b -->
     <string name="button_choose_folders">Wybierz foldery</string>
+    <!-- Stage S4b -->
+    <string name="action_delete_albums">Usuń albumy</string>
+    <string name="action_hide_folders">Ukryj foldery</string>
+    <string name="action_pin">Przypnij</string>
+    <string name="action_remove_from_album">Usuń z albumu</string>
+    <string name="action_unpin">Odepnij</string>
+    <string name="button_create">Utwórz</string>
+    <string name="desc_album_has_all">Wszystkie zaznaczone elementy już tu są.</string>
+    <string name="desc_album_has_some">%1$d. Część już tu jest (%2$d).</string>
+    <string name="error_album_exists">Album o tej nazwie już istnieje.</string>
+    <string name="label_name">Nazwa</string>
+    <string name="label_new_album">Nowy album</string>
+    <string name="msg_added_to_album">Dodano do albumu %1$s: %2$d</string>
+    <string name="msg_added_to_album_skipped">Dodano do albumu %1$s: %2$d. Pominięto te, które już w nim były (%3$d).</string>
+    <string name="msg_album_deleted">Usunięto album (%1$s). Zdjęcia i filmy pozostają w Galerii.</string>
+    <string name="msg_albums_deleted">Usunięto albumy: %1$d. Zdjęcia i filmy pozostają w Galerii.</string>
+    <string name="title_add_to_album">Dodaj do albumu</string>
+    <string name="title_new_album">Nowy album</string>
+    <!-- Stage S4b -->
+    <string name="button_add_photos">Dodaj zdjęcia</string>
+    <string name="desc_album_empty">Dodaj zdjęcia tutaj albo zaznacz je w Zdjęciach i wybierz „Dodaj do albumu”.</string>
+    <string name="desc_delete_album">Zdjęcia i filmy pozostaną w Galerii.</string>
+    <string name="label_album_count">Elementy: %1$d</string>
+    <string name="menu_delete_album">Usuń album</string>
+    <string name="menu_rename_album">Zmień nazwę albumu</string>
+    <string name="msg_album_empty">Ten album jest pusty.</string>
+    <string name="msg_removed_from_album">Usunięto z albumu %1$s: %2$d. Pozostają w Galerii.</string>
+    <string name="sort_order_added">W kolejności dodania</string>
+    <!-- Stage S4b -->
+    <string name="title_in_albums">W albumach</string>
+    <!-- Stage S4b -->
+    <string name="msg_moved_to_trash_albums">Przeniesiono do kosza: %1$d. Usunięto je też ze wszystkich albumów.</string>
+    <string name="msg_moved_to_trash_one_albums">Przeniesiono do kosza i usunięto ze wszystkich albumów</string>
+    <!-- Stage S4b -->
+    <string name="format_missing_per_album">%1$s: %2$d</string>
+    <string name="msg_restored_missing">Przywrócono kopię. Niektórych elementów albumów nie ma w tym telefonie (%1$d).</string>
+    <string name="title_missing_items">Nie znaleziono elementów</string>
+    <!-- Stage S4b -->
+    <string name="settings_backup_desc">Ustawienia i albumy w pliku JSON</string>
 </resources>

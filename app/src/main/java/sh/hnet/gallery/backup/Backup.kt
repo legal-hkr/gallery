@@ -23,6 +23,8 @@ data class BackupFile(
     /** ISO 8601, UTC. */
     val createdAt: String,
     val settings: BackupSettings = BackupSettings(),
+    /** The albums made in the app (SPEC-albums §20.2); absent in backups from before them. */
+    val albums: List<BackupAlbum>? = null,
 ) {
     companion object {
         const val FORMAT = "sh.hnet.gallery.backup"
@@ -51,8 +53,28 @@ data class BackupSettings(
     val newAlbumsInPhotos: Boolean? = null,
     val newFoldersInPhotos: Boolean? = null,
     val sources: Map<String, String>? = null,
+    /** Sources' albums pinned (pinning time, for the order) and their sorts, by `volume:path`. */
+    val sourcePins: Map<String, Long>? = null,
+    val sourceSorts: Map<String, String>? = null,
+    /** The Albums tab's order (`RECENT`, `NAME`, `COUNT`). */
+    val albumSort: String? = null,
+    /** The collections shown oldest first, by name. */
+    val collectionsOldestFirst: List<String>? = null,
     val mediaManagementOffers: Int? = null,
     val autoplayMotion: Boolean? = null,
+)
+
+/**
+ * A user album in the backup (SPEC-albums §20.2): its items by fingerprint (name, date taken, size), so it
+ * finds them on another phone; never the media themselves.
+ */
+@Serializable
+data class BackupAlbum(
+    val name: String,
+    val createdAt: Long,
+    val pinnedAt: Long? = null,
+    val sort: String? = null,
+    val items: List<String> = emptyList(),
 )
 
 /** What a picked file turned out to be, before anything changes. */

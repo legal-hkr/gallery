@@ -7,6 +7,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.model.MediaItem
@@ -36,7 +37,15 @@ class MediaActions(
     /** To Trash at once, with Undo (SPEC §5.5); [onDone] when they are there (a selection ends, the viewer knows it moved them). */
     fun trash(items: List<MediaItem>, onDone: () -> Unit = {}) {
         if (items.isEmpty()) return
-        val message = if (items.size == 1) context.getString(R.string.msg_moved_to_trash_one) else context.getString(R.string.msg_moved_to_trash, items.size)
+        // Any of them in a user album: the message says they left every album too (SPEC-albums §5.5)
+        val members = (context.applicationContext as GalleryApplication).albums.members.value.orEmpty().mapTo(HashSet()) { it.mediaId }
+        val inAlbums = items.any { it.id in members }
+        val message = when {
+            items.size == 1 && inAlbums -> context.getString(R.string.msg_moved_to_trash_one_albums)
+            items.size == 1 -> context.getString(R.string.msg_moved_to_trash_one)
+            inAlbums -> context.getString(R.string.msg_moved_to_trash_albums, items.size)
+            else -> context.getString(R.string.msg_moved_to_trash, items.size)
+        }
         messageScope.launch {
             apply(writer.trash(items, true)) {
                 onDone()
@@ -75,18 +84,30 @@ class MediaActions(
     /** For good (SPEC §11.2), once the family's confirmation was given: no Undo. */
     fun deleteForever(items: List<MediaItem>, onDone: () -> Unit = {}) {
         if (items.isEmpty()) return
-        messageScope.launch { apply(writer.deleteForever(items)) { onDone() } }
+        messageScope.launch {
+            apply(writer.deleteForever(items)) {
+                onDone()
+                // Deleted for good: out of every user album (SPEC-albums §9.12)
+                messageScope.launch { (context.applicationContext as GalleryApplication).albums.forget(items.map { it.id }) }
+            }
+        }
     }
 
     /** Says [message] in the family's short snackbar; [undo] adds Undo. */
-    fun say(message: String, undo: (() -> Unit)?) {
+    fun say(message: String, undo: (() -> Unit)?) = say(message, context.getString(R.string.button_undo), undo)
+
+    /** Says [message] with an action of its own ([label], e.g. Show), or none. */
+    fun say(message: String, label: String, action: (() -> Unit)?) {
         messageScope.launch {
             snackbars.currentSnackbarData?.dismiss()
-            val result = snackbars.showSnackbar(message, actionLabel = undo?.let { context.getString(R.string.button_undo) }, duration = SnackbarDuration.Short)
-            if (result == SnackbarResult.ActionPerformed) undo?.invoke()
+            val result = snackbars.showSnackbar(message, actionLabel = action?.let { label }, duration = SnackbarDuration.Short)
+            if (result == SnackbarResult.ActionPerformed) action?.invoke()
         }
     }
 }
 
 /** The shell's [MediaActions], for every grid and the viewer. */
 val LocalMediaActions = staticCompositionLocalOf<MediaActions> { error("No media actions provided") }
+
+/** Opens a user album's page (the snackbar's Show, Info's chips): over the viewer when it is open, else on the current tab. */
+val LocalOpenAlbum = staticCompositionLocalOf<(Long) -> Unit> { {} }

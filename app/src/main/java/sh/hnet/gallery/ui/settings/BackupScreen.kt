@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -81,9 +85,11 @@ class RestoreAction internal constructor(val pick: () -> Unit)
 @Composable
 fun rememberRestoreAction(snackbars: SnackbarHostState, messageScope: CoroutineScope, onRestored: () -> Unit = {}): RestoreAction {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val app = context.applicationContext as GalleryApplication
     var pending by remember { mutableStateOf<BackupManager.Picked?>(null) }
     var errorShown by remember { mutableStateOf<ErrorDetails?>(null) }
+    var missingShown by remember { mutableStateOf<Map<String, Int>?>(null) }
     val notOurs = stringResource(R.string.error_backup_not_ours)
     val newer = stringResource(R.string.error_backup_newer)
     val unreadable = stringResource(R.string.error_backup_unreadable)
@@ -113,10 +119,16 @@ fun rememberRestoreAction(snackbars: SnackbarHostState, messageScope: CoroutineS
             onConfirm = {
                 pending = null
                 messageScope.launch {
-                    app.backup.restore(backup)
+                    val missing = app.backup.restore(backup)
                     onRestored()
                     snackbars.currentSnackbarData?.dismiss()
-                    snackbars.showSnackbar(restored, duration = SnackbarDuration.Short)
+                    if (missing.isEmpty()) {
+                        snackbars.showSnackbar(restored, duration = SnackbarDuration.Short)
+                    } else {
+                        // Some album items aren't on this phone: how many, and Show lists them per album (SPEC-albums §20.2)
+                        val result = snackbars.showSnackbar(resources.getString(R.string.msg_restored_missing, missing.values.sum()), actionLabel = show, duration = SnackbarDuration.Short)
+                        if (result == SnackbarResult.ActionPerformed) missingShown = missing
+                    }
                 }
             },
             onDismiss = { pending = null },
@@ -128,6 +140,18 @@ fun rememberRestoreAction(snackbars: SnackbarHostState, messageScope: CoroutineS
         }
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }
+    missingShown?.let { missing ->
+        AlertDialog(
+            onDismissRequest = { missingShown = null },
+            title = { Text(stringResource(R.string.title_missing_items)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    for ((album, count) in missing) Text(stringResource(R.string.format_missing_per_album, album, count))
+                }
+            },
+            confirmButton = { TextButton(onClick = { missingShown = null }) { Text(stringResource(R.string.button_close)) } },
+        )
+    }
 
     return remember(picker) { RestoreAction { picker.launch(BACKUP_MIME_TYPES) } }
 }

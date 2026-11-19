@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -44,6 +45,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -76,6 +78,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -112,10 +115,12 @@ import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.model.SourceState
 import sh.hnet.gallery.model.ViewerList
+import sh.hnet.gallery.ui.albums.AddToAlbumSheet
 import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
 import sh.hnet.gallery.ui.components.Consent
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
+import sh.hnet.gallery.ui.components.LocalOpenAlbum
 import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.RenameDialog
@@ -143,6 +148,7 @@ fun ViewerScreen(
     snackbars: SnackbarHostState,
     messageScope: CoroutineScope,
     trash: Boolean = false,
+    album: Long? = null,
     onPage: (Long) -> Unit,
     onLoaded: (Long, ImageBitmap?) -> Unit,
     onClose: () -> Unit,
@@ -150,6 +156,7 @@ fun ViewerScreen(
     onOpenFolder: (MediaItem) -> Unit = {},
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val app = context.applicationContext as GalleryApplication
     val activity = LocalActivity.current
     val scope = rememberCoroutineScope()
@@ -159,7 +166,19 @@ fun ViewerScreen(
     val facts by app.facts.facts.collectAsStateWithLifecycle()
     val autoplay by app.preferences.autoplayMotion.collectAsStateWithLifecycle(true)
     val byId = remember(items) { items.orEmpty().associateBy { it.id } }
-    val pages = remember(byId) { ViewerList.pages(opened, byId, trash) }
+    // Opened from a user album, an item removed from it leaves the pages as a trashed one does (SPEC-albums §9.8)
+    val members by app.albums.members.collectAsStateWithLifecycle()
+    val inAlbum = remember(members, album) { album?.let { id -> members.orEmpty().filter { it.albumId == id }.mapTo(HashSet()) { it.mediaId } } }
+    val albumName = app.albums.albums.collectAsStateWithLifecycle().value?.firstOrNull { it.id == album }?.name
+    val pages = remember(byId, inAlbum) { ViewerList.pages(opened, byId, trash).let { list -> if (inAlbum == null) list else list.filter { it in inAlbum } } }
+    var adding by remember { mutableStateOf<MediaItem?>(null) }
+    val openAlbum = LocalOpenAlbum.current
+    val allAlbums by app.albums.albums.collectAsStateWithLifecycle()
+    /** The user albums an item is in, by name in the language's order (Info's "In albums"). */
+    fun albumsOf(id: Long): List<Pair<Long, String>> {
+        val ids = members.orEmpty().filter { it.mediaId == id }.mapTo(HashSet()) { it.albumId }
+        return allAlbums.orEmpty().filter { it.id in ids }.sortedBy { it.name.lowercase() }.map { it.id to it.name }
+    }
     var currentId by rememberSaveable { mutableLongStateOf(start) }
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
     val dismiss = rememberViewerDismissState()
@@ -398,6 +417,17 @@ fun ViewerScreen(
                         onInfo = { info = true },
                         onDelete = { actions.trash(listOf(item)) { ownTrashed.add(item.id) } },
                         onRename = { scope.launch { renaming = item to writer.namesBeside(item, items.orEmpty()) } },
+                        onAddToAlbum = { adding = item },
+                        removeFrom = albumName,
+                        onRemoveFromAlbum = {
+                            val id = album ?: return@Toolbar
+                            ownTrashed.add(item.id)
+                            val message = resources.getString(R.string.msg_removed_from_album, albumName.orEmpty(), 1)
+                            scope.launch {
+                                val removed = app.albums.remove(id, listOf(item.id))
+                                actions.say(message) { app.appScope.launch { app.albums.putBack(removed) } }
+                            }
+                        },
                         onSetAs = { open(context, item, Intent.ACTION_ATTACH_DATA) },
                         onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
                         onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
@@ -424,6 +454,7 @@ fun ViewerScreen(
                     toolbar()
                 }
             }
+            adding?.let { target -> AddToAlbumSheet(listOf(target), onDismiss = { adding = null }, onAdded = { adding = null }) }
             renaming?.let { (target, taken) ->
                 RenameDialog(target.name, taken, onDismiss = { renaming = null }) { name ->
                     renaming = null
@@ -457,6 +488,11 @@ fun ViewerScreen(
                         info = false
                         onOpenFolder(item)
                     }) else null,
+                    albums = if (trash) emptyList() else albumsOf(item.id),
+                    onOpenAlbum = { id ->
+                        info = false
+                        openAlbum(id)
+                    },
                 )
             }
         }
@@ -530,6 +566,9 @@ private fun Toolbar(
     onInfo: () -> Unit,
     onDelete: () -> Unit,
     onRename: () -> Unit,
+    onAddToAlbum: () -> Unit,
+    removeFrom: String?,
+    onRemoveFromAlbum: () -> Unit,
     onSetAs: () -> Unit,
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
@@ -547,7 +586,7 @@ private fun Toolbar(
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         Box {
             TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { more = true })
-            MoreMenu(more, onDismiss = { more = false }, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
+            MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
         }
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
@@ -555,11 +594,33 @@ private fun Toolbar(
 
 /** More (SPEC §6.3), in three groups; what later stages bring is shown disabled (D5). */
 @Composable
-private fun MoreMenu(expanded: Boolean, onDismiss: () -> Unit, onRename: () -> Unit, onSetAs: () -> Unit, onEditElsewhere: () -> Unit, onOpenWith: () -> Unit) {
+private fun MoreMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    removeFrom: String?,
+    onRemoveFromAlbum: () -> Unit,
+    onAddToAlbum: () -> Unit,
+    onRename: () -> Unit,
+    onSetAs: () -> Unit,
+    onEditElsewhere: () -> Unit,
+    onOpenWith: () -> Unit,
+) {
     DropdownMenuPopup(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 3)) {
-            MenuItem(stringResource(R.string.action_add_to_album), R.drawable.ic_library_add, 0, 2, enabled = false) {}
-            MenuItem(stringResource(R.string.menu_rename), R.drawable.ic_drive_file_rename_outline, 1, 2) { onDismiss(); onRename() }
+            val count = if (removeFrom != null) 3 else 2
+            // From a user album, Remove from album first with the album's name under it (SPEC-albums §6.3)
+            if (removeFrom != null) {
+                SelectableDropdownMenuItem(
+                    selected = false,
+                    onClick = { onDismiss(); onRemoveFromAlbum() },
+                    text = { Text(stringResource(R.string.action_remove_from_album), maxLines = 1) },
+                    supportingText = { Text(removeFrom, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    shapes = MenuDefaults.itemShape(0, count),
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_library_remove), contentDescription = null, modifier = Modifier.size(20.dp)) },
+                )
+            }
+            MenuItem(stringResource(R.string.action_add_to_album), R.drawable.ic_library_add, count - 2, count) { onDismiss(); onAddToAlbum() }
+            MenuItem(stringResource(R.string.menu_rename), R.drawable.ic_drive_file_rename_outline, count - 1, count) { onDismiss(); onRename() }
         }
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(1, 3)) {
