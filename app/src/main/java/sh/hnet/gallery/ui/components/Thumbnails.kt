@@ -46,7 +46,8 @@ object Thumbnails {
     /** Four thumbnails read at a time (LOGIKA §3). */
     private val reading = Dispatchers.IO.limitedParallelism(4)
 
-    private val STEPS = intArrayOf(128, 256, 384, 512)
+    // 768 for the two-column step (cells of ~540 px on a phone; 512 would be stretched)
+    private val STEPS = intArrayOf(128, 256, 384, 512, 768)
 
     /** The size actually read for a cell of [px] pixels. */
     fun sizeFor(px: Int): Int = STEPS.firstOrNull { it >= px } ?: STEPS.last()

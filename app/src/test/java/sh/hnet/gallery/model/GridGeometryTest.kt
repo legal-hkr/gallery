@@ -17,7 +17,7 @@ class GridGeometryTest {
 
     @Test
     fun headersAndLinesAsTheGridLaysThemOut() {
-        val g = GridGeometry.of(entries, columns = 4, width = 400f, gap = 0f, headerHeight = 50f)
+        val g = GridGeometry.of(entries, columns = 4, width = 400, gap = 0, headerHeight = 50)
         assertEquals(Box(0f, 0f, 400f, 50f), g.box(0))
         assertTrue(g.isHeader(0))
         // Four tiles in the first line, the fifth on the next
@@ -32,15 +32,37 @@ class GridGeometryTest {
 
     @Test
     fun gapsBetweenCellsAndLines() {
-        val g = GridGeometry.of(entries, columns = 4, width = 406f, gap = 2f, headerHeight = 50f)
+        val g = GridGeometry.of(entries, columns = 4, width = 406, gap = 2, headerHeight = 50)
         assertEquals(100f, g.cell)
         assertEquals(Box(102f, 52f, 202f, 152f), g.box(2))
         assertEquals(154f, g.box(5).top)
     }
 
     @Test
+    fun wholePixelsAsLazyVerticalGrid() {
+        // 1080 px, 7 columns, 3 px gaps: 1062 px of cells, 151 each and the first five 152 (as GridCells.Fixed)
+        val g = GridGeometry.of(entries, columns = 7, width = 1080, gap = 3, headerHeight = 50)
+        assertEquals(Box(0f, 53f, 152f, 205f), g.box(1))
+        assertEquals(Box(155f, 53f, 307f, 205f), g.box(2))
+        // The day's line is as high as its widest cell; the next header after it and the gap
+        assertEquals(53f + 152f + 3f, g.box(6).top)
+        // A card before the entries: they start after it and its gap
+        assertEquals(103f, GridGeometry.of(entries, 7, 1080, 3, 50, lead = 100).box(0).top)
+    }
+
+    @Test
+    fun whereTheGridStands() {
+        val g = GridGeometry.of(entries, columns = 4, width = 400, gap = 0, headerHeight = 50)
+        // 60 px down: 10 px into the first line of tiles (any of its items puts the line first), after a card item or not
+        assertEquals(4 to 10, g.scrollTo(60f, leadItems = 0))
+        assertEquals(5 to 10, g.scrollTo(60f, leadItems = 1))
+        assertEquals(0 to 0, g.scrollTo(0f, leadItems = 0))
+        assertEquals(6 to 0, g.scrollTo(250f, leadItems = 0))
+    }
+
+    @Test
     fun entriesInARange() {
-        val g = GridGeometry.of(entries, columns = 4, width = 400f, gap = 0f, headerHeight = 50f)
+        val g = GridGeometry.of(entries, columns = 4, width = 400, gap = 0, headerHeight = 50)
         assertEquals(1..5, g.between(60f, 200f))
         assertEquals(0..0, g.between(0f, 40f))
         assertEquals(6..7, g.between(260f, 1000f))
@@ -55,8 +77,9 @@ class GridGeometryTest {
         assertEquals(GridStep.SMALL to 1f, PinchSteps.track(GridStep.MEDIUM, 0.79f))
         assertEquals(GridStep.MONTHS to 1f, PinchSteps.track(GridStep.SMALL, 0.7f))
         // At the ends the zoom doesn't build up where there is no step: the way back starts at once
-        assertEquals(null to 1f, PinchSteps.track(GridStep.LARGE, 3f))
-        assertEquals(GridStep.MEDIUM to 1f, PinchSteps.track(GridStep.LARGE, 0.75f))
+        assertEquals(GridStep.HUGE to 1f, PinchSteps.track(GridStep.LARGE, 1.3f))
+        assertEquals(null to 1f, PinchSteps.track(GridStep.HUGE, 3f))
+        assertEquals(GridStep.LARGE to 1f, PinchSteps.track(GridStep.HUGE, 0.75f))
         assertEquals(null to 1f, PinchSteps.track(GridStep.MONTHS, 0.2f))
     }
 }
@@ -69,8 +92,8 @@ class MorphsTest {
 
     /** 100 days of 5 photos on a 1080 × 2400 px screen. */
     private val entries = (0 until 100).flatMap { d -> listOf(TimelineEntry.Day(LocalDate.of(2026, 1, 1).plusDays(d.toLong()))) + (0 until 5).map { tile(d * 5L + it, d) } }
-    private val four = GridGeometry.of(entries, 4, 1080f, 6f, 132f)
-    private val five = GridGeometry.of(entries, 5, 1080f, 6f, 132f)
+    private val four = GridGeometry.of(entries, 4, 1080, 5, 132)
+    private val five = GridGeometry.of(entries, 5, 1080, 5, 132)
 
     @Test
     fun theLayerFillsTheScreenInTheMiddleOfTheList() {

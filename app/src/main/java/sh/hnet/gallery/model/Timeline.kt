@@ -7,10 +7,11 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 /**
- * The grid's steps (SPEC §4.4): three, four and five columns grouped by day, then the month view.
- * One step is remembered for every grid of the app.
+ * The grid's steps (SPEC §4.4): two, three, four and five columns grouped by day, then the month view
+ * (two columns added by the owner, 19 Nov 2026). One step is remembered for every grid of the app.
  */
 enum class GridStep(val columns: Int, val months: Boolean) {
+    HUGE(2, false),
     LARGE(3, false),
     MEDIUM(4, false),
     SMALL(5, false),

@@ -103,7 +103,8 @@ class TimelineTest {
 
     @Test
     fun nearestStep() {
-        assertEquals(GridStep.LARGE, GridStep.nearest(2.2f))
+        assertEquals(GridStep.HUGE, GridStep.nearest(2.2f))
+        assertEquals(GridStep.LARGE, GridStep.nearest(2.6f))
         assertEquals(GridStep.MEDIUM, GridStep.nearest(4.4f))
         assertEquals(GridStep.SMALL, GridStep.nearest(5.9f))
         assertEquals(GridStep.MONTHS, GridStep.nearest(6.1f))

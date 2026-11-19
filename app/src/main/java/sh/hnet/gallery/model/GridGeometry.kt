@@ -1,5 +1,7 @@
 package sh.hnet.gallery.model
 
+import kotlin.math.roundToInt
+
 /**
  * Where every entry of a grid lies (LOGIKA §3, the pinch's morph): full-width headers and square
  * tiles in lines, `gap` apart, as `LazyVerticalGrid` with fixed columns lays them out – so the pinch
@@ -42,47 +44,74 @@ class GridGeometry private constructor(
         return low..last
     }
 
+    /**
+     * Where the grid stands when the content's [y] (pixels from its very top) is at the top of the screen: the
+     * grid's index of the entry there ([leadItems] items before the entries) and how far into it, never negative.
+     */
+    fun scrollTo(y: Float, leadItems: Int): Pair<Int, Int> {
+        val start = tops.firstOrNull() ?: 0f
+        if (y < start || keys.isEmpty()) return 0 to y.coerceAtLeast(0f).roundToInt()
+        // The last entry starting at or above y: its line is the first on screen
+        var low = 0
+        var high = keys.lastIndex
+        while (low < high) {
+            val mid = (low + high + 1) / 2
+            if (tops[mid] <= y) low = mid else high = mid - 1
+        }
+        return (low + leadItems) to (y - tops[low]).roundToInt()
+    }
+
     companion object {
         /**
          * The layout of [entries] in [columns] columns across [width] pixels, [gap] between cells and
-         * lines, headers [headerHeight] high.
+         * lines, headers [headerHeight] high, after [lead] pixels of other items (a card) and their gap.
+         * In whole pixels as `LazyVerticalGrid` lays them out (`GridCells.Fixed`): the cells share the
+         * width less the gaps, the first ones a pixel wider for what doesn't divide, and a line is as
+         * high as its widest cell – fractions here drifted from the real grid line by line, and the
+         * grid jumped when it took over from the pinch's layer (owner's phone test, 19 Nov 2026).
          */
-        fun of(entries: List<TimelineEntry>, columns: Int, width: Float, gap: Float, headerHeight: Float): GridGeometry {
-            val cell = (width - gap * (columns - 1)) / columns
+        fun of(entries: List<TimelineEntry>, columns: Int, width: Int, gap: Int, headerHeight: Int, lead: Int = 0): GridGeometry {
+            val inner = width - gap * (columns - 1)
+            val slot = inner / columns
+            val wider = inner % columns
+            val cellWidths = IntArray(columns) { slot + if (it < wider) 1 else 0 }
+            val cellLefts = IntArray(columns).also { for (c in 1 until columns) it[c] = it[c - 1] + cellWidths[c - 1] + gap }
             val n = entries.size
             val tops = FloatArray(n)
             val lefts = FloatArray(n)
             val widths = FloatArray(n)
             val heights = FloatArray(n)
-            var y = 0f
+            var y = if (lead > 0) lead + gap else 0
             var column = 0
-            var lineOpen = false
+            // The open line's height: its widest cell
+            var line = 0
             for ((i, entry) in entries.withIndex()) {
                 if (entry is TimelineEntry.Tile) {
                     if (column == columns) {
-                        y += cell + gap
+                        y += line + gap
                         column = 0
+                        line = 0
                     }
-                    tops[i] = y
-                    lefts[i] = column * (cell + gap)
-                    widths[i] = cell
-                    heights[i] = cell
+                    tops[i] = y.toFloat()
+                    lefts[i] = cellLefts[column].toFloat()
+                    widths[i] = cellWidths[column].toFloat()
+                    heights[i] = cellWidths[column].toFloat()
+                    line = maxOf(line, cellWidths[column])
                     column++
-                    lineOpen = true
                 } else {
                     // A header closes the tiles' line before it and takes a line of its own
-                    if (lineOpen) y += cell + gap
-                    tops[i] = y
+                    if (line > 0) y += line + gap
+                    tops[i] = y.toFloat()
                     lefts[i] = 0f
-                    widths[i] = width
-                    heights[i] = headerHeight
+                    widths[i] = width.toFloat()
+                    heights[i] = headerHeight.toFloat()
                     y += headerHeight + gap
                     column = 0
-                    lineOpen = false
+                    line = 0
                 }
             }
-            val height = if (lineOpen) y + cell else (y - gap).coerceAtLeast(0f)
-            return GridGeometry(entries.map { it.key }, tops, lefts, widths, heights, height, cell)
+            val height = if (line > 0) y + line else (y - gap).coerceAtLeast(0)
+            return GridGeometry(entries.map { it.key }, tops, lefts, widths, heights, height.toFloat(), slot.toFloat())
         }
     }
 }

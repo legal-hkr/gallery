@@ -34,7 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -96,8 +96,8 @@ private class Morph(val anchor: String, val fy: Float, val pivot: Offset, val fr
     val progress = Animatable(0f)
 }
 
-/** What the grid settles on after a pinch: the step, and the anchor tile's top on screen there. */
-private data class Settle(val step: GridStep, val anchor: String, val top: Float)
+/** What the grid settles on after a change of step: the step, and the content's place at the top of the screen as the layer left it. */
+private data class Settle(val step: GridStep, val y: Float)
 
 /**
  * The photo grid of every list of items (SPEC §4.4, §4.5): day or month headers spanning the
@@ -146,8 +146,8 @@ fun MediaGrid(
             else -> 1f
         }
         val density = LocalDensity.current
-        val widthPx = with(density) { maxWidth.toPx() }
-        val heightPx = with(density) { maxHeight.toPx() }
+        val widthPx = constraints.maxWidth
+        val heightPx = constraints.maxHeight.toFloat()
         fun columnsOf(s: GridStep) = (s.columns * widthFactor).toInt()
         fun gapOf(s: GridStep) = if (s.months) 1.dp else 2.dp
         val columns = columnsOf(step)
@@ -155,11 +155,14 @@ fun MediaGrid(
         val corner = if (step.months) 2.dp else 6.dp
         val cellPx = with(density) { ((maxWidth - gap * (columns - 1)) / columns).toPx() }
         // The headers' height as the grid draws them (font scale included), for the layer's geometry
-        var headerPx by remember { mutableFloatStateOf(with(density) { 44.dp.toPx() }) }
+        var headerPx by remember { mutableIntStateOf(with(density) { 44.dp.roundToPx() }) }
+        // The items before the entries (the partial-access card), as last measured: the layer's layouts start after them
+        var leadPx by remember { mutableIntStateOf(0) }
+        val lead = if (topCount > 0) leadPx else 0
         // Each step's layout, made when a pinch first needs it
-        val geometries = remember(days, months, widthPx, headerPx, widthFactor) { HashMap<GridStep, GridGeometry>() }
+        val geometries = remember(days, months, widthPx, headerPx, widthFactor, lead) { HashMap<GridStep, GridGeometry>() }
         fun geometry(s: GridStep): GridGeometry = geometries.getOrPut(s) {
-            GridGeometry.of((if (s.months) months else days).entries, columnsOf(s), widthPx, with(density) { gapOf(s).toPx() }, headerPx)
+            GridGeometry.of((if (s.months) months else days).entries, columnsOf(s), widthPx, with(density) { gapOf(s).roundToPx() }, headerPx, lead)
         }
 
         /**
@@ -178,6 +181,15 @@ fun MediaGrid(
                     if (entry is TimelineEntry.Tile) launch { Thumbnails.load(resolver, entry.item, px) }
                 }
             }
+        }
+
+        /** The card's height before the entries, when it and the first entry are on screen. */
+        fun measureLead() {
+            if (topCount == 0) return
+            val items = state.layoutInfo.visibleItemsInfo
+            val card = items.firstOrNull { it.index == 0 } ?: return
+            val first = items.firstOrNull { it.index == topCount } ?: return
+            leadPx = first.offset.y - card.offset.y - with(density) { gap.roundToPx() }
         }
 
         /** The tile under a point of the grid, or the nearest one, and how far down in it the point is (0–1). */
@@ -206,11 +218,10 @@ fun MediaGrid(
         LaunchedEffect(settle, timeline, columns) {
             val target = settle ?: return@LaunchedEffect
             if (step != target.step || timeline.months != target.step.months) return@LaunchedEffect
-            val index = target.anchor.toLongOrNull()?.let { timeline.indexOf[it] }
-            if (index != null) {
-                state.scrollToItem(index + topCount)
-                state.scrollBy(-target.top)
-            }
+            // Straight to where the layer's last frame showed the content (the anchor tile then lies where the layer had it).
+            // Scrolling to the anchor and then back by its top went wrong where the list's end kept the anchor from the top
+            val (index, offset) = geometry(target.step).scrollTo(target.y, topCount)
+            state.scrollToItem(index, offset)
             withFrameNanos { }
             morph = null
             settle = null
@@ -242,6 +253,7 @@ fun MediaGrid(
                                     zoom = rest
                                     if (target != null) {
                                         val centroid = event.calculateCentroid(useCurrent = true)
+                                        measureLead()
                                         tileAt(centroid)?.let { (key, fy) ->
                                             val change = Morph(key, fy, centroid, stepNow, target)
                                             morph = change
@@ -252,8 +264,8 @@ fun MediaGrid(
                                                 prefetch.cancel()
                                                 val geo = geometry(target)
                                                 val index = geo.index(change.anchor)
-                                                val top = if (index != null) Morphs.offset(geo, index, change.pivot.y, change.fy, heightPx) + geo.box(index).top else 0f
-                                                settle = Settle(target, change.anchor, top)
+                                                val y = if (index != null) -Morphs.offset(geo, index, change.pivot.y, change.fy, heightPx) else 0f
+                                                settle = Settle(target, y)
                                                 onStepChangeNow(target)
                                             }
                                         }
@@ -276,8 +288,8 @@ fun MediaGrid(
                 contentType = { it::class },
             ) { entry ->
                 when (entry) {
-                    is TimelineEntry.Day -> DayHeader(entry.date, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height.toFloat() })
-                    is TimelineEntry.Month -> MonthHeader(entry.month, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height.toFloat() })
+                    is TimelineEntry.Day -> DayHeader(entry.date, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height })
+                    is TimelineEntry.Month -> MonthHeader(entry.month, today, Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height })
                     is TimelineEntry.Tile -> Tile(
                         entry.item,
                         facts[entry.item.id],
