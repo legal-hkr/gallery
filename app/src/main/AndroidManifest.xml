@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.MANAGE_MEDIA" />
     <!-- Media3 merges this in for streaming; the app plays only local files (as Music) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <!-- Media3 merges this in for playback with the screen off (setWakeMode); the app plays only on screen and keeps it on with FLAG_KEEP_SCREEN_ON -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" tools:node="remove" />
 
     <!-- S2: Info's "Open in a maps app" shows only when an app answers geo: (package visibility) -->
     <queries>
