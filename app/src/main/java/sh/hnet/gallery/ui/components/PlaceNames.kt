@@ -41,3 +41,12 @@ fun PlaceData.label(fact: Fact?, language: PlaceLanguage, full: Boolean): String
 
 /** A fact's settlement for counting places (the day headers); null when not placed by this data. */
 fun PlaceData.settlementOf(fact: Fact?): Int? = fact?.takeIf { it.placedBy(this) }?.settlement
+
+/** A place group's name (`PlaceKey`): its town's, else its region's, else its country's. */
+fun PlaceData.groupName(key: Int, language: sh.hnet.gallery.model.PlaceLanguage): String {
+    if (key >= 0) return settlementName(key, language)
+    val region = sh.hnet.gallery.model.PlaceKey.region(key)
+    if (region >= 0) return regionName(region, language)
+    val country = sh.hnet.gallery.model.PlaceKey.country(key)
+    return if (country >= 0) countryName(country, language) else ""
+}

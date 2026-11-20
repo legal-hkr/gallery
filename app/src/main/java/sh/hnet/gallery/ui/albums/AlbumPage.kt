@@ -62,6 +62,8 @@ import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.components.albumPath
+import sh.hnet.gallery.model.PlaceKey
+import sh.hnet.gallery.ui.components.groupName
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.MediaGrid
@@ -106,7 +108,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         is PageKey.Collection -> stringResource(key.kind.title)
         is PageKey.Folder -> albumName(key.folder)
         is PageKey.User -> shown?.name.orEmpty()
-        is PageKey.Town -> placeData()?.settlementName(key.settlement, placeLanguage()).orEmpty()
+        is PageKey.Town -> placeData()?.groupName(key.settlement, placeLanguage()).orEmpty()
         PageKey.NoLocation -> stringResource(R.string.label_no_location)
     }
     // A town's region and country under its name (SPEC §13.1)
@@ -114,7 +116,13 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
     val townWhere = town?.let { settlement ->
         val data = placeData()
         val language = placeLanguage()
-        data?.town(settlement)?.let { (region, country) -> listOfNotNull(region.takeIf { it >= 0 }?.let { data.regionName(it, language) }, country.takeIf { it >= 0 }?.let { data.countryName(it, language) }).distinct().joinToString(", ") }
+        // A town: its region and country; a region's group: its country; a country's group: nothing more
+        when {
+            data == null -> null
+            settlement >= 0 -> data.town(settlement).let { (region, country) -> listOfNotNull(region.takeIf { it >= 0 }?.let { data.regionName(it, language) }, country.takeIf { it >= 0 }?.let { data.countryName(it, language) }).distinct().joinToString(", ") }
+            PlaceKey.region(settlement) >= 0 -> data.regionCountry(PlaceKey.region(settlement)).takeIf { it in 0 until data.countryCount }?.let { data.countryName(it, language) }
+            else -> null
+        }
     }
     var adding by remember { mutableStateOf<List<MediaItem>?>(null) }
     var renaming by rememberSaveable { mutableStateOf(false) }

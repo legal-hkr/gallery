@@ -232,6 +232,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     places.regionNames(region.region).forEach { names.add(SearchName(it, regionPart)) }
                 }
                 for (town in country.towns) {
+                    // A region's or country's group is found by its region's or country's names already
+                    if (!town.isTown) continue
                     val townPart = SearchPart.Place(PlaceLevel.TOWN, town.settlement, places.settlementName(town.settlement, language))
                     places.settlementNames(town.settlement).forEach { names.add(SearchName(it, townPart)) }
                 }

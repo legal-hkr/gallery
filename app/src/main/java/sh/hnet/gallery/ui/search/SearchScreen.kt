@@ -78,6 +78,7 @@ import sh.hnet.gallery.ui.components.EmptyState
 import sh.hnet.gallery.ui.components.GridFastScroller
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.TooltipIconButton
+import sh.hnet.gallery.ui.components.groupName
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.MediaGrid
@@ -177,7 +178,7 @@ private fun Home(home: SearchHome, viewModel: SearchViewModel, locale: Locale) {
             item(key = "places") {
                 // No Map button here (owner's test of S6c: it made no sense in search); the map is Places' card
                 Header(stringResource(R.string.header_places), Modifier.padding(start = 16.dp))
-                TownRow(home.towns, data, language) { settlement -> viewModel.run(data.settlementName(settlement, language)) }
+                TownRow(home.towns, data, language) { key -> viewModel.run(data.groupName(key, language)) }
             }
         }
         if (home.kinds.isNotEmpty()) {

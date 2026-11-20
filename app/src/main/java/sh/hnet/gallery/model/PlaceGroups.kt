@@ -1,7 +1,31 @@
 package sh.hnet.gallery.model
 
-/** A town's items, newest first (SPEC §13.1); its region and country are those of its newest item. */
-data class TownGroup(val settlement: Int, val region: Int, val country: Int, val items: List<MediaItem>)
+/**
+ * A town's items, newest first (SPEC §13.1); its region and country are those of its newest item. Items placed in a
+ * country but near no town in the data (mountains, the sea, a village outside the extract) are a group of their
+ * region, else of their country (owner's phone test of S6b: they counted to "Polska", yet no carousel showed them):
+ * [settlement] is then a [PlaceKey] below 0.
+ */
+data class TownGroup(val settlement: Int, val region: Int, val country: Int, val items: List<MediaItem>) {
+    val isTown: Boolean get() = settlement >= 0
+}
+
+/** A place's group by one number: a town's index, else its region's or its country's, below 0. */
+object PlaceKey {
+    private const val COUNTRY_BASE = 100_000
+
+    fun of(place: Place): Int = when {
+        place.settlement >= 0 -> place.settlement
+        place.region >= 0 -> -2 - place.region
+        else -> -COUNTRY_BASE - place.country
+    }
+
+    /** The region a key stands for, or -1. */
+    fun region(key: Int): Int = if (key < 0 && key > -COUNTRY_BASE) -2 - key else -1
+
+    /** The country a key stands for (a key of the country alone), or -1. */
+    fun country(key: Int): Int = if (key <= -COUNTRY_BASE) -COUNTRY_BASE - key else -1
+}
 
 /** A region's towns on a country's page (SPEC §13.1), the most items first; [region] -1 for towns outside every region. */
 data class RegionGroup(val region: Int, val towns: List<TownGroup>, val count: Int)
@@ -14,7 +38,7 @@ data class CountryGroup(val country: Int, val count: Int, val towns: List<TownGr
 
 /** Places (SPEC §13.1, LOGIKA §17.5): the countries, the most items first, and the items without a location. */
 class PlaceGroups(val countries: List<CountryGroup>, val noLocation: List<MediaItem>) {
-    val townCount: Int get() = countries.sumOf { it.towns.size }
+    val townCount: Int get() = countries.sumOf { c -> c.towns.count { it.isTown } }
 
     fun country(index: Int): CountryGroup? = countries.firstOrNull { it.country == index }
 
@@ -38,9 +62,10 @@ class PlaceGroups(val countries: List<CountryGroup>, val noLocation: List<MediaI
                     continue
                 }
                 if (place.country >= 0) countryItems[place.country] = (countryItems[place.country] ?: 0) + 1
-                if (place.settlement >= 0 && place.country >= 0) {
-                    towns.getOrPut(place.settlement) { ArrayList() }.add(item)
-                    townPlace.putIfAbsent(place.settlement, place)
+                if (place.country >= 0) {
+                    val key = PlaceKey.of(place)
+                    towns.getOrPut(key) { ArrayList() }.add(item)
+                    townPlace.putIfAbsent(key, place)
                 }
             }
             val byCountry = towns.entries

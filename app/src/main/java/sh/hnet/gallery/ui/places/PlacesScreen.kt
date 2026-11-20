@@ -53,6 +53,7 @@ import sh.hnet.gallery.ui.components.MediaThumbnail
 import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
 import sh.hnet.gallery.ui.components.TooltipIconButton
+import sh.hnet.gallery.ui.components.groupName
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.map.MapCard
@@ -177,7 +178,7 @@ internal fun TownRow(towns: List<TownGroup>, data: PlaceData, language: PlaceLan
         val town = towns[index]
         Box(Modifier.fillMaxSize().maskClip(shape).clickable { onOpenTown(town.settlement) }) {
             MediaThumbnail(town.items.first(), THUMB_PX, Modifier.fillMaxSize())
-            TownBadge(data.settlementName(town.settlement, language), town.items.size, carouselItemDrawInfo)
+            TownBadge(data.groupName(town.settlement, language), town.items.size, carouselItemDrawInfo)
         }
     }
     if (towns.size == 1) {

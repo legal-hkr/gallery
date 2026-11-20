@@ -50,6 +50,7 @@ import http.client
 import io
 import json
 import os
+import re
 import struct
 import sys
 import time
@@ -290,6 +291,50 @@ def settlements(rows):
     return found
 
 
+# Settlements of many people are asked what they are: metropolitan areas and agglomerations are "settlements" too,
+# with a point in their city's middle and the region's people, so the rule that a more populous one near by wins
+# gave "Aglomeracja wrocławska" to Wrocław's market square and "Obszar Metropolitalny Warszawy" to Warsaw
+# Whole names of classes, not words: Tokyo is a "metropolitan prefecture" (and a "megacity", a "big city")
+AREA_WORDS = ("metropolitan area", "metropolitan region", "metropolitan statistical area", "urban area", "agglomeration", "conurbation", "megalopolis", "larger urban zone", "functional urban area")
+# A settlement also called a city, a town, a municipality or a village stays, whatever else it is – as whole words:
+# a "megacity" may be an agglomeration, a "big city" isn't
+PLACE_WORDS = re.compile(r"\b(city|town|municipality|village|commune)\b")
+# Areas whatever else they are called: South Africa's metropolitan municipalities hold their city and the land around
+AREA_ALWAYS = ("metropolitan municipality",)
+AREA_LEAST = 100_000
+
+CLASSES = """SELECT ?s ?label WHERE {{
+  VALUES ?s {{ {ids} }}
+  ?s wdt:P31 ?class .
+  ?class rdfs:label ?label FILTER(LANG(?label) = "en")
+}}"""
+
+
+def areas(cache, ids, pause):
+    """Of these settlements, those that are an area of a city rather than a place (their classes' English names)."""
+    path = os.path.join(cache, "classes.json")
+    known = {}
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            known = json.load(f)
+    missing = [i for i in ids if i not in known]
+    for start in range(0, len(missing), 200):
+        batch = missing[start:start + 200]
+        for i in batch:
+            known.setdefault(i, [])
+        for row in ask(CLASSES.format(ids=" ".join("wd:" + i for i in batch)), pause):
+            known[row["s"]["value"].rsplit("/", 1)[1]].append(row["label"]["value"])
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(known, f, ensure_ascii=False)
+        print(f"  classes: {len(known)}", file=sys.stderr)
+    def area(labels):
+        lower = [label.lower() for label in labels]
+        if any(word in label for label in lower for word in AREA_ALWAYS):
+            return True
+        return any(word in label for label in lower for word in AREA_WORDS) and not any(PLACE_WORDS.search(label) for label in lower)
+    return {i for i in ids if area(known.get(i, []))}
+
+
 def native_names(cache, ids, pause):
     """Native names of countries and regions by their Wikidata ids (Natural Earth has no local names for countries)."""
     path = os.path.join(cache, "native-names.json")
@@ -407,6 +452,10 @@ def main():
         rows += cached_rows(args.cache, lat, lon, size) if args.cached_only else fetch_tile(args.cache, lat, lon, size, args.pause)
     found = settlements(rows)
     print(f"{len(found)} settlements fetched", file=sys.stderr)
+    dropped = areas(args.cache, [i for i, e in found.items() if e["pop"] >= AREA_LEAST], args.pause)
+    for item in dropped:
+        del found[item]
+    print(f"{len(dropped)} metropolitan areas and agglomerations left out", file=sys.stderr)
 
     within = shapely.box(box[1], box[0], box[3], box[2])
     ids = [text(p.get("WIKIDATAID")) for p, _ in countries] + [text(p.get("wikidataid")) for p, g in regions if not args.box or g.intersects(within)]

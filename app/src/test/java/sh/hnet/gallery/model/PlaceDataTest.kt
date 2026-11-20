@@ -110,10 +110,37 @@ class PlaceGroupsTest {
         assertEquals(listOf(1, 2), groups.countries.map { it.country })
         val first = groups.countries[0]
         assertEquals(5, first.count)
-        assertEquals(listOf(10, 11), first.towns.map { it.settlement })
-        assertEquals(listOf(5, 6), first.regions.map { it.region })
+        // The item at sea is a group of its country alone (no carousel left it out), after the larger town
+        assertEquals(listOf(10, PlaceKey.of(Place(-1, -1, 1)), 11), first.towns.map { it.settlement })
+        assertEquals(listOf(5, 6, -1), first.regions.map { it.region })
         assertEquals(listOf(1L, 2L, 3L), groups.town(10)!!.items.map { it.id })
         assertEquals(listOf(8L, 9L), groups.noLocation.map { it.id })
         assertEquals(3, groups.townCount)
+    }
+}
+
+class PlaceKeyTest {
+    @Test
+    fun aTownARegionACountry() {
+        assertEquals(12, PlaceKey.of(Place(12, 3, 1)))
+        val region = PlaceKey.of(Place(-1, 3, 1))
+        assertEquals(3, PlaceKey.region(region))
+        assertEquals(-1, PlaceKey.country(region))
+        val country = PlaceKey.of(Place(-1, -1, 7))
+        assertEquals(7, PlaceKey.country(country))
+        assertEquals(-1, PlaceKey.region(country))
+        // Region 0 and country 0 are keys too
+        assertEquals(0, PlaceKey.region(PlaceKey.of(Place(-1, 0, 0))))
+        assertEquals(0, PlaceKey.country(PlaceKey.of(Place(-1, -1, 0))))
+    }
+
+    @Test
+    fun townlessItemsGroupByRegion() {
+        val places = mapOf(1L to Place(-1, 4, 2), 2L to Place(-1, 4, 2), 3L to Place(20, 4, 2))
+        val items = (1L..3L).map { MediaItem(id = it, video = false, mime = "image/jpeg", taken = 10 - it, name = "$it", bucketId = 0, path = "DCIM/Camera/", volume = "external_primary", size = 1, width = 1, height = 1, duration = 0, favorite = false, trashed = false, expires = 0, ours = false, generation = 0) }
+        val country = PlaceGroups.of(items) { places[it] }.countries.single()
+        assertEquals(3, country.count)
+        assertEquals(listOf(PlaceKey.of(Place(-1, 4, 2)), 20), country.towns.map { it.settlement })
+        assertEquals(listOf(1L, 2L), country.towns[0].items.map { it.id })
     }
 }
