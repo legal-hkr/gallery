@@ -88,6 +88,15 @@ import sh.hnet.gallery.ui.viewer.ViewerRequest
  */
 @Composable
 fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, onAddPhotos: (() -> Unit)? = null, viewModel: PageViewModel = viewModel(key = key.toString())) {
+    // The page goes back once: Delete album goes back and the album gone makes the page go back too – for an empty album
+    // the second came first, and the pair took the Albums tab's root as well (owner's test: a crash)
+    var left by remember { mutableStateOf(false) }
+    val leave = {
+        if (!left) {
+            left = true
+            onBack()
+        }
+    }
     LaunchedEffect(key) { viewModel.show(key) }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
@@ -98,7 +107,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
     val selection = rememberSelection()
     SelectionEffects(selection)
     val actions = LocalMediaActions.current
-    LaunchedEffect(state) { if (state == PageState.Gone) onBack() }
+    LaunchedEffect(state) { if (state == PageState.Gone) leave() }
     val shown = state as? PageState.Shown
     val shownItems = remember(shown, step) { shown?.timeline(step)?.entries.orEmpty().mapNotNull { (it as? TimelineEntry.Tile)?.item } }
     val allIds = remember(shownItems) { shownItems.map { it.id } }
@@ -145,7 +154,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         if (folders.isEmpty()) return
         scope.launch {
             val before = viewModel.choose(folders, chosen)
-            if (chosen == SourceState.HIDDEN) onBack()
+            if (chosen == SourceState.HIDDEN) leave()
             actions.say(
                 when (chosen) {
                     SourceState.IN_PHOTOS -> inPhotos
@@ -162,7 +171,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         } else {
             var menu by remember { mutableStateOf(false) }
             TopAppBar(
-                navigationIcon = { TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack) },
+                navigationIcon = { TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), leave) },
                 title = {
                     Column {
                         Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() })
@@ -214,7 +223,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                                             menu = false
                                             scope.launch {
                                                 val (albums, items) = viewModel.delete(userAlbum)
-                                                onBack()
+                                                leave()
                                                 actions.say(deletedMessage) { viewModel.putBack(albums, items) }
                                             }
                                         },

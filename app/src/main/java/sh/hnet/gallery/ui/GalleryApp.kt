@@ -323,7 +323,8 @@ fun GalleryApp() {
             label = "destination",
         ) { current ->
             val currentStack = stacks.getValue(current)
-            val back: () -> Unit = { currentStack.removeAt(currentStack.lastIndex) }
+            // Never the tab's root: an empty back stack is a crash
+            val back: () -> Unit = { if (currentStack.size > 1) currentStack.removeAt(currentStack.lastIndex) }
             NavDisplay(
                 backStack = currentStack,
                 onBack = { if (currentStack.size > 1) currentStack.removeAt(currentStack.lastIndex) },
