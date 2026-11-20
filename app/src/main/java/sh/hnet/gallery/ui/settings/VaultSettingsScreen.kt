@@ -1,33 +1,39 @@
 package sh.hnet.gallery.ui.settings
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedListItem
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.vault.Vault
 import sh.hnet.gallery.model.VaultLockDelay
-import sh.hnet.gallery.ui.components.RowIcon
+import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
+import sh.hnet.gallery.ui.components.DestructiveButton
+import sh.hnet.gallery.ui.components.SettingsDescription
 import sh.hnet.gallery.ui.components.SettingsGroup
+import sh.hnet.gallery.ui.components.SettingsGroupHeader
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
 import sh.hnet.gallery.ui.components.SettingsPage
 import sh.hnet.gallery.ui.components.SettingsRadioRow
-import sh.hnet.gallery.ui.components.settingsRowColors
 import sh.hnet.gallery.ui.vault.LocalVaultActions
 import sh.hnet.gallery.ui.vault.SecureWindow
 
 /**
  * Settings › Vault (SPEC §20.7): opens after the system's prompt (cancelled, it goes back). When the vault locks, one
- * single-choice group; the key's Forget comes with S8c (disabled, D5). Not set up or its key lost: one row to the
- * vault's page instead.
+ * single-choice group; Forget the key (SPEC §18.8) asks in the error colour, then deletes the Keystore key and every
+ * file – the vault is new again. Not set up or its key lost: one row to the vault's page instead.
  */
 @Composable
 fun VaultSettingsScreen(onBack: () -> Unit, onOpenVault: () -> Unit) {
@@ -36,6 +42,7 @@ fun VaultSettingsScreen(onBack: () -> Unit, onOpenVault: () -> Unit) {
     val state by app.vault.state.collectAsStateWithLifecycle()
     val delay by app.preferences.vaultLockDelay.collectAsStateWithLifecycle(VaultLockDelay.AT_ONCE)
     val access = LocalVaultActions.current
+    var forgetting by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (app.vault.state.value is Vault.State.Locked) access?.open(then = {}, cancelled = onBack) ?: onBack()
     }
@@ -59,23 +66,25 @@ fun VaultSettingsScreen(onBack: () -> Unit, onOpenVault: () -> Unit) {
                         }
                     }
                 }
-                SettingsGroup(stringResource(R.string.header_key)) {
-                    row { shapes ->
-                        // Forget the key comes with S8c (D5)
-                        SegmentedListItem(
-                            onClick = {},
-                            enabled = false,
-                            shapes = shapes,
-                            colors = settingsRowColors(),
-                            leadingContent = { RowIcon(R.drawable.ic_key_off, error = true) },
-                            supportingContent = { Text(stringResource(R.string.desc_forget_key)) },
-                        ) {
-                            Text(stringResource(R.string.label_forget_key), color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
+                // A page's single destructive action: the family's outlined button in the error colour (owner's decision)
+                SettingsGroupHeader(stringResource(R.string.header_key))
+                SettingsDescription(stringResource(R.string.desc_forget_key))
+                DestructiveButton(stringResource(R.string.label_forget_key), R.drawable.ic_key_off, { forgetting = true }, Modifier.padding(top = 8.dp))
             }
         }
+    }
+    if (forgetting) {
+        ConfirmDestructiveDialog(
+            R.drawable.ic_key_off,
+            stringResource(R.string.title_forget_key),
+            AnnotatedString(stringResource(R.string.desc_forget_key_confirm, app.vault.count)),
+            stringResource(R.string.button_forget_key),
+            onConfirm = {
+                forgetting = false
+                scope.launch { app.vault.forget() }
+            },
+            onDismiss = { forgetting = false },
+        )
     }
 }
 

@@ -36,7 +36,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         val app = application as GalleryApplication
         // A full-screen prompt of the screen lock stops the activity too: a vault that is still locked then has nothing to lock
-        if (!isChangingConfigurations) app.appScope.launch { app.vault.lockAfter(app.preferences.vaultLockDelay.first().ms) }
+        if (!isChangingConfigurations && !app.vault.picking) app.appScope.launch { app.vault.lockAfter(app.preferences.vaultLockDelay.first().ms) }
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -103,7 +103,7 @@ private var secureScreens = 0
 /**
  * Albums › Vault (SPEC §18): the setup page the first time, the system's prompt when locked (the lock's page when it
  * is cancelled), the lost key's card, else the grid of what is inside – 3 fixed columns, moved in last first – with
- * selection; a tap opens the viewer over the vault's items (S8b2). Import and export come with S8c.
+ * selection; a tap opens the viewer over the vault's items (S8b2); Import on the top bar, Export in the selection (S8c).
  */
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,14 +155,13 @@ fun VaultScreen(onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit) {
 
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VaultTopBar(onBack: () -> Unit, onLock: (() -> Unit)?) {
+private fun VaultTopBar(onBack: () -> Unit, onLock: (() -> Unit)?, onImport: () -> Unit = {}) {
     TopAppBar(
         navigationIcon = { TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack) },
         title = { Text(stringResource(R.string.label_vault), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
         actions = {
             if (onLock != null) {
-                // Import from outside comes with S8c (D5)
-                TooltipIconButton(R.drawable.ic_input, stringResource(R.string.content_description_import), {}, enabled = false)
+                TooltipIconButton(R.drawable.ic_input, stringResource(R.string.content_description_import), onImport)
                 TooltipIconButton(R.drawable.ic_lock, stringResource(R.string.content_description_lock_now), onLock)
             }
         },
@@ -287,7 +286,7 @@ private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () 
         val allSelected = selected.containsAll(all)
         SelectionTopBar(selected.size, allSelected, onClose = { selected = emptySet() }, onSelectAll = { selected = if (allSelected) emptySet() else all.toSet() })
     } else {
-        VaultTopBar(onBack, onLock)
+        VaultTopBar(onBack, onLock, onImport = { access?.askImport() })
     }
     if (entries.isEmpty()) {
         EmptyState(R.drawable.ic_lock, stringResource(R.string.msg_vault_empty)) {
@@ -344,10 +343,9 @@ private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () 
                 expandedShadowElevation = 3.dp,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
             ) {
-                // Export comes with S8c (D5)
                 TooltipIconButton(R.drawable.ic_drive_file_move, stringResource(R.string.action_move_out), { access?.takeOut(chosen, move = true) { selected = emptySet() } })
                 TooltipIconButton(R.drawable.ic_file_copy, stringResource(R.string.action_copy_out), { access?.takeOut(chosen, move = false) { selected = emptySet() } })
-                TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), {}, enabled = false)
+                TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), { access?.askExport(chosen) { selected = emptySet() } })
                 TooltipIconButton(R.drawable.ic_delete_forever, stringResource(R.string.action_delete_forever), { deleting = chosen }, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
             }
         }

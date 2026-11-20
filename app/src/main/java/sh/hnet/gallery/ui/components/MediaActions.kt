@@ -134,6 +134,11 @@ class MediaActions(
         }
     }
 
+    /** A failure in the family's way: [message] with Show, which opens [details] (S8c's import and export). */
+    fun fail(message: String, details: String) {
+        messageScope.reportFailure(snackbars, message, details, context.getString(R.string.button_show), showError)
+    }
+
     /** Says [message] in the family's short snackbar; [undo] adds Undo. */
     fun say(message: String, undo: (() -> Unit)?) = say(message, context.getString(R.string.button_undo), undo)
 

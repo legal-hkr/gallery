@@ -4,6 +4,8 @@ package sh.hnet.gallery.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FiniteAnimationSpec
@@ -122,6 +124,8 @@ import sh.hnet.gallery.ui.settings.WhatsNewScreen
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.slideshow.SlideshowScreen
+import sh.hnet.gallery.ui.vault.ExportDialog
+import sh.hnet.gallery.ui.vault.ImportDialog
 import sh.hnet.gallery.ui.vault.LocalVaultActions
 import sh.hnet.gallery.ui.vault.VaultActions
 import sh.hnet.gallery.ui.vault.VaultScreen
@@ -269,6 +273,13 @@ fun GalleryApp() {
     ) {
     // Moving in with the vault not there (not set up, its key lost): its page on the current tab
     SideEffect { vaultActions?.openVault = { viewer = null; stacks.getValue(tab).add(Screen.Vault) } }
+    // Import's files and export's folder through the system's pickers (SPEC §18.6–§18.7)
+    val importPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> vaultActions?.picked(uris) }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree -> vaultActions?.folderPicked(tree) }
+    SideEffect {
+        vaultActions?.pickFiles = { importPicker.launch(arrayOf("image/*", "video/*")) }
+        vaultActions?.pickFolder = { folderPicker.launch(null) }
+    }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -451,8 +462,18 @@ fun GalleryApp() {
         val movingNow = moving
         if (movingShown && movingNow != null && !wizard) {
             StatusCard(
-                title = stringResource(R.string.status_moving_to_vault),
-                line = stringResource(R.string.progress_moved, movingNow.done, movingNow.total),
+                title = stringResource(
+                    when (movingNow.kind) {
+                        VaultActions.Kind.MOVING -> R.string.status_moving_to_vault
+                        VaultActions.Kind.IMPORTING -> R.string.status_importing
+                        VaultActions.Kind.EXPORTING -> R.string.status_exporting
+                    },
+                ),
+                line = when (movingNow.kind) {
+                    VaultActions.Kind.MOVING -> stringResource(R.string.progress_moved, movingNow.done, movingNow.total)
+                    VaultActions.Kind.IMPORTING -> stringResource(R.string.progress_imported, movingNow.done, movingNow.total)
+                    VaultActions.Kind.EXPORTING -> stringResource(R.string.progress_exported, movingNow.done, movingNow.total)
+                },
                 progress = movingNow.done.toFloat() / movingNow.total.coerceAtLeast(1),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -567,6 +588,8 @@ fun GalleryApp() {
             onDismiss = vaultActions::dismiss,
         )
     }
+    vaultActions?.importing?.let { uris -> ImportDialog(uris.size, onConfirm = vaultActions::confirmImport, onDismiss = vaultActions::dismissImport) }
+    vaultActions?.exporting?.let { entries -> ExportDialog(entries.size, onConfirm = vaultActions::confirmExport, onDismiss = vaultActions::dismissExport) }
     // Out of the vault (SPEC-albums §18.3): the Add to album sheet with No album first; put back in their albums already
     vaultActions?.returned?.let { back ->
         AddToAlbumSheet(back.items, onDismiss = { vaultActions.returnedDone(noAlbum = false) }, onAdded = { vaultActions.returnedDone(noAlbum = false) }, onNoAlbum = { vaultActions.returnedDone(noAlbum = true) })

@@ -4,18 +4,22 @@ import android.app.Activity
 import android.app.KeyguardManager
 import android.hardware.biometrics.BiometricManager.Authenticators
 import android.hardware.biometrics.BiometricPrompt
+import android.net.Uri
 import android.os.CancellationSignal
+import android.provider.DocumentsContract
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import javax.crypto.Cipher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
@@ -73,8 +77,10 @@ class VaultActions(
     var asking by mutableStateOf<Pair<List<MediaItem>, () -> Unit>?>(null)
         private set
 
-    /** Moving in: done of all, while it runs (the shell's status card). */
-    data class Progress(val done: Int, val total: Int)
+    /** Moving in, importing or exporting: done of all, while it runs (the shell's status card). */
+    data class Progress(val kind: Kind, val done: Int, val total: Int)
+
+    enum class Kind { MOVING, IMPORTING, EXPORTING }
 
     private val _progress = MutableStateFlow<Progress?>(null)
     val progress: StateFlow<Progress?> = _progress.asStateFlow()
@@ -163,14 +169,122 @@ class VaultActions(
         if (noAlbum) scope.launch { for ((album, ids) in done.putBack) app.albums.remove(album, ids) }
     }
 
+    // Import (SPEC §18.6): the system's picker of documents, the question with Delete originals, then the encrypting
+
+    /** Opens the system's picker of documents (the shell's launcher); set by the shell. */
+    var pickFiles: () -> Unit = {}
+
+    /** Opens the system's picker of a folder (the shell's launcher); set by the shell. */
+    var pickFolder: () -> Unit = {}
+
+    /** Files picked, waiting for the question's answer. */
+    var importing by mutableStateOf<List<Uri>?>(null)
+        private set
+
+    /** Import's button on the vault's page. */
+    fun askImport() {
+        vault.picking = true
+        pickFiles()
+    }
+
+    /** The picker's answer: the question for the files, none when it was cancelled. */
+    fun picked(uris: List<Uri>) {
+        vault.picking = false
+        importing = uris.takeIf { it.isNotEmpty() }
+    }
+
+    fun dismissImport() {
+        importing = null
+    }
+
+    /** The question answered with Import; [deleteOriginals] as its checkbox (off by default). */
+    fun confirmImport(deleteOriginals: Boolean) {
+        val uris = importing ?: return
+        importing = null
+        open(then = {
+            scope.launch {
+                _progress.value = Progress(Kind.IMPORTING, 0, uris.size)
+                val (added, failures) = try {
+                    vault.importFiles(uris) { done -> _progress.value = Progress(Kind.IMPORTING, done, uris.size) }
+                } finally {
+                    _progress.value = null
+                }
+                if (failures.isNotEmpty()) {
+                    actions.fail(activity.getString(R.string.error_import_some, failures.size), failures.joinToString("\n"))
+                } else {
+                    actions.say(activity.getString(R.string.msg_imported, added.size), undo = null)
+                    // Only once all are in, and where the provider can (SPEC §18.6)
+                    if (deleteOriginals) {
+                        val kept = withContext(Dispatchers.IO) {
+                            uris.count { uri ->
+                                try {
+                                    !DocumentsContract.deleteDocument(activity.contentResolver, uri)
+                                } catch (_: Exception) {
+                                    true
+                                }
+                            }
+                        }
+                        if (kept > 0) actions.say(activity.getString(R.string.msg_originals_kept, kept), undo = null)
+                    }
+                }
+            }
+        })
+    }
+
+    // Export (SPEC §18.7): the question, the system's picker of a folder, then decrypted copies there
+
+    /** Items to export, waiting for the question's answer or the folder. */
+    var exporting by mutableStateOf<List<VaultEntry>?>(null)
+        private set
+    private var exportPending: List<VaultEntry>? = null
+
+    fun askExport(entries: List<VaultEntry>, onDone: () -> Unit = {}) {
+        if (entries.isEmpty()) return
+        exporting = entries
+        exportDone = onDone
+    }
+
+    private var exportDone: () -> Unit = {}
+
+    fun dismissExport() {
+        exporting = null
+    }
+
+    /** The question answered with Choose folder. */
+    fun confirmExport() {
+        exportPending = exporting
+        exporting = null
+        vault.picking = true
+        pickFolder()
+    }
+
+    /** The folder's picker answered: the copies written there, none when it was cancelled. */
+    fun folderPicked(tree: Uri?) {
+        vault.picking = false
+        val entries = exportPending ?: return
+        exportPending = null
+        if (tree == null) return
+        exportDone()
+        scope.launch {
+            _progress.value = Progress(Kind.EXPORTING, 0, entries.size)
+            val failures = try {
+                vault.export(entries, tree) { done -> _progress.value = Progress(Kind.EXPORTING, done, entries.size) }
+            } finally {
+                _progress.value = null
+            }
+            if (failures.isNotEmpty()) actions.fail(activity.getString(R.string.error_export_some, failures.size), failures.joinToString("\n"))
+            else actions.say(activity.getString(R.string.msg_exported, entries.size), undo = null)
+        }
+    }
+
     private fun move(items: List<MediaItem>, onDone: () -> Unit) {
         if (!vault.fits(items)) return actions.say(activity.getString(R.string.error_vault_space), undo = null)
         scope.launch {
-            _progress.value = Progress(0, items.size)
+            _progress.value = Progress(Kind.MOVING, 0, items.size)
             val entries = try {
                 val members = app.albums.members.value.orEmpty()
                 vault.moveIn(items, app.facts.facts.value.orEmpty(), { id -> members.filter { it.mediaId == id }.map { it.albumId } }, app.media.canLocate()) { done ->
-                    _progress.value = Progress(done, items.size)
+                    _progress.value = Progress(Kind.MOVING, done, items.size)
                 }
             } catch (_: Exception) {
                 _progress.value = null

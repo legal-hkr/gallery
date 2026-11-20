@@ -3,12 +3,14 @@ package sh.hnet.gallery.data.vault
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.ParcelFileDescriptor
 import android.os.ProxyFileDescriptorCallback
 import android.os.StatFs
 import android.os.storage.StorageManager
+import android.provider.DocumentsContract
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
@@ -23,6 +25,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.security.KeyStore
 import java.security.SecureRandom
@@ -222,6 +225,13 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /**
+     * The vault's own system picker is over the app (import's files, export's folder, SPEC §18.6–§18.7): leaving for it
+     * isn't leaving the app, so it doesn't lock then; the screen turning off still does.
+     */
+    @Volatile
+    var picking = false
+
     fun cancelLock() {
         locking?.cancel()
         locking = null
@@ -237,41 +247,108 @@ class Vault(context: Context, private val scope: CoroutineScope) {
      * when that is refused); [onProgress] gets how many are done. The location stays in the file when the app may read
      * it ([located]). Returns the new entries; a failure removes what this call wrote and throws.
      */
-    suspend fun moveIn(items: List<MediaItem>, facts: Map<Long, Fact>, albumsOf: (Long) -> List<Long>, located: Boolean, onProgress: (Int) -> Unit): List<VaultEntry> = withContext(Dispatchers.IO) {
-        val key = masterKey()
-        val added = ArrayList<VaultEntry>()
-        try {
-            for ((done, item) in items.withIndex()) {
-                ensureActive()
-                val file = UUID.randomUUID().toString()
-                val source = if (located) item.originalUri() else item.uri()
-                val data = File(dir, file + DATA)
-                val written = resolver.openInputStream(source)?.use { input -> writeEncrypted(data) { out -> VaultFormat.encrypt(key, input, out, random) } }
-                    ?: throw IOException("Can't open ${item.id}")
-                // The thumbnail now, from the original (a video's frame too); none is fine
-                thumbnailOf(item)?.let { jpeg -> writeEncrypted(File(dir, file + THUMB)) { out -> VaultFormat.encrypt(key, jpeg.inputStream(), out, random) } }
-                val fact = facts[item.id]
-                added.add(
+    suspend fun moveIn(items: List<MediaItem>, facts: Map<Long, Fact>, albumsOf: (Long) -> List<Long>, located: Boolean, onProgress: (Int) -> Unit): List<VaultEntry> {
+        val incoming = items.map { item ->
+            Incoming(
+                label = item.name,
+                open = { resolver.openInputStream(if (located) item.originalUri() else item.uri()) },
+                // The thumbnail from the original (a video's frame too); none is fine
+                thumbnail = { thumbnailOf(item) },
+                entry = { file, size ->
+                    val fact = facts[item.id]
                     VaultEntry(
-                        file = file, name = item.name, mime = item.mime, size = written,
+                        file = file, name = item.name, mime = item.mime, size = size,
                         width = item.width, height = item.height, durationMs = item.duration,
                         taken = item.taken, offsetMinutes = fact?.offsetMinutes, movedAt = System.currentTimeMillis(),
                         fromVolume = item.volume, fromPath = item.path, albums = albumsOf(item.id), gainmap = fact?.gainmap == true,
-                    ),
-                )
+                    )
+                },
+            )
+        }
+        val (added, failures) = add(incoming, allOrNothing = true, onProgress = onProgress)
+        if (failures.isNotEmpty()) throw IOException(failures.first())
+        return added
+    }
+
+    /**
+     * Files from anywhere the system's picker offers – a USB drive, a card, a folder (SPEC §18.6) – encrypted into the
+     * vault without ever entering MediaStore; the name, the date from the file (EXIF, a video's own) or its provider,
+     * the size and a thumbnail are taken on the way. Those that fail are skipped and named in the second list.
+     */
+    suspend fun importFiles(uris: List<Uri>, onProgress: (Int) -> Unit): Pair<List<VaultEntry>, List<String>> {
+        // The providers' names and dates read off the main thread
+        val incoming = withContext(Dispatchers.IO) { uris.map { uri -> ImportedFile(appContext, uri).incoming() } }
+        return add(incoming, allOrNothing = false, onProgress = onProgress)
+    }
+
+    /** One file on its way in: how to read it, its thumbnail, and its entry once written as [file] of a size. */
+    class Incoming(val label: String, val open: () -> InputStream?, val thumbnail: () -> ByteArray?, val entry: (file: String, size: Long) -> VaultEntry)
+
+    /**
+     * [incoming] encrypted into the vault and the index written once. [allOrNothing]: the first failure takes back
+     * what this call wrote; else the failures are skipped. The entries added, and each failure as "name: error".
+     */
+    private suspend fun add(incoming: List<Incoming>, allOrNothing: Boolean, onProgress: (Int) -> Unit): Pair<List<VaultEntry>, List<String>> = withContext(Dispatchers.IO) {
+        val key = masterKey()
+        val added = ArrayList<VaultEntry>()
+        val failures = ArrayList<String>()
+        try {
+            for ((done, one) in incoming.withIndex()) {
+                ensureActive()
+                val file = UUID.randomUUID().toString()
+                try {
+                    val written = one.open()?.use { input -> writeEncrypted(File(dir, file + DATA)) { out -> VaultFormat.encrypt(key, input, out, random) } }
+                        ?: throw IOException("Can't be opened")
+                    one.thumbnail()?.let { jpeg -> writeEncrypted(File(dir, file + THUMB)) { out -> VaultFormat.encrypt(key, jpeg.inputStream(), out, random) } }
+                    added.add(one.entry(file, written))
+                } catch (e: Exception) {
+                    deleteFiles(file)
+                    if (allOrNothing) throw e
+                    failures.add(one.label + ": " + e.javaClass.simpleName + (e.message?.let { " – $it" } ?: ""))
+                }
                 onProgress(done + 1)
             }
-            mutex.withLock {
-                index = index.copy(entries = index.entries + added)
-                saveIndex()
-                publish()
+            if (added.isNotEmpty()) {
+                mutex.withLock {
+                    index = index.copy(entries = index.entries + added)
+                    saveIndex()
+                    publish()
+                }
             }
-            added
+            added to failures
         } catch (e: Exception) {
             for (entry in added) deleteFiles(entry.file)
-            throw e
+            if (allOrNothing) throw e
+            added to (failures + (e.javaClass.simpleName))
         }
     }
+
+    /**
+     * The vault's items written decrypted into a folder the user chose (SPEC §18.7), under their own names (the
+     * provider numbers a name taken); the vault keeps them. Each failure as "name: error".
+     */
+    suspend fun export(entries: List<VaultEntry>, tree: Uri, onProgress: (Int) -> Unit): List<String> = withContext(Dispatchers.IO) {
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val failures = ArrayList<String>()
+        for ((done, entry) in entries.withIndex()) {
+            ensureActive()
+            var created: Uri? = null
+            try {
+                created = DocumentsContract.createDocument(resolver, parent, entry.mime, entry.name) ?: throw IOException("Not created")
+                val (reader, stream) = open(entry)
+                stream.use { reader.stream().use { from -> resolver.openOutputStream(created)?.use { to -> from.copyTo(to, 256 * 1024) } ?: throw IOException("Not writable") } }
+            } catch (e: Exception) {
+                // Half a file is no file
+                created?.let { try { DocumentsContract.deleteDocument(resolver, it) } catch (_: Exception) { } }
+                failures.add(entry.name + ": " + e.javaClass.simpleName + (e.message?.let { " – $it" } ?: ""))
+            }
+            onProgress(done + 1)
+        }
+        failures
+    }
+
+    /** How many items the vault holds (Forget the key's question); 0 while locked. */
+    val count: Int get() = if (master == null) 0 else index.entries.size
 
     /** Out of the vault for good (SPEC §18.3), or a move in taken back. */
     suspend fun remove(entries: List<VaultEntry>) = withContext(Dispatchers.IO) {

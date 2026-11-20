@@ -457,12 +457,13 @@ fun ViewerScreen(
                         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), { info = true })
                     }
                 } else if (vault) {
-                    // The vault's (SPEC §18.3): Info, Move out, Copy out, Export (S8c), Delete for good – no Share, no Edit
+                    // The vault's (SPEC §18.3): Info, Move out, Copy out, Export, Delete for good – no Share, no Edit
                     val entry = vaultEntries.firstOrNull { Vault.idOf(it.file) == item.id }
                     VaultToolbar(
                         onInfo = { info = true },
                         onMoveOut = { entry?.let { vaultActions?.takeOut(listOf(it), move = true) { ownTrashed.add(item.id) } } },
                         onCopyOut = { entry?.let { vaultActions?.takeOut(listOf(it), move = false) } },
+                        onExport = { entry?.let { vaultActions?.askExport(listOf(it)) } },
                         onDeleteForever = { deleting = item },
                     )
                 } else if (item.outside) {
@@ -769,14 +770,14 @@ private fun OutsideToolbar(onShare: () -> Unit, onSave: () -> Unit, onInfo: () -
     }
 }
 
-/** The vault's viewer (SPEC §18.3): Info, Move out, Copy out, Export (S8c, disabled), Delete for good last in the error colour. */
+/** The vault's viewer (SPEC §18.3): Info, Move out, Copy out, Export, Delete for good last in the error colour. */
 @Composable
-private fun VaultToolbar(onInfo: () -> Unit, onMoveOut: () -> Unit, onCopyOut: () -> Unit, onDeleteForever: () -> Unit) {
+private fun VaultToolbar(onInfo: () -> Unit, onMoveOut: () -> Unit, onCopyOut: () -> Unit, onExport: () -> Unit, onDeleteForever: () -> Unit) {
     HorizontalFloatingToolbar(expanded = true) {
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         TooltipIconButton(R.drawable.ic_drive_file_move, stringResource(R.string.action_move_out), onMoveOut)
         TooltipIconButton(R.drawable.ic_file_copy, stringResource(R.string.action_copy_out), onCopyOut)
-        TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), {}, enabled = false)
+        TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), onExport)
         TooltipIconButton(R.drawable.ic_delete_forever, stringResource(R.string.action_delete_forever), onDeleteForever, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
 }

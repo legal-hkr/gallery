@@ -499,4 +499,26 @@
     <string name="progress_moved">Moved: %1$d of %2$d</string>
     <string name="error_vault_space">Not enough free space on the phone.</string>
     <string name="error_move_to_vault">Couldn’t move to the vault.</string>
+
+    <!-- Stage S8c -->
+    <string name="title_import_vault">Import into the vault (%1$d)?</string>
+    <string name="desc_import_vault">The files will be encrypted and saved in the vault. They won’t appear in Gallery or in other apps.</string>
+    <string name="label_delete_originals">Delete originals after importing</string>
+    <string name="button_import">Import</string>
+    <string name="status_importing">Importing into the vault…</string>
+    <string name="progress_imported">Imported: %1$d of %2$d</string>
+    <string name="msg_imported">Imported into the vault: %1$d</string>
+    <string name="error_import_some">Some files couldn’t be imported (%1$d).</string>
+    <string name="msg_originals_kept">Some originals couldn’t be deleted (%1$d). They remain where they were.</string>
+    <string name="title_export_vault">Export from the vault (%1$d)?</string>
+    <string name="desc_export_vault">The files will be saved without encryption in the chosen folder, for example on a USB drive. They will also stay in the vault. If it’s a folder in the phone’s storage, they’ll appear in Gallery.</string>
+    <string name="button_choose_folder">Choose folder</string>
+    <string name="status_exporting">Exporting from the vault…</string>
+    <string name="msg_exported">Exported: %1$d</string>
+    <string name="error_export_some">Some files couldn’t be exported (%1$d).</string>
+    <string name="title_forget_key">Forget the vault’s key?</string>
+    <string name="desc_forget_key_confirm">The vault’s content (items: %1$d) can never be read again. The encrypted files will be deleted.</string>
+    <string name="button_forget_key">Forget key</string>
+    <!-- Stage S8c (mine) -->
+    <string name="progress_exported">Exported: %1$d of %2$d</string>
 </resources>
