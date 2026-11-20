@@ -29,6 +29,8 @@ class PlaceDataTest {
     fun aPartOfTheCityIsTheCity() {
         // Nowa Huta's square, 9 km from the centre: a part of Kraków, not a village beyond it
         assertEquals("Kraków", named(50.0717, 20.0377).first)
+        // The same place, not a namesake: Places shows Kraków once (Tokyo, its wards and its urban area came out as three)
+        assertEquals(data.place(50.0617, 19.9373).settlement, data.place(50.0717, 20.0377).settlement)
     }
 
     @Test
@@ -90,5 +92,28 @@ class DayPlacesTest {
         assertEquals(listOf(10), places.getValue(day(20).key).toList())
         assertEquals(listOf(21, 20), places.getValue(day(19).key).toList())
         assertEquals(false, day(18).key in places)
+    }
+}
+
+class PlaceGroupsTest {
+    private fun item(id: Long, trashed: Boolean = false) = MediaItem(id = id, video = false, mime = "image/jpeg", taken = 1000 - id, name = "$id.jpg", bucketId = 0, path = "DCIM/Camera/", volume = "external_primary", size = 1, width = 1, height = 1, duration = 0, favorite = false, trashed = trashed, expires = 0, ours = false, generation = 0)
+
+    @Test
+    fun countriesTownsRegionsAndTheRest() {
+        // Country 1: town 10 (region 5) ×3, town 11 (region 6) ×1, one item at sea; country 2: town 20 ×2; two without location
+        val places = mapOf(
+            1L to Place(10, 5, 1), 2L to Place(10, 5, 1), 3L to Place(10, 5, 1), 4L to Place(11, 6, 1), 5L to Place(-1, -1, 1),
+            6L to Place(20, 7, 2), 7L to Place(20, 7, 2),
+        )
+        val items = (1L..9L).map { item(it) } + item(10, trashed = true)
+        val groups = PlaceGroups.of(items) { places[it] }
+        assertEquals(listOf(1, 2), groups.countries.map { it.country })
+        val first = groups.countries[0]
+        assertEquals(5, first.count)
+        assertEquals(listOf(10, 11), first.towns.map { it.settlement })
+        assertEquals(listOf(5, 6), first.regions.map { it.region })
+        assertEquals(listOf(1L, 2L, 3L), groups.town(10)!!.items.map { it.id })
+        assertEquals(listOf(8L, 9L), groups.noLocation.map { it.id })
+        assertEquals(3, groups.townCount)
     }
 }

@@ -27,7 +27,9 @@ import sh.hnet.gallery.facts.FactReader
 import sh.hnet.gallery.facts.FactScanner
 import sh.hnet.gallery.facts.GalleryDatabase
 import sh.hnet.gallery.model.Library
+import sh.hnet.gallery.model.Place
 import sh.hnet.gallery.model.PlaceData
+import sh.hnet.gallery.model.PlaceGroups
 
 class GalleryApplication : Application() {
     /** Work that outlives a screen; lives as long as the process. */
@@ -54,6 +56,25 @@ class GalleryApplication : Application() {
 
     /** The place data while place names are on (SPEC §20.5); null while off, and until the file is mapped. */
     val places: StateFlow<PlaceData?> by lazy { placesKnown.stateIn(appScope, SharingStarted.Eagerly, null) }
+
+    /**
+     * Places (SPEC §13.1): the library's items by country, region and town, and those without a location; null while
+     * place names are off or the data, the library or the facts aren't there yet. Built only while something shows it.
+     */
+    val placeGroups: StateFlow<PlaceGroups?> by lazy {
+        combine(library, facts.facts, places) { library, facts, data ->
+            if (library == null || facts == null || data == null) null
+            else PlaceGroups.of(library.visible) { id ->
+                val fact = facts[id]
+                when {
+                    fact?.latitude == null -> null
+                    // Located, but placed by other data or not yet: in no group until it is
+                    fact.places != data.version -> Place.NONE
+                    else -> Place(fact.settlement ?: -1, fact.region ?: -1, fact.country ?: -1)
+                }
+            }
+        }.flowOn(Dispatchers.Default).stateIn(appScope, SharingStarted.WhileSubscribed(5_000), null)
+    }
 
     /** The sources' states (SPEC-albums §9.1). */
     val sources: SourceStore by lazy { SourceStore(database.sourceDao(), appScope) }

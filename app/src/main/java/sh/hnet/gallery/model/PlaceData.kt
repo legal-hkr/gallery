@@ -27,7 +27,11 @@ enum class PlaceLanguage { POLISH, ENGLISH }
 class PlaceData(buffer: ByteBuffer) {
     private val data: ByteBuffer = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN)
 
+    /** The build (a CRC-32 of the content): facts placed by another build are placed again (LOGIKA §17.4). */
     val version: Int
+
+    /** When the data was fetched, yyyymmdd (About › Place data). */
+    val date: Int
     private val stringCount: Int
     val countryCount: Int
     val regionCount: Int
@@ -41,6 +45,8 @@ class PlaceData(buffer: ByteBuffer) {
     private val bordersAt: Int
     private val grid: Int
     private val stringBytesAt: Int
+    private val partCount: Int
+    private val partsAt: Int
     private val names = HashMap<Int, String>()
     private val shapes = object : LinkedHashMap<Long, Border>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Border>?): Boolean = size > 64
@@ -49,7 +55,10 @@ class PlaceData(buffer: ByteBuffer) {
     init {
         require(data.capacity() >= HEADER && data.getInt(0) == MAGIC) { "Not place data" }
         require(data.getShort(4).toInt() == FORMAT) { "Unknown format" }
-        version = data.getInt(8)
+        date = data.getInt(8)
+        version = data.getInt(68)
+        partCount = data.getInt(64)
+        partsAt = data.capacity() - partCount * 8
         stringCount = data.getInt(12)
         countryCount = data.getInt(16)
         regionCount = data.getInt(20)
@@ -101,6 +110,9 @@ class PlaceData(buffer: ByteBuffer) {
 
     fun regionCountry(index: Int): Int = data.getShort(regionAt(index)).toInt() and 0xFFFF
 
+    /** A settlement's own region and country (-1 when none), for its page's subtitle. */
+    fun town(index: Int): Pair<Int, Int> = settlementRegion(index) to settlementCountry(index)
+
     /** The cell holding a settlement: the last cell whose first settlement is at or before it. */
     private fun cellOf(index: Int): Int {
         var low = 0
@@ -139,7 +151,7 @@ class PlaceData(buffer: ByteBuffer) {
      * when the point lies outside every border (at sea near a coast).
      */
     fun place(lat: Double, lon: Double): Place {
-        val settlement = nearest(lat, lon)
+        val settlement = nearest(lat, lon).let { if (it >= 0) townOf(it) else it }
         val hint = if (settlement >= 0) settlementRegion(settlement) else -1
         var region = regionOf(lat, lon, hint)
         if (region < 0 && settlement >= 0) region = hint
@@ -191,6 +203,22 @@ class PlaceData(buffer: ByteBuffer) {
             .filter { it.second <= closest.second + PREFER_KM }
             .maxWithOrNull(compareBy<Pair<Int, Double>> { settlementPopulation(it.first) }.thenByDescending { it.second })!!
             .first
+    }
+
+    /** A part of a town (a district, an urban area) as its town; any other settlement as itself. */
+    fun townOf(settlement: Int): Int {
+        var low = 0
+        var high = partCount - 1
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            val part = data.getInt(partsAt + mid * 8)
+            when {
+                part < settlement -> low = mid + 1
+                part > settlement -> high = mid - 1
+                else -> return data.getInt(partsAt + mid * 8 + 4)
+            }
+        }
+        return settlement
     }
 
     private fun firstCellAtLeast(id: Int): Int {
@@ -274,11 +302,11 @@ class PlaceData(buffer: ByteBuffer) {
         const val PREFER_KM = 2.0
         const val LEVELS = 4
         private const val MAGIC = 0x4C504E48 // "HNPL" little-endian
-        private const val FORMAT = 2
+        private const val FORMAT = 3
 
         /** Borders' units per degree (about 11 m). */
         const val BORDER_UNIT = 1e4
-        private const val HEADER = 64
+        private const val HEADER = 72
         private const val AREA = 48
         private const val SETTLEMENT = 21
         private const val NONE16 = 0xFFFF

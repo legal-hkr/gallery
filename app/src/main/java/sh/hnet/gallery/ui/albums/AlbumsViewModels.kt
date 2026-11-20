@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -32,6 +34,7 @@ import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.model.GridStep
 import sh.hnet.gallery.model.Library
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.PlaceGroups
 import sh.hnet.gallery.model.SourceState
 import sh.hnet.gallery.model.Timeline
 import sh.hnet.gallery.model.TimelineFolders
@@ -53,10 +56,13 @@ data class AlbumsState(
     val sort: String = "RECENT",
     /** Every screenshot folder hidden: the collection goes too (SPEC-albums §9.11). */
     val screenshotsHidden: Boolean = false,
+    /** Places' towns (SPEC §9.2); null while place names are off – the tile goes (SPEC §20.5). */
+    val places: Int? = null,
 )
 
 
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class AlbumsViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as GalleryApplication
 
@@ -88,6 +94,7 @@ class AlbumsViewModel(application: Application) : AndroidViewModel(application) 
             )
         }
     }
+        .combine(app.preferences.placeNames.flatMapLatest { on -> if (on) app.placeGroups.map { it?.townCount ?: 0 } else flowOf(null) }) { state, towns -> state.copy(places = towns) }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AlbumsState())
 
@@ -136,6 +143,12 @@ sealed interface PageKey {
     data class Folder(val folder: FolderKey) : PageKey
 
     data class User(val id: Long) : PageKey
+
+    /** A town's items (SPEC §13.1): an album-like page without the album's actions. */
+    data class Town(val settlement: Int) : PageKey
+
+    /** The items without a location (SPEC §13.1). */
+    data object NoLocation : PageKey
 }
 
 /** A page's order (SPEC-albums §9.7, §9.10). */
@@ -199,8 +212,11 @@ class PageViewModel(application: Application) : AndroidViewModel(application) {
         Choices(rows, newFolders, oldest, albums, members)
     }
 
-    val state: StateFlow<PageState> = combine(key.filterNotNull(), app.library, app.index.items, choices, offsets) { key, library, all, choices, offsets ->
-        Input(key, library, all, choices, offsets)
+    // Only a place's page follows the places, so the others aren't built again for every fact read
+    private val groups = key.flatMapLatest { page -> if (page is PageKey.Town || page is PageKey.NoLocation) app.placeGroups.map { Placed(it) } else flowOf(Placed(null)) }
+
+    val state: StateFlow<PageState> = combine(key.filterNotNull(), app.library, app.index.items, choices, combine(offsets, groups, ::Pair)) { key, library, all, choices, (offsets, groups) ->
+        Input(key, library, all, choices, offsets, groups.groups)
     }
         .conflate()
         .mapLatest(::build)
@@ -238,6 +254,21 @@ class PageViewModel(application: Application) : AndroidViewModel(application) {
                 folders = if (key.kind == CollectionKind.SCREENSHOTS) input.all.orEmpty().mapTo(LinkedHashSet()) { it.folder }.filter { TimelineFolders.isScreenshots(it.path) } else emptyList()
                 state = folders.firstOrNull()?.let { SourceStore.stateOf(it, rows, newFolders) }
             }
+            is PageKey.Town -> {
+                val groups = input.groups ?: return PageState.Loading
+                shown = groups.town(key.settlement)?.items ?: return PageState.Gone
+                folders = emptyList()
+                state = null
+                sort = PageSort.NEWEST
+            }
+            PageKey.NoLocation -> {
+                val groups = input.groups ?: return PageState.Loading
+                shown = groups.noLocation
+                if (shown.isEmpty()) return PageState.Gone
+                folders = emptyList()
+                state = null
+                sort = PageSort.NEWEST
+            }
             is PageKey.Folder -> {
                 val folder = key.folder
                 state = SourceStore.stateOf(folder, rows, newFolders)
@@ -268,7 +299,7 @@ class PageViewModel(application: Application) : AndroidViewModel(application) {
             is PageKey.Collection -> viewModelScope.launch { app.preferences.setCollectionOldestFirst(page.kind.name, sort == PageSort.OLDEST) }
             is PageKey.Folder -> viewModelScope.launch { app.sources.setSort(page.folder, sort.name.takeIf { sort != PageSort.NEWEST }) }
             is PageKey.User -> viewModelScope.launch { app.albums.setSort(page.id, sort.name.takeIf { sort != PageSort.NEWEST }) }
-            null -> {}
+            is PageKey.Town, PageKey.NoLocation, null -> {}
         }
     }
 
@@ -303,7 +334,10 @@ class PageViewModel(application: Application) : AndroidViewModel(application) {
 
     private data class Choices(val rows: Map<String, SourceRow>?, val newFolders: Boolean, val oldest: Set<String>, val albums: List<AlbumRow>?, val members: List<AlbumItemRow>?)
 
-    private data class Input(val key: PageKey, val library: Library?, val all: List<MediaItem>?, val choices: Choices, val offsets: Map<Long, Int?>)
+    private data class Input(val key: PageKey, val library: Library?, val all: List<MediaItem>?, val choices: Choices, val offsets: Map<Long, Int?>, val groups: PlaceGroups?)
+
+    /** Place groups in a box: a page of no place gets an empty one at once. */
+    private class Placed(val groups: PlaceGroups?)
 }
 
 /** Trash (SPEC §11): its items, the newest trashed first; null while the index loads. */

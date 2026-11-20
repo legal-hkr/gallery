@@ -352,4 +352,12 @@
     <string name="desc_wikidata">Miejscowości: nazwy, położenie i liczba mieszkańców. Licencja CC0 1.0 (domena publiczna).</string>
     <string name="desc_natural_earth">Granice i nazwy krajów oraz regionów. Domena publiczna.</string>
     <string name="label_place_data_date">Stan danych: %1$s</string>
+    <!-- Stage S6b -->
+    <string name="label_no_location">Bez lokalizacji</string>
+    <!-- Stage S6b (mine) -->
+    <string name="msg_no_places">Brak zdjęć i filmów z lokalizacją</string>
+    <!-- Stage S6b -->
+    <string name="button_map">Mapa</string>
+    <string name="content_description_show_place">Pokaż %1$s</string>
+    <string name="desc_no_location_count">Zdjęcia i filmy: %1$d</string>
 </resources>

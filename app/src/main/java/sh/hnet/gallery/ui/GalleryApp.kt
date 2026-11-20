@@ -89,10 +89,13 @@ import sh.hnet.gallery.ui.components.MediaActions
 import sh.hnet.gallery.ui.components.MediaManagement
 import sh.hnet.gallery.ui.components.MediaManagementOfferSheet
 import sh.hnet.gallery.ui.components.StatusCard
+import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.rememberConsent
 import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
 import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.pick.PickerScreen
+import sh.hnet.gallery.ui.places.CountryScreen
+import sh.hnet.gallery.ui.places.PlacesScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
 import sh.hnet.gallery.ui.settings.BackupScreen
@@ -308,6 +311,7 @@ fun GalleryApp() {
                             onOpenFolder = { currentStack.add(Screen.Folder(it.key)) },
                             onOpenAlbum = { currentStack.add(Screen.Album(it)) },
                             onOpenTrash = { currentStack.add(Screen.Trash) },
+                            onOpenPlaces = { currentStack.add(Screen.Places) },
                             onNewAlbum = { id ->
                                 currentStack.add(Screen.Album(id))
                                 currentStack.add(Screen.PickForAlbum(id))
@@ -330,6 +334,26 @@ fun GalleryApp() {
                         if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }
                     }
                     entry<Screen.Trash> { TrashScreen(onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Places> {
+                        PlacesScreen(
+                            onBack = back,
+                            onOpenCountry = { country -> app.places.value?.let { currentStack.add(Screen.PlaceCountry(country, it.version)) } },
+                            onOpenTown = { town -> app.places.value?.let { currentStack.add(Screen.PlaceTown(town, it.version)) } },
+                            onOpenNoLocation = { currentStack.add(Screen.NoLocation) },
+                        )
+                    }
+                    // A page of other place data (an app update meanwhile) closes: its index names something else now
+                    entry<Screen.PlaceCountry> { key ->
+                        val data = placeData()
+                        if (data != null && data.version != key.version) LaunchedEffect(Unit) { back() }
+                        else CountryScreen(key.country, onBack = back, onOpenTown = { town -> currentStack.add(Screen.PlaceTown(town, key.version)) })
+                    }
+                    entry<Screen.PlaceTown> { key ->
+                        val data = placeData()
+                        if (data != null && data.version != key.version) LaunchedEffect(Unit) { back() }
+                        else AlbumPage(PageKey.Town(key.settlement), onBack = back, onOpen = { viewer = it })
+                    }
+                    entry<Screen.NoLocation> { AlbumPage(PageKey.NoLocation, onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
                     entry<Screen.Settings> {
                         SettingsRootScreen(

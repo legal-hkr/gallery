@@ -70,6 +70,8 @@ import sh.hnet.gallery.ui.albums.title
 import sh.hnet.gallery.ui.components.GridFastScroller
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
+import sh.hnet.gallery.ui.components.placeData
+import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.MediaGrid
 import sh.hnet.gallery.ui.grid.SelectionState
 import sh.hnet.gallery.ui.grid.rememberSaveableSelection
@@ -275,6 +277,9 @@ private fun pageTitle(key: PageKey): String {
             val albums by app.albums.albums.collectAsStateWithLifecycle()
             albums?.firstOrNull { it.id == key.id }?.name.orEmpty()
         }
+        // The picker shows no places (SPEC §17.4); here only so the keys are all known
+        is PageKey.Town -> placeData()?.settlementName(key.settlement, placeLanguage()).orEmpty()
+        PageKey.NoLocation -> stringResource(R.string.label_no_location)
     }
 }
 
@@ -283,11 +288,15 @@ private fun PageKey.name(): String = when (this) {
     is PageKey.Collection -> "c:${kind.name}"
     is PageKey.Folder -> "f:${folder.key}"
     is PageKey.User -> "u:$id"
+    is PageKey.Town -> "t:$settlement"
+    PageKey.NoLocation -> "n:"
 }
 
 private fun pageOf(name: String): PageKey? = when {
     name.startsWith("c:") -> CollectionKind.entries.firstOrNull { it.name == name.drop(2) }?.let { PageKey.Collection(it) }
     name.startsWith("f:") -> FolderKey.of(name.drop(2))?.let { PageKey.Folder(it) }
     name.startsWith("u:") -> name.drop(2).toLongOrNull()?.let { PageKey.User(it) }
+    name.startsWith("t:") -> name.drop(2).toIntOrNull()?.let { PageKey.Town(it) }
+    name == "n:" -> PageKey.NoLocation
     else -> null
 }

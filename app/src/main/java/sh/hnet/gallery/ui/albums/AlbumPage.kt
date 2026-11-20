@@ -62,6 +62,8 @@ import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.components.albumPath
+import sh.hnet.gallery.ui.components.placeData
+import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.MediaGrid
 import sh.hnet.gallery.ui.grid.MediaSelectionToolbar
 import sh.hnet.gallery.ui.grid.SelectionEffects
@@ -104,6 +106,15 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         is PageKey.Collection -> stringResource(key.kind.title)
         is PageKey.Folder -> albumName(key.folder)
         is PageKey.User -> shown?.name.orEmpty()
+        is PageKey.Town -> placeData()?.settlementName(key.settlement, placeLanguage()).orEmpty()
+        PageKey.NoLocation -> stringResource(R.string.label_no_location)
+    }
+    // A town's region and country under its name (SPEC §13.1)
+    val town = (key as? PageKey.Town)?.settlement
+    val townWhere = town?.let { settlement ->
+        val data = placeData()
+        val language = placeLanguage()
+        data?.town(settlement)?.let { (region, country) -> listOfNotNull(region.takeIf { it >= 0 }?.let { data.regionName(it, language) }, country.takeIf { it >= 0 }?.let { data.countryName(it, language) }).distinct().joinToString(", ") }
     }
     var adding by remember { mutableStateOf<List<MediaItem>?>(null) }
     var renaming by rememberSaveable { mutableStateOf(false) }
@@ -145,6 +156,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                             folder != null -> albumPath(folder)
                             userAlbum != null && shown != null -> stringResource(R.string.label_album_count, shown.count)
                             screenshots && shown != null && shown.folders.isNotEmpty() -> stringResource(R.string.label_folders_count, shown.folders.size)
+                            !townWhere.isNullOrEmpty() -> townWhere
                             else -> null
                         }
                         // A long path scrolls sideways, never wraps (SPEC-albums §9.10)
@@ -236,11 +248,12 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                         }
                     }
                 }
-                is PageKey.Folder -> {}
+                is PageKey.Folder, is PageKey.Town, PageKey.NoLocation -> {}
             }
             return@Column
         }
-        if (!selection.active) {
+        // A place's page has no chips: no state, one order (SPEC §13.1)
+        if (!selection.active && key !is PageKey.Town && key != PageKey.NoLocation) {
             Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 shown.state?.let { current -> StateChip(current, screenshots, ::choose) }
                 SortChip(

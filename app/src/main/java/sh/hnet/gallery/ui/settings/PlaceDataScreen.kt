@@ -55,7 +55,7 @@ fun PlaceDataScreen(onBack: () -> Unit) {
             }
         }
         // The data's date, known while place names are on (the file is read only then)
-        data?.version?.let { version ->
+        data?.date?.let { version ->
             val date = runCatching { LocalDate.of(version / 10000, version / 100 % 100, version % 100) }.getOrNull()
             if (date != null) SettingsNote(stringResource(R.string.label_place_data_date, DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale).format(date)))
         }

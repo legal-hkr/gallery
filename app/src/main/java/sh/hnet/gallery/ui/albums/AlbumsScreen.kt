@@ -108,6 +108,7 @@ fun AlbumsScreen(
     onOpenFolder: (FolderKey) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenTrash: () -> Unit,
+    onOpenPlaces: () -> Unit = {},
     /** A new album: its page with the picker over it (SPEC-albums §9.6). */
     onNewAlbum: (Long) -> Unit = onOpenAlbum,
     viewModel: AlbumsViewModel = viewModel(),
@@ -169,9 +170,11 @@ fun AlbumsScreen(
                                 CollectionTile(kind.icon, stringResource(kind.title), state.counts[kind]?.takeIf { state.loaded }?.let(number::format)) { onOpenCollection(kind) }
                             }
                         }
-                        // Places sits after Screenshots, as in the SPEC's order
+                        // Places sits after Screenshots, as in the SPEC's order; it goes while place names are off (SPEC §20.5)
                         if (kind == CollectionKind.SCREENSHOTS) {
-                            item(key = "places") { CollectionTile(R.drawable.ic_location_on, stringResource(R.string.label_places), null, enabled = false) {} }
+                            state.places?.let { towns ->
+                                item(key = "places") { CollectionTile(R.drawable.ic_location_on, stringResource(R.string.label_places), towns.takeIf { it > 0 }?.let(number::format), onClick = onOpenPlaces) }
+                            }
                         }
                     }
                     item(key = "trash") { CollectionTile(R.drawable.ic_delete, stringResource(R.string.label_trash), state.trash.takeIf { it > 0 }?.let(number::format), onClick = onOpenTrash) }

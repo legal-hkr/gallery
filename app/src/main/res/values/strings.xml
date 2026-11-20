@@ -351,4 +351,12 @@
     <string name="desc_wikidata">Towns and villages: names, positions and populations. CC0 1.0 license (public domain).</string>
     <string name="desc_natural_earth">Borders and names of countries and regions. Public domain.</string>
     <string name="label_place_data_date">Data as of %1$s</string>
+    <!-- Stage S6b -->
+    <string name="label_no_location">No location</string>
+    <!-- Stage S6b (mine) -->
+    <string name="msg_no_places">No photos or videos with a location</string>
+    <!-- Stage S6b -->
+    <string name="button_map">Map</string>
+    <string name="content_description_show_place">Show %1$s</string>
+    <string name="desc_no_location_count">Photos and videos: %1$d</string>
 </resources>

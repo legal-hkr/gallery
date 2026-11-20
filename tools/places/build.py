@@ -17,12 +17,14 @@ square whose query times out is split in four.
 
 The file's layout (little-endian; borders and bounding boxes in 1e-4 degrees, about 11 m):
 
-    header, 64 bytes:
-        0  magic "HNPL"            4  u16 format (2)        6  u16 levels of borders (4)
-        8  u32 data version (yyyymmdd)
+    header, 72 bytes:
+        0  magic "HNPL"            4  u16 format (3)        6  u16 levels of borders (4)
+        8  u32 the data's date (yyyymmdd, shown in About)
         12 u32 strings  16 u32 countries  20 u32 regions  24 u32 settlements  28 u32 cells
         32 u32 offset of strings  36 countries  40 regions  44 cells  48 settlements  52 borders
         56 u32 grid cells per degree (4)  60 u32 reserved
+        64 u32 parts of towns  68 u32 build: CRC-32 of everything after the header (the app places photos again when
+           it changes; two builds of one day differ in it, not in the date)
     strings: u32 offsets[strings + 1] relative to the bytes that follow, then UTF-8 bytes
     country, 48 bytes: u32 name pl, en, local; i32 bbox west, south, east, north; u32 borders[4] (offsets from
         the borders' start, one per level); u8 continent (1 Europe, 0 other); 3 bytes padding. Countries have
@@ -34,6 +36,8 @@ The file's layout (little-endian; borders and bounding boxes in 1e-4 degrees, ab
     settlement, 21 bytes: u16 lat, lon within its cell (0–65535 across the cell's quarter degree); u32 population;
         u24 name pl, en, local; u16 region, u16 country (0xFFFF none)
     border: u16 rings; per ring u32 points, i32 lon, lat of the first, then zigzag varint deltas of the rest
+    parts, 8 bytes each, last in the file: u32 settlement, u32 its town (a settlement), sorted by settlement – the
+        app records the town, so a town, its districts and its urban area are one place
 
 A part of a town (a district, a quarter: a settlement located in another settlement, P131) keeps its own point but
 takes its town's names and population, so a photo in a city's outskirts is named after the city.
@@ -53,6 +57,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import zlib
 
 import numpy as np
 import shapefile
@@ -85,6 +90,9 @@ POLISH_REGION_PREFIX = "województwo "
 # parents, and their combinations made answers of hundreds of megabytes that the service cut off
 QUERY = """SELECT ?s (SAMPLE(?c) AS ?coord) (MAX(?p) AS ?pop) (SAMPLE(?lpl) AS ?pl) (SAMPLE(?len) AS ?en) (SAMPLE(?lmul) AS ?mul)
        (SAMPLE(?nat) AS ?native) (GROUP_CONCAT(DISTINCT STR(?par); separator=" ") AS ?parent) WHERE {{
+  # In the written order: the square first, then each point's class (the service otherwise may start from every
+  # settlement of the world; a dense square took 13 s with this, 19 s without, on 20 Nov 2026)
+  hint:Query hint:optimizer "None" .
   SERVICE wikibase:box {{
     ?s wdt:P625 ?c .
     bd:serviceParam wikibase:cornerWest "Point({west} {south})"^^geo:wktLiteral .
@@ -431,14 +439,15 @@ def main():
     items = list(found)
     for item in items:
         entry = found[item]
-        town, depth = entry, 0
+        town, town_item, depth = entry, item, 0
         while depth < 3:
             parent = next((p for p in sorted(entry_parents(town)) if p in found and p != item), None)
             if parent is None:
                 break
-            town, depth = found[parent], depth + 1
+            town, town_item, depth = found[parent], parent, depth + 1
         if town is not entry:
             entry["names_from"] = town
+            entry["town"] = town_item
     points = shapely.points(np.array([[found[i]["lon"], found[i]["lat"]] for i in items]))
     def locate(tree, n):
         where = np.full(n, 0xFFFF, dtype=np.int64)
@@ -470,7 +479,7 @@ def main():
         region = int(in_region[k])
         if region != 0xFFFF and country == 0xFFFF:
             country = region_rows[region]["country"]
-        kept.append((entry["lat"], entry["lon"], population, pl, en, local, region, country))
+        kept.append((entry["lat"], entry["lon"], population, pl, en, local, region, country, item, entry.get("town", item)))
     print(f"{len(kept)} settlements kept", file=sys.stderr)
 
     # Settlements by grid cell
@@ -481,7 +490,7 @@ def main():
     kept.sort(key=lambda s: (cell(s[0], s[1]), -s[2]))
     settlement_bytes = bytearray()
     cells = []
-    for index, (lat, lon, population, pl, en, local, region, country) in enumerate(kept):
+    for index, (lat, lon, population, pl, en, local, region, country, _, _) in enumerate(kept):
         c = cell(lat, lon)
         if not cells or cells[-1][0] != c:
             cells.append((c, index))
@@ -520,16 +529,23 @@ def main():
         region_bytes += struct.pack("<4i", *bbox(r["geometry"]))
         region_bytes += struct.pack("<4I", *border_offsets(r["geometry"], REGION_LEVELS))
 
+    # Parts of towns whose town stayed in the file
+    position = {s[8]: i for i, s in enumerate(kept)}
+    parts = sorted((i, position[s[9]]) for i, s in enumerate(kept) if s[9] != s[8] and s[9] in position)
+    part_bytes = b"".join(struct.pack("<II", a, b) for a, b in parts)
+
     string_bytes = strings.pack()
-    offset = 64
+    offset = 72
     sections = []
     for part in (string_bytes, country_bytes, region_bytes, cell_bytes, settlement_bytes, borders):
         sections.append(offset)
         offset += len(part)
-    version = int(datetime.date.today().strftime("%Y%m%d"))
-    header = struct.pack("<4sHHI5I6III", b"HNPL", 2, len(LEVELS), version, len(strings.items), len(country_rows), len(region_rows), len(kept), len(cells), *sections, GRID, 0)
-    assert len(header) == 64
-    data = header + string_bytes + bytes(country_bytes) + bytes(region_bytes) + cell_bytes + bytes(settlement_bytes) + bytes(borders)
+    date = int(datetime.date.today().strftime("%Y%m%d"))
+    body = string_bytes + bytes(country_bytes) + bytes(region_bytes) + cell_bytes + bytes(settlement_bytes) + bytes(borders) + part_bytes
+    build = zlib.crc32(body) & 0xFFFFFFFF
+    header = struct.pack("<4sHHI5I6IIIII", b"HNPL", 3, len(LEVELS), date, len(strings.items), len(country_rows), len(region_rows), len(kept), len(cells), *sections, GRID, 0, len(parts), build)
+    assert len(header) == 72
+    data = header + body
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     # No time in the gzip header: the same data gives the same file
     with open(args.out + ".part", "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=9, mtime=0, filename="") as f:
