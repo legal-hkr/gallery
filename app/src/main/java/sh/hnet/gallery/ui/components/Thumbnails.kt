@@ -47,6 +47,15 @@ object Thumbnails {
         override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
     }
 
+    /**
+     * The budget from the app's ordinary memory class, not the large heap the editor needs (D25): with `largeHeap` half
+     * the heap meant some 256 MB of graphics buffers, and the emulator ran out of them ("Failed to allocate ColorBuffer",
+     * the owner's demo set, 20 Nov 2026). Set once at the start.
+     */
+    fun budget(memoryClassMb: Int) {
+        cache.resize(memoryClassMb * 1024 * 1024 / 2)
+    }
+
     /** Items whose thumbnail the system couldn't make, by the same key: not asked again until the file changes. */
     private val broken = HashSet<String>()
 

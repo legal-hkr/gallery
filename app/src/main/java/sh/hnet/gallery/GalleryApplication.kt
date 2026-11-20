@@ -1,5 +1,6 @@
 package sh.hnet.gallery
 
+import android.app.ActivityManager
 import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -116,6 +117,7 @@ class GalleryApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Thumbnails.budget(getSystemService(ActivityManager::class.java).memoryClass)
         // Locked: what the viewer decrypted for the screen goes from memory too (SPEC §18.4)
         appScope.launch {
             vault.state.collect {
