@@ -56,6 +56,12 @@ object Thumbnails {
     // 768 for the two-column step (cells of ~540 px on a phone; 512 would be stretched)
     private val STEPS = intArrayOf(128, 256, 384, 512, 768)
 
+    /** Everything of items from outside MediaStore dropped (negative ids): the vault's, once it locks (SPEC §18.4). */
+    fun forgetOutside() {
+        cache.snapshot().keys.filter { it.startsWith("-") }.forEach(cache::remove)
+        synchronized(broken) { broken.removeAll { it.startsWith("-") } }
+    }
+
     /** The size actually read for a cell of [px] pixels. */
     fun sizeFor(px: Int): Int = STEPS.firstOrNull { it >= px } ?: STEPS.last()
 

@@ -35,6 +35,8 @@ import sh.hnet.gallery.model.Library
 import sh.hnet.gallery.model.Place
 import sh.hnet.gallery.model.PlaceData
 import sh.hnet.gallery.model.PlaceGroups
+import sh.hnet.gallery.ui.components.Thumbnails
+import sh.hnet.gallery.ui.viewer.TileCache
 
 class GalleryApplication : Application() {
     /** Work that outlives a screen; lives as long as the process. */
@@ -114,6 +116,15 @@ class GalleryApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Locked: what the viewer decrypted for the screen goes from memory too (SPEC §18.4)
+        appScope.launch {
+            vault.state.collect {
+                if (it !is Vault.State.Open) {
+                    Thumbnails.forgetOutside()
+                    TileCache.forgetOutside()
+                }
+            }
+        }
         // The screen turning off always locks the vault, whatever the delay (D31)
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = vault.lock()

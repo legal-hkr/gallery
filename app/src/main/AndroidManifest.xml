@@ -108,6 +108,12 @@
         </activity>
 
         <!-- Hands the copies made for a share to the app the user picks; nothing else is reachable -->
+        <!-- The open vault's content for the app's own viewer (S8b2): not exported, never granted -->
+        <provider
+            android:name=".data.vault.VaultProvider"
+            android:authorities="${applicationId}.vault"
+            android:exported="false"
+            android:grantUriPermissions="false" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

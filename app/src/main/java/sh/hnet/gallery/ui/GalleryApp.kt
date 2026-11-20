@@ -78,6 +78,7 @@ import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.PickRequest
 import sh.hnet.gallery.model.TimelineFolders
+import sh.hnet.gallery.ui.albums.AddToAlbumSheet
 import sh.hnet.gallery.ui.albums.AlbumPage
 import sh.hnet.gallery.ui.albums.AlbumsScreen
 import sh.hnet.gallery.ui.albums.PageKey
@@ -370,7 +371,7 @@ fun GalleryApp() {
                         if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }
                     }
                     entry<Screen.Trash> { TrashScreen(onBack = back, onOpen = { viewer = it }) }
-                    entry<Screen.Vault> { VaultScreen(onBack = back) }
+                    entry<Screen.Vault> { VaultScreen(onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.SettingsVault> { VaultSettingsScreen(onBack = back, onOpenVault = { currentStack.add(Screen.Vault) }) }
                     entry<Screen.Places> {
                         PlacesScreen(
@@ -565,6 +566,10 @@ fun GalleryApp() {
             onConfirm = vaultActions::confirm,
             onDismiss = vaultActions::dismiss,
         )
+    }
+    // Out of the vault (SPEC-albums §18.3): the Add to album sheet with No album first; put back in their albums already
+    vaultActions?.returned?.let { back ->
+        AddToAlbumSheet(back.items, onDismiss = { vaultActions.returnedDone(noAlbum = false) }, onAdded = { vaultActions.returnedDone(noAlbum = false) }, onNoAlbum = { vaultActions.returnedDone(noAlbum = true) })
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }
     if (offering) {

@@ -69,7 +69,7 @@ import sh.hnet.gallery.ui.components.settingsRowColors
  * changes. [onAdded] ends the selection.
  */
 @Composable
-fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -> Unit) {
+fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -> Unit, onNoAlbum: (() -> Unit)? = null) {
     val context = LocalContext.current
     val resources = LocalResources.current
     val app = context.applicationContext as GalleryApplication
@@ -110,10 +110,24 @@ fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 8.dp, bottom = 12.dp),
             )
-            val count = rows.size + 1
+            // Out of the vault (SPEC-albums §18.3): No album first – the items stay in none, not even those they were put back in
+            val first = if (onNoAlbum != null) 1 else 0
+            val count = rows.size + 1 + first
+            if (onNoAlbum != null) {
+                SegmentedListItem(
+                    onClick = onNoAlbum,
+                    shapes = groupShapes(0, count),
+                    colors = settingsRowColors(),
+                    leadingContent = {
+                        Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
+                            Icon(painterResource(R.drawable.ic_close), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    },
+                ) { Text(stringResource(R.string.label_no_album), maxLines = 1) }
+            }
             SegmentedListItem(
                 onClick = { naming = true },
-                shapes = groupShapes(0, count),
+                shapes = groupShapes(first, count),
                 colors = settingsRowColors(),
                 leadingContent = {
                     Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
@@ -132,7 +146,7 @@ fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -
                         }
                     },
                     enabled = !all,
-                    shapes = groupShapes(index + 1, count),
+                    shapes = groupShapes(index + 1 + first, count),
                     colors = settingsRowColors(),
                     leadingContent = { AlbumCover(album.newest, Modifier.size(48.dp)) },
                     trailingContent = if (all) ({ Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary) }) else null,

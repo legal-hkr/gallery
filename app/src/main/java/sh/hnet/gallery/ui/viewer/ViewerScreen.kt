@@ -111,6 +111,7 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.data.uri
+import sh.hnet.gallery.data.vault.Vault
 import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.model.MediaItem
@@ -135,6 +136,7 @@ import sh.hnet.gallery.ui.grid.ShareButton
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.vault.LocalVaultActions
+import sh.hnet.gallery.ui.vault.SecureWindow
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
 private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
@@ -164,6 +166,8 @@ fun ViewerScreen(
     readOnly: Boolean = false,
     /** Where the opening came from (an album's name, Photos): the slideshow's position line; none, no slideshow from here. */
     title: String? = null,
+    /** Opened from the vault (S8b2): its items through its provider, its own toolbar, the window kept secure. */
+    vault: Boolean = false,
     extra: List<MediaItem> = emptyList(),
     locked: Boolean = false,
     unlock: (() -> Unit) -> Unit = { it() },
@@ -190,7 +194,16 @@ fun ViewerScreen(
     val autoplay by app.preferences.autoplayMotion.collectAsStateWithLifecycle(true)
     // Items another app opened (SPEC §17): read on their own, so they show before – or without – the index; the index's
     // own copy wins once it has one
-    val byId = remember(items, extra) { extra.associateBy { it.id } + items.orEmpty().associateBy { it.id } }
+    // The vault's items, read through its provider while it is open (S8b2)
+    val vaultState by app.vault.state.collectAsStateWithLifecycle()
+    val vaultEntries = if (vault) (vaultState as? Vault.State.Open)?.entries.orEmpty() else emptyList()
+    val vaultItems = remember(vaultEntries) { vaultEntries.map(app.vault::item) }
+    val byId = remember(items, extra, vaultItems) { (extra + vaultItems).associateBy { it.id } + items.orEmpty().associateBy { it.id } }
+    if (vault) {
+        // Nothing of the vault in Recents or screenshots; locked, the viewer goes (SPEC §18.4)
+        SecureWindow()
+        LaunchedEffect(vaultState) { if (vaultState !is Vault.State.Open) onClose() }
+    }
     // Opened from a user album, an item removed from it leaves the pages as a trashed one does (SPEC-albums §9.8)
     val members by app.albums.members.collectAsStateWithLifecycle()
     val inAlbum = remember(members, album) { album?.let { id -> members.orEmpty().filter { it.albumId == id }.mapTo(HashSet()) { it.mediaId } } }
@@ -206,7 +219,7 @@ fun ViewerScreen(
     }
     var currentId by rememberSaveable { mutableLongStateOf(start) }
     val slideshow = LocalSlideshow.current
-    val vault = LocalVaultActions.current
+    val vaultActions = LocalVaultActions.current
     // The pages as they are when a slideshow ends (items may have gone meanwhile)
     val latestPages by rememberUpdatedState(pages)
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
@@ -429,6 +442,7 @@ fun ViewerScreen(
                 TopBar(
                     item, hdr = hdr && (!video || toneMaps), sdr = sdr, motionPhoto = fact?.motion == true,
                     onBack = { close() },
+                    vault = vault,
                     folderName = (!item.outside && extra.isNotEmpty()).takeIf { it }?.let { item.folder },
                     onSdr = { value ->
                         sdr = value
@@ -442,6 +456,15 @@ fun ViewerScreen(
                     HorizontalFloatingToolbar(expanded = true) {
                         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), { info = true })
                     }
+                } else if (vault) {
+                    // The vault's (SPEC §18.3): Info, Move out, Copy out, Export (S8c), Delete for good – no Share, no Edit
+                    val entry = vaultEntries.firstOrNull { Vault.idOf(it.file) == item.id }
+                    VaultToolbar(
+                        onInfo = { info = true },
+                        onMoveOut = { entry?.let { vaultActions?.takeOut(listOf(it), move = true) { ownTrashed.add(item.id) } } },
+                        onCopyOut = { entry?.let { vaultActions?.takeOut(listOf(it), move = false) } },
+                        onDeleteForever = { deleting = item },
+                    )
                 } else if (item.outside) {
                     // A file from outside (SPEC §17.2, SPEC-albums §17.2): Share, Save to phone, Info, Open with – nothing that changes it
                     OutsideToolbar(
@@ -494,7 +517,7 @@ fun ViewerScreen(
                             }
                         } else null,
                         // Move to vault (SPEC §18.5): the item leaves the pages as one this viewer removed itself
-                        onMoveToVault = vault?.takeIf { !readOnly && !trash && !item.outside }?.let { v -> { v.moveIn(listOf(item)) { ownTrashed.add(item.id) } } },
+                        onMoveToVault = vaultActions?.takeIf { !readOnly && !trash && !item.outside }?.let { v -> { v.moveIn(listOf(item)) { ownTrashed.add(item.id) } } },
                     )
                 }
             }
@@ -533,7 +556,13 @@ fun ViewerScreen(
                     stringResource(R.string.button_delete_forever),
                     onConfirm = {
                         deleting = null
-                        actions.deleteForever(listOf(target)) { ownTrashed.add(target.id) }
+                        if (vault) {
+                            // The app's own files: no system dialog (SPEC §18.3)
+                            ownTrashed.add(target.id)
+                            vaultEntries.firstOrNull { Vault.idOf(it.file) == target.id }?.let { entry -> app.appScope.launch { app.vault.remove(listOf(entry)) } }
+                        } else {
+                            actions.deleteForever(listOf(target)) { ownTrashed.add(target.id) }
+                        }
                     },
                     onDismiss = { deleting = null },
                 )
@@ -545,7 +574,7 @@ fun ViewerScreen(
                 val folderShown = sources?.let { SourceStore.stateOf(item.folder, it, newFolders) != SourceState.HIDDEN } == true
                 InfoSheet(
                     item, fact, hdr, landscape, playback.takeIf { it.item == item.id },
-                    onChangeDate = if (readOnly) null else ({ date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }),
+                    onChangeDate = if (readOnly || vault) null else ({ date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }),
                     onDismiss = { info = false },
                     // The sheet is a window of its own, above anything the viewer's host lays over it: it closes as the album opens (owner's test of S4b1)
                     onOpenFolder = if (folderShown && !trash && !readOnly) ({
@@ -581,7 +610,7 @@ private const val MOTION_SETTLE_MS = 300L
  * (the place under it comes with S6), and the state toggles – HDR on HDR photos, play on motion photos.
  */
 @Composable
-private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boolean, onBack: () -> Unit, onSdr: (Boolean) -> Unit, onPlayMotion: () -> Unit, folderName: FolderKey? = null) {
+private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boolean, onBack: () -> Unit, onSdr: (Boolean) -> Unit, onPlayMotion: () -> Unit, folderName: FolderKey? = null, vault: Boolean = false) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val facts by app.facts.facts.collectAsStateWithLifecycle()
     TopAppBar(
@@ -589,10 +618,12 @@ private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boo
             Column {
                 // A file from outside: its name and "Outside Gallery" (SPEC §17.2); one another app opened in its folder: the
                 // date and the folder's album (SPEC §17.1, §17.3)
-                Text(if (item.outside) item.name else viewerTitle(item, facts?.get(item.id)), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // A vault item: its date as any, "Vault" under it
+                Text(if (item.outside && !vault) item.name else viewerTitle(item, facts?.get(item.id)), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // The place under the date (SPEC §6.2: town and country), when the item has one
                 val place = placeData()?.label(facts?.get(item.id), placeLanguage(), full = false)
                 val subtitle = when {
+                    vault -> stringResource(R.string.label_vault)
                     item.outside -> stringResource(R.string.label_outside_gallery)
                     folderName != null -> albumName(folderName)
                     else -> place
@@ -601,7 +632,7 @@ private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boo
             }
         },
         navigationIcon = {
-            if (item.outside) TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_close), onBack)
+            if (item.outside && !vault) TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_close), onBack)
             else TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack)
         },
         actions = {
@@ -735,6 +766,18 @@ private fun OutsideToolbar(onShare: () -> Unit, onSave: () -> Unit, onInfo: () -
         TooltipIconButton(R.drawable.ic_download, stringResource(R.string.action_save_to_phone), onSave)
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         TooltipIconButton(R.drawable.ic_open_in_new, stringResource(R.string.menu_open_with), onOpenWith)
+    }
+}
+
+/** The vault's viewer (SPEC §18.3): Info, Move out, Copy out, Export (S8c, disabled), Delete for good last in the error colour. */
+@Composable
+private fun VaultToolbar(onInfo: () -> Unit, onMoveOut: () -> Unit, onCopyOut: () -> Unit, onDeleteForever: () -> Unit) {
+    HorizontalFloatingToolbar(expanded = true) {
+        TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
+        TooltipIconButton(R.drawable.ic_drive_file_move, stringResource(R.string.action_move_out), onMoveOut)
+        TooltipIconButton(R.drawable.ic_file_copy, stringResource(R.string.action_copy_out), onCopyOut)
+        TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), {}, enabled = false)
+        TooltipIconButton(R.drawable.ic_delete_forever, stringResource(R.string.action_delete_forever), onDeleteForever, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
 }
 

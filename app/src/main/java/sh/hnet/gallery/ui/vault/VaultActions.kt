@@ -14,12 +14,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.vault.Vault
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.VaultEntry
 import sh.hnet.gallery.ui.components.Consent
 import sh.hnet.gallery.ui.components.MediaActions
 
@@ -105,6 +108,59 @@ class VaultActions(
         asking = null
         // Its key found lost on the way: the vault's page with the card, rather than nothing at all
         open(then = { move(items, onDone) }, cancelled = { if (vault.state.value is Vault.State.Lost) openVault() })
+    }
+
+    /**
+     * Items back in the gallery and the albums they were put back in (SPEC-albums §18.3): the Add to album sheet then
+     * opens with No album first, which takes them out of those albums again.
+     */
+    data class Returned(val items: List<MediaItem>, val putBack: List<Pair<Long, List<Long>>>)
+
+    var returned by mutableStateOf<Returned?>(null)
+        private set
+
+    /**
+     * Move out / Copy out of the vault (SPEC §18.3, SPEC-albums §18.3): each file to the folder it came from (else
+     * `Download/`), then back in the user albums it was in; moving deletes the vault's copy only after the write
+     * succeeded. [onDone] once they are out (a selection ends, the viewer drops the page).
+     */
+    fun takeOut(entries: List<VaultEntry>, move: Boolean, onDone: () -> Unit = {}) {
+        if (entries.isEmpty()) return
+        scope.launch {
+            val written = ArrayList<Pair<VaultEntry, Long>>()
+            for (entry in entries) {
+                val id = try {
+                    val (reader, stream) = vault.open(entry)
+                    stream.use { writer.saveFromVault(entry) { reader.stream() } }
+                } catch (_: Exception) {
+                    null
+                }
+                if (id != null) written.add(entry to id)
+            }
+            if (written.isEmpty()) return@launch actions.say(activity.getString(R.string.error_take_out_vault), undo = null)
+            if (move) vault.remove(written.map { it.first })
+            onDone()
+            val ids = written.map { it.second }
+            actions.say(activity.getString(if (move) R.string.msg_moved_out_vault else R.string.msg_copied_out_vault, written.size), undo = null)
+            // The index learns of the new files in a moment; the sheet needs them as items
+            val items = withTimeoutOrNull(5000) { app.index.items.first { list -> list != null && ids.all { id -> list.any { it.id == id } } } }
+                ?.filter { it.id in ids }.orEmpty()
+            if (items.isEmpty()) return@launch
+            val byId = items.associateBy { it.id }
+            val albums = app.albums.albums.value.orEmpty().mapTo(HashSet()) { it.id }
+            val putBack = written.flatMap { (entry, id) -> entry.albums.filter { it in albums }.map { it to id } }
+                .groupBy({ it.first }, { it.second })
+            val now = System.currentTimeMillis()
+            for ((album, members) in putBack) app.albums.add(album, members.mapNotNull { byId[it] }, now)
+            returned = Returned(items, putBack.toList())
+        }
+    }
+
+    /** The sheet after moving out closed; [noAlbum]: it was No album, so out of the albums they were put back in. */
+    fun returnedDone(noAlbum: Boolean) {
+        val done = returned ?: return
+        returned = null
+        if (noAlbum) scope.launch { for ((album, ids) in done.putBack) app.albums.remove(album, ids) }
     }
 
     private fun move(items: List<MediaItem>, onDone: () -> Unit) {

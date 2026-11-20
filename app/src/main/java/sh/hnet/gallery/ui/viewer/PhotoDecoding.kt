@@ -166,6 +166,11 @@ object TileCache {
     fun put(key: String, bitmap: Bitmap) {
         cache.put(key, bitmap)
     }
+
+    /** Everything of items from outside MediaStore dropped (negative ids): the vault's, once it locks (SPEC §18.4). */
+    fun forgetOutside() {
+        cache.snapshot().keys.filter { it.startsWith("-") }.forEach(cache::remove)
+    }
 }
 
 /** Where a tile of the image lands in the fitted image drawn in a container: image pixels times [fit], from [left], [top]. */

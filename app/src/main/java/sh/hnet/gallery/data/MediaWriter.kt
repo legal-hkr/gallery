@@ -6,10 +6,14 @@ import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Environment
+import android.os.storage.StorageManager
 import android.provider.MediaStore
+import java.io.File
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.VaultEntry
 
 /**
  * Changes to items in MediaStore (LOGIKA §4, SPEC §22.4). The app's own files are changed at once;
@@ -110,6 +114,56 @@ class MediaWriter(private val context: Context) {
             try { resolver.delete(target, null) } catch (_: Exception) { }
             null
         }
+    }
+
+    /**
+     * A vault item back in the gallery (SPEC-albums §18.3): in the folder it came from, or in `Download/` when it was
+     * imported, its folder is gone or MediaStore takes no such file there (another app's `Android/media` folder);
+     * written while pending, its date taken kept, a name already there numbered by MediaStore. The new item's id, or null.
+     */
+    suspend fun saveFromVault(entry: VaultEntry, content: () -> InputStream): Long? = withContext(Dispatchers.IO) {
+        fun values(path: String) = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, entry.name.ifBlank { "file" })
+            put(MediaStore.MediaColumns.MIME_TYPE, entry.mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, path)
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+            if (entry.taken > 0) put(MediaStore.MediaColumns.DATE_TAKEN, entry.taken)
+        }
+        fun insert(collection: Uri, path: String): Uri? = try {
+            resolver.insert(collection, values(path))
+        } catch (_: Exception) {
+            null
+        }
+        val volume = entry.fromVolume
+        val path = entry.fromPath
+        val home = if (volume != null && path != null && folderExists(volume, path)) {
+            val collection = when {
+                entry.mime.startsWith("image/") -> MediaStore.Images.Media.getContentUri(volume)
+                entry.mime.startsWith("video/") -> MediaStore.Video.Media.getContentUri(volume)
+                else -> MediaStore.Files.getContentUri(volume)
+            }
+            insert(collection, path)
+        } else {
+            null
+        }
+        val target = home ?: insert(MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY), Environment.DIRECTORY_DOWNLOADS + "/") ?: return@withContext null
+        try {
+            content().use { from -> resolver.openOutputStream(target)?.use { to -> from.copyTo(to, 256 * 1024) } } ?: error("No stream")
+            resolver.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null)
+            ContentUris.parseId(target)
+        } catch (_: Exception) {
+            // Half a copy is no file: it goes
+            try { resolver.delete(target, null) } catch (_: Exception) { }
+            null
+        }
+    }
+
+    /** Whether a folder is still there on its volume (the volume mounted, the folder not deleted meanwhile). */
+    private fun folderExists(volume: String, path: String): Boolean = try {
+        val root = context.getSystemService(StorageManager::class.java).storageVolumes.firstOrNull { it.mediaStoreVolumeName == volume }?.directory
+        root != null && File(root, path).isDirectory
+    } catch (_: Exception) {
+        false
     }
 
     /** The right to write the items' files (the date taken, SPEC §7.2): null when the app may already. */

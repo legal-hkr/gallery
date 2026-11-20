@@ -81,25 +81,33 @@ import sh.hnet.gallery.ui.components.settingsRowColors
 import sh.hnet.gallery.ui.grid.SelectableFrame
 import sh.hnet.gallery.ui.grid.SelectionEffects
 import sh.hnet.gallery.ui.grid.SelectionTopBar
+import sh.hnet.gallery.ui.viewer.ViewerRequest
+import sh.hnet.gallery.ui.viewer.mediaOrigin
 
-/** While any of the vault is on screen: no Recents preview, no screenshots or recording (SPEC §18.4). */
+/**
+ * While any of the vault is on screen: no Recents preview, no screenshots or recording (SPEC §18.4). Counted: the
+ * viewer closing over the vault's page must not clear what the page still needs.
+ */
 @Composable
 fun SecureWindow() {
     val window = LocalActivity.current?.window
     DisposableEffect(window) {
-        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (window != null && secureScreens++ == 0) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { if (window != null && --secureScreens == 0) window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
     }
 }
+
+/** How many vault screens are shown now (the main thread's alone). */
+private var secureScreens = 0
 
 /**
  * Albums › Vault (SPEC §18): the setup page the first time, the system's prompt when locked (the lock's page when it
  * is cancelled), the lost key's card, else the grid of what is inside – 3 fixed columns, moved in last first – with
- * selection. The viewer and moving out come with S8b2, import and export with S8c.
+ * selection; a tap opens the viewer over the vault's items (S8b2). Import and export come with S8c.
  */
 @kotlin.OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VaultScreen(onBack: () -> Unit) {
+fun VaultScreen(onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit) {
     SecureWindow()
     val app = LocalContext.current.applicationContext as GalleryApplication
     val state by app.vault.state.collectAsStateWithLifecycle()
@@ -116,7 +124,7 @@ fun VaultScreen(onBack: () -> Unit) {
         Vault.State.NotSetUp -> VaultSetup(onBack)
         else -> Column(Modifier.fillMaxSize()) {
             when (shown) {
-                is Vault.State.Open -> VaultGrid(shown.entries, onBack, onLock = app.vault::lock)
+                is Vault.State.Open -> VaultGrid(shown.entries, onBack, onLock = app.vault::lock, onOpen = onOpen)
                 Vault.State.Locked -> {
                     VaultTopBar(onBack, onLock = null)
                     EmptyState(R.drawable.ic_lock, stringResource(R.string.msg_vault_locked)) {
@@ -264,10 +272,11 @@ private fun KeyLost(files: Int) {
 /** The open vault (SPEC §18.3): 3 fixed columns, no day headers; long press and taps select. */
 @kotlin.OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () -> Unit) {
+private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () -> Unit, onOpen: (ViewerRequest) -> Unit) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
+    val access = LocalVaultActions.current
     var selected by remember { mutableStateOf(emptySet<String>()) }
     val all = remember(entries) { entries.map { it.file } }
     LaunchedEffect(all) { selected = selected.intersect(all.toSet()) }
@@ -306,13 +315,18 @@ private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () 
                     selected.isNotEmpty(),
                     chosen,
                     6.dp,
-                    Modifier.aspectRatio(1f).clip(RoundedCornerShape(6.dp)).combinedClickable(
+                    Modifier.aspectRatio(1f).mediaOrigin(Vault.idOf(entry.file).toString(), 6.dp).clip(RoundedCornerShape(6.dp)).combinedClickable(
                         onLongClick = {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             selected = if (chosen) selected - entry.file else selected + entry.file
                         },
-                        // Opening an item comes with the vault's viewer (S8b2)
-                        onClick = { if (selected.isNotEmpty()) selected = if (chosen) selected - entry.file else selected + entry.file },
+                        onClick = {
+                            if (selected.isNotEmpty()) {
+                                selected = if (chosen) selected - entry.file else selected + entry.file
+                            } else {
+                                onOpen(ViewerRequest(entries.map { Vault.idOf(it.file) }, Vault.idOf(entry.file), vault = true) {})
+                            }
+                        },
                     ),
                 ) {
                     val thumbnail by produceState<ImageBitmap?>(null, entry.file) { value = app.vault.thumbnail(entry) }
@@ -330,9 +344,9 @@ private fun VaultGrid(entries: List<VaultEntry>, onBack: () -> Unit, onLock: () 
                 expandedShadowElevation = 3.dp,
                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
             ) {
-                // Moving and copying out come with S8b2, export with S8c (D5)
-                TooltipIconButton(R.drawable.ic_drive_file_move, stringResource(R.string.action_move_out), {}, enabled = false)
-                TooltipIconButton(R.drawable.ic_file_copy, stringResource(R.string.action_copy_out), {}, enabled = false)
+                // Export comes with S8c (D5)
+                TooltipIconButton(R.drawable.ic_drive_file_move, stringResource(R.string.action_move_out), { access?.takeOut(chosen, move = true) { selected = emptySet() } })
+                TooltipIconButton(R.drawable.ic_file_copy, stringResource(R.string.action_copy_out), { access?.takeOut(chosen, move = false) { selected = emptySet() } })
                 TooltipIconButton(R.drawable.ic_output, stringResource(R.string.action_export), {}, enabled = false)
                 TooltipIconButton(R.drawable.ic_delete_forever, stringResource(R.string.action_delete_forever), { deleting = chosen }, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
             }

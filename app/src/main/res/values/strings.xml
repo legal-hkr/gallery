@@ -490,7 +490,11 @@
     <string name="header_key">Key</string>
     <string name="label_forget_key">Forget the key</string>
     <string name="desc_forget_key">The vault’s content can no longer be read.</string>
+    <string name="msg_moved_out_vault">Moved out of the vault: %1$d</string>
+    <string name="msg_copied_out_vault">Copied out of the vault: %1$d</string>
+    <string name="label_no_album">No album</string>
     <!-- Stage S8b (mine) -->
+    <string name="error_take_out_vault">Couldn’t take it out of the vault.</string>
     <string name="settings_vault_not_set_up">Not set up</string>
     <string name="progress_moved">Moved: %1$d of %2$d</string>
     <string name="error_vault_space">Not enough free space on the phone.</string>

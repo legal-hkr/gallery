@@ -491,7 +491,11 @@
     <string name="header_key">Klucz</string>
     <string name="label_forget_key">Zapomnij klucz</string>
     <string name="desc_forget_key">Zawartości sejfu nie da się już odczytać.</string>
+    <string name="msg_moved_out_vault">Przeniesiono z sejfu: %1$d</string>
+    <string name="msg_copied_out_vault">Skopiowano z sejfu: %1$d</string>
+    <string name="label_no_album">Bez albumu</string>
     <!-- Stage S8b (mine) -->
+    <string name="error_take_out_vault">Nie udało się wyjąć z sejfu.</string>
     <string name="settings_vault_not_set_up">Nie utworzono</string>
     <string name="progress_moved">Przeniesiono: %1$d z %2$d</string>
     <string name="error_vault_space">W telefonie jest za mało wolnego miejsca.</string>

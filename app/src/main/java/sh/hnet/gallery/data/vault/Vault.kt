@@ -3,11 +3,18 @@ package sh.hnet.gallery.data.vault
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.ParcelFileDescriptor
+import android.os.ProxyFileDescriptorCallback
 import android.os.StatFs
+import android.os.storage.StorageManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
+import android.system.ErrnoException
+import android.system.OsConstants
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.ui.graphics.ImageBitmap
@@ -314,6 +321,60 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** An item of the open vault by its file; null while locked. */
+    fun entry(file: String): VaultEntry? = if (master == null) null else index.entries.firstOrNull { it.file == file }
+
+    /**
+     * An item's content as a seekable read-only descriptor (the [VaultProvider]): reads come to [reader]'s chunks,
+     * decrypted in memory; nothing is written anywhere. Null while locked or gone.
+     */
+    fun openDescriptor(file: String): ParcelFileDescriptor? {
+        val entry = entry(file) ?: return null
+        val (reader, stream) = try {
+            open(entry)
+        } catch (_: Exception) {
+            return null
+        }
+        val callback = object : ProxyFileDescriptorCallback() {
+            override fun onGetSize(): Long = reader.size
+
+            override fun onRead(offset: Long, size: Int, data: ByteArray): Int {
+                // Locked meanwhile: not a byte more, though the file's own key is still in this reader
+                if (master == null) throw ErrnoException("read", OsConstants.EACCES)
+                var done = 0
+                try {
+                    while (done < size) {
+                        val n = reader.read(offset + done, data, done, size - done)
+                        if (n <= 0) break
+                        done += n
+                    }
+                } catch (_: Exception) {
+                    throw ErrnoException("read", OsConstants.EIO)
+                }
+                return done
+            }
+
+            override fun onRelease() = stream.close()
+        }
+        return try {
+            appContext.getSystemService(StorageManager::class.java).openProxyFileDescriptor(ParcelFileDescriptor.MODE_READ_ONLY, callback, io)
+        } catch (_: Exception) {
+            stream.close()
+            null
+        }
+    }
+
+    /** The proxy descriptors' reads, on a thread of their own. */
+    private val io: Handler by lazy { Handler(HandlerThread("vault").apply { start() }.looper) }
+
+    /** A vault item as the viewer's item: from outside MediaStore, read through the [VaultProvider]. */
+    fun item(entry: VaultEntry): MediaItem = MediaItem(
+        id = idOf(entry.file), video = entry.video, mime = entry.mime, taken = entry.taken, name = entry.name,
+        bucketId = 0, path = "", volume = "", size = entry.size, width = entry.width, height = entry.height,
+        duration = entry.durationMs, favorite = false, trashed = false, expires = 0, ours = true, generation = 0,
+        added = entry.movedAt, source = "content://${appContext.packageName}.vault/${entry.file}",
+    )
+
     /** A reader of an item's content (the viewer, moving out); the caller closes the stream. */
     fun open(entry: VaultEntry): Pair<VaultFormat.Reader, FileInputStream> {
         val stream = FileInputStream(File(dir, entry.file + DATA))
@@ -355,13 +416,16 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         _state.value = if (master != null) State.Open(index.ordered) else State.Locked
     }
 
-    private companion object {
-        const val KEYSTORE = "AndroidKeyStore"
-        const val ALIAS = "vault"
-        const val TRANSFORMATION = "AES/GCM/NoPadding"
-        const val IV = 12
-        const val DATA = ".data"
-        const val THUMB = ".thumb"
-        const val THUMB_PX = 512
+    companion object {
+        /** A vault item's id as an item (negative, as every item from outside MediaStore), stable for its file. */
+        fun idOf(file: String): Long = -1 - (UUID.fromString(file).mostSignificantBits and Long.MAX_VALUE)
+
+        private const val KEYSTORE = "AndroidKeyStore"
+        private const val ALIAS = "vault"
+        private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val IV = 12
+        private const val DATA = ".data"
+        private const val THUMB = ".thumb"
+        private const val THUMB_PX = 512
     }
 }
