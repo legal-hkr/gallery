@@ -51,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -331,7 +332,10 @@ fun SlideshowScreen(request: SlideshowRequest, onClose: (Long) -> Unit) {
             slides.forEach { slide ->
                 val item = byId[slide.id] ?: return@forEach
                 val live = slide === top && item.video
-                SlideView(slide, item, pictures[slide.id], thumbPx, if (live) player else null)
+                // Each slide keeps its own composition: unkeyed, the one under it leaving after the crossfade made the
+                // present slide anew – a video's surface too, which showed its first frame until the player drew again
+                // (owner's test on the demo set: every video jumped back for a moment after about a second)
+                key(slide.turn) { SlideView(slide, item, pictures[slide.id], thumbPx, if (live) player else null) }
             }
 
             // Any touch on the controls counts as a touch: they stay while used
