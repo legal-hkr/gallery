@@ -76,6 +76,7 @@ import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
+import sh.hnet.gallery.ui.vault.LocalVaultActions
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -183,6 +184,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                         if (selection.active) {
                             val chosen = shownItems.filter { it.id in selection.selected }
                             val slideshow = LocalSlideshow.current
+                            val vault = LocalVaultActions.current
                             val photosTitle = stringResource(R.string.label_nav_photos)
                             MediaSelectionToolbar(
                                 chosen,
@@ -196,6 +198,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                     selection.clear()
                                     slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, photosTitle))
                                 },
+                                onMoveToVault = vault?.let { v -> { v.moveIn(chosen) { selection.clear() } } },
                             )
                         }
                     }

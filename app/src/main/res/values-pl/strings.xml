@@ -444,4 +444,56 @@
     <string name="settings_slideshow_desc">%1$d s, %2$s</string>
     <string name="header_photo_time">Czas wyświetlania zdjęcia</string>
     <string name="header_transition">Przejście</string>
+
+    <!-- Stage S8b -->
+    <string name="desc_vault_intro">Zdjęcia i filmy w sejfie są zaszyfrowane i przeniesione poza Galerię i inne aplikacje. Sejf można otworzyć odciskiem palca albo blokadą ekranu telefonu.</string>
+    <string name="header_vault_before">Zanim go utworzysz:</string>
+    <string name="title_vault_no_backup">Nie ma go w żadnej kopii zapasowej</string>
+    <string name="desc_vault_no_backup">Ani w kopii Galerii, ani w kopii systemu.</string>
+    <string name="title_vault_uninstall">Odinstalowanie Galerii usuwa sejf</string>
+    <string name="desc_vault_uninstall">Razem z całą zawartością.</string>
+    <string name="title_vault_screen_lock">Wyłączenie blokady ekranu blokuje go na zawsze</string>
+    <string name="desc_vault_screen_lock">Tak samo przywrócenie ustawień fabrycznych. Zawartości nie da się wtedy odczytać.</string>
+    <string name="title_vault_no_recovery">Nie ma sposobu na odzyskanie zawartości</string>
+    <string name="desc_vault_no_recovery">Ani w aplikacji, ani w żaden inny sposób.</string>
+    <string name="button_create_vault">Utwórz sejf</string>
+    <string name="button_set_screen_lock">Ustaw blokadę ekranu</string>
+    <string name="prompt_unlock_vault">Odblokuj sejf</string>
+    <string name="prompt_create_vault">Utwórz sejf</string>
+    <string name="content_description_import">Importuj</string>
+    <string name="content_description_lock_now">Zablokuj teraz</string>
+    <string name="action_move_out">Przenieś z sejfu</string>
+    <string name="action_copy_out">Kopiuj z sejfu</string>
+    <string name="action_export">Eksportuj</string>
+    <string name="title_move_to_vault">Przenieść do sejfu (%1$d)?</string>
+    <string name="title_move_to_vault_one">Przenieść do sejfu?</string>
+    <string name="desc_move_to_vault">Elementy przestaną być widoczne w tej aplikacji i we wszystkich innych. Nie trafią do kosza systemu. Sejf nie jest objęty żadną kopią zapasową.</string>
+    <string name="button_move">Przenieś</string>
+    <string name="status_moving_to_vault">Przenoszenie do sejfu…</string>
+    <string name="msg_moved_to_vault">Przeniesiono do sejfu: %1$d</string>
+    <string name="error_vault_key_lost">Nie można odczytać sejfu. Blokada ekranu została wyłączona, więc klucz sejfu przestał działać. Zawartości (elementy: %1$d) nie da się odzyskać.</string>
+    <string name="button_delete">Usuń</string>
+    <string name="button_delete_unreadable">Usuń nieczytelną zawartość</string>
+    <string name="title_delete_unreadable">Usunąć nieczytelną zawartość?</string>
+    <string name="desc_delete_unreadable">Pliki (%1$d) zostaną usunięte. Sejf będzie wtedy pusty i będzie można używać go ponownie.</string>
+    <string name="msg_vault_locked">Sejf jest zablokowany.</string>
+    <string name="desc_vault_locked">Odblokuj go odciskiem palca albo blokadą ekranu.</string>
+    <string name="button_unlock">Odblokuj</string>
+    <string name="msg_vault_empty">Sejf jest pusty.</string>
+    <string name="desc_vault_empty">Elementy można przenieść z Galerii albo zaimportować z plików.</string>
+    <string name="settings_vault_at_once">Blokada: od razu</string>
+    <string name="settings_vault_1_min">Blokada: po minucie</string>
+    <string name="settings_vault_5_min">Blokada: po 5 minutach</string>
+    <string name="header_lock_vault">Blokuj sejf</string>
+    <string name="lock_at_once">Od razu po wyjściu z aplikacji</string>
+    <string name="lock_1_min">Po minucie</string>
+    <string name="lock_5_min">Po 5 minutach</string>
+    <string name="header_key">Klucz</string>
+    <string name="label_forget_key">Zapomnij klucz</string>
+    <string name="desc_forget_key">Zawartości sejfu nie da się już odczytać.</string>
+    <!-- Stage S8b (mine) -->
+    <string name="settings_vault_not_set_up">Nie utworzono</string>
+    <string name="progress_moved">Przeniesiono: %1$d z %2$d</string>
+    <string name="error_vault_space">W telefonie jest za mało wolnego miejsca.</string>
+    <string name="error_move_to_vault">Nie udało się przenieść do sejfu.</string>
 </resources>

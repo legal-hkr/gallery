@@ -1,6 +1,10 @@
 package sh.hnet.gallery
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +27,7 @@ import sh.hnet.gallery.data.MediaSource
 import sh.hnet.gallery.data.Places
 import sh.hnet.gallery.data.ShareMaker
 import sh.hnet.gallery.data.SourceStore
+import sh.hnet.gallery.data.vault.Vault
 import sh.hnet.gallery.facts.FactReader
 import sh.hnet.gallery.facts.FactScanner
 import sh.hnet.gallery.facts.GalleryDatabase
@@ -104,8 +109,15 @@ class GalleryApplication : Application() {
     /** Backup and restore of the settings (SPEC §20.2). */
     val backup: BackupManager by lazy { BackupManager(this, getSharedPreferences("stamps", MODE_PRIVATE)) }
 
+    /** The vault (S8b): locked by default, open after the prompt until it locks. */
+    val vault: Vault by lazy { Vault(this, appScope) }
+
     override fun onCreate() {
         super.onCreate()
+        // The screen turning off always locks the vault, whatever the delay (D31)
+        registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = vault.lock()
+        }, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         // Every new list of items is checked for files not read yet
         appScope.launch { index.items.filterNotNull().collect { facts.update(it) } }
         // The copies made for shares of earlier starts go (SPEC §14.1)

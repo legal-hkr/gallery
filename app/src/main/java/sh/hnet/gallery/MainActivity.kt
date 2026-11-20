@@ -6,6 +6,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.ui.GalleryApp
 import sh.hnet.gallery.ui.share.ShareSheet
@@ -22,6 +24,19 @@ class MainActivity : ComponentActivity() {
             }
         }
         handle(intent)
+    }
+
+    // The vault locks once the app is in the background for the chosen delay (SPEC §18.4); coming back in time keeps it open
+    override fun onStart() {
+        super.onStart()
+        (application as GalleryApplication).vault.cancelLock()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        val app = application as GalleryApplication
+        // A full-screen prompt of the screen lock stops the activity too: a vault that is still locked then has nothing to lock
+        if (!isChangingConfigurations) app.appScope.launch { app.vault.lockAfter(app.preferences.vaultLockDelay.first().ms) }
     }
 
     override fun onNewIntent(intent: Intent) {

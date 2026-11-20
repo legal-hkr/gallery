@@ -443,4 +443,56 @@
     <string name="settings_slideshow_desc">%1$d s, %2$s</string>
     <string name="header_photo_time">Time per photo</string>
     <string name="header_transition">Transition</string>
+
+    <!-- Stage S8b -->
+    <string name="desc_vault_intro">Photos and videos in the vault are encrypted and moved out of Gallery and other apps. The vault opens with a fingerprint or the phone’s screen lock.</string>
+    <string name="header_vault_before">Before creating it:</string>
+    <string name="title_vault_no_backup">It isn’t included in any backup</string>
+    <string name="desc_vault_no_backup">Neither in Gallery’s backup nor in the system’s.</string>
+    <string name="title_vault_uninstall">Uninstalling Gallery deletes the vault</string>
+    <string name="desc_vault_uninstall">With everything in it.</string>
+    <string name="title_vault_screen_lock">Turning off the screen lock locks it permanently</string>
+    <string name="desc_vault_screen_lock">So does a factory reset. Its content can’t be read afterwards.</string>
+    <string name="title_vault_no_recovery">There’s no way to recover the content</string>
+    <string name="desc_vault_no_recovery">Neither in Gallery nor in any other way.</string>
+    <string name="button_create_vault">Create vault</string>
+    <string name="button_set_screen_lock">Set a screen lock</string>
+    <string name="prompt_unlock_vault">Unlock the vault</string>
+    <string name="prompt_create_vault">Create the vault</string>
+    <string name="content_description_import">Import</string>
+    <string name="content_description_lock_now">Lock now</string>
+    <string name="action_move_out">Move out of vault</string>
+    <string name="action_copy_out">Copy out of vault</string>
+    <string name="action_export">Export</string>
+    <string name="title_move_to_vault">Move to the vault (%1$d)?</string>
+    <string name="title_move_to_vault_one">Move to the vault?</string>
+    <string name="desc_move_to_vault">The items will no longer be visible in Gallery or any other app. They won’t go to the system’s Trash. The vault isn’t included in any backup.</string>
+    <string name="button_move">Move</string>
+    <string name="status_moving_to_vault">Moving to the vault…</string>
+    <string name="msg_moved_to_vault">Moved to the vault: %1$d</string>
+    <string name="error_vault_key_lost">Can’t read the vault. The screen lock was turned off, so the vault’s key stopped working. The content (items: %1$d) can’t be recovered.</string>
+    <string name="button_delete">Delete</string>
+    <string name="button_delete_unreadable">Delete unreadable content</string>
+    <string name="title_delete_unreadable">Delete unreadable content?</string>
+    <string name="desc_delete_unreadable">The files (%1$d) will be deleted. The vault will then be empty and can be used again.</string>
+    <string name="msg_vault_locked">The vault is locked.</string>
+    <string name="desc_vault_locked">Unlock it with a fingerprint or the screen lock.</string>
+    <string name="button_unlock">Unlock</string>
+    <string name="msg_vault_empty">The vault is empty.</string>
+    <string name="desc_vault_empty">Items can be moved in from Gallery or imported from files.</string>
+    <string name="settings_vault_at_once">Lock: immediately</string>
+    <string name="settings_vault_1_min">Lock: after a minute</string>
+    <string name="settings_vault_5_min">Lock: after 5 minutes</string>
+    <string name="header_lock_vault">Lock the vault</string>
+    <string name="lock_at_once">Immediately after leaving the app</string>
+    <string name="lock_1_min">After a minute</string>
+    <string name="lock_5_min">After 5 minutes</string>
+    <string name="header_key">Key</string>
+    <string name="label_forget_key">Forget the key</string>
+    <string name="desc_forget_key">The vault’s content can no longer be read.</string>
+    <!-- Stage S8b (mine) -->
+    <string name="settings_vault_not_set_up">Not set up</string>
+    <string name="progress_moved">Moved: %1$d of %2$d</string>
+    <string name="error_vault_space">Not enough free space on the phone.</string>
+    <string name="error_move_to_vault">Couldn’t move to the vault.</string>
 </resources>

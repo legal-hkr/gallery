@@ -92,6 +92,7 @@ import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.places.TownRow
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
+import sh.hnet.gallery.ui.vault.LocalVaultActions
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -155,6 +156,7 @@ fun SearchScreen(onOpen: (ViewerRequest) -> Unit, viewModel: SearchViewModel = v
         when {
             shown != null -> Results(shown, step, facts, selection, onOpen, viewModel, locale) { chosen ->
                 val slideshow = LocalSlideshow.current
+                val vault = LocalVaultActions.current
                 val searchTitle = stringResource(R.string.label_nav_search)
                 MediaSelectionToolbar(
                     chosen,
@@ -167,6 +169,7 @@ fun SearchScreen(onOpen: (ViewerRequest) -> Unit, viewModel: SearchViewModel = v
                         selection.clear()
                         slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, searchTitle))
                     },
+                    onMoveToVault = vault?.let { v -> { v.moveIn(chosen) { selection.clear() } } },
                 )
             }
             text.isBlank() -> home?.let { Home(it, viewModel, locale) }

@@ -17,6 +17,7 @@ import sh.hnet.gallery.model.SlideTransition
 import sh.hnet.gallery.model.Slideshow
 import sh.hnet.gallery.model.SourceRules
 import sh.hnet.gallery.model.SourceState
+import sh.hnet.gallery.model.VaultLockDelay
 
 private val Context.settings by preferencesDataStore("settings")
 
@@ -64,6 +65,11 @@ class Preferences(private val context: Context) {
 
     suspend fun setSlideTransition(transition: SlideTransition) = context.settings.edit { it[SLIDE_TRANSITION] = transition.name }
 
+    /** When the vault locks after the app leaves the screen (Settings › Vault, SPEC §20.7; at once by default). */
+    val vaultLockDelay: Flow<VaultLockDelay> = context.settings.data.map { VaultLockDelay.of(it[VAULT_LOCK_DELAY]) }.distinctUntilChanged()
+
+    suspend fun setVaultLockDelay(delay: VaultLockDelay) = context.settings.edit { it[VAULT_LOCK_DELAY] = delay.name }
+
     /** The collections shown oldest first (their sort chip, remembered per collection; LOGIKA §15.11), by [CollectionKind] name. */
     val collectionsOldestFirst: Flow<Set<String>> = context.settings.data.map { it[COLLECTIONS_OLDEST_FIRST].orEmpty() }.distinctUntilChanged()
 
@@ -109,6 +115,7 @@ class Preferences(private val context: Context) {
             autoplayMotion = p[AUTOPLAY_MOTION] ?: true,
             slideSeconds = Slideshow.seconds(p[SLIDE_SECONDS]),
             slideTransition = SlideTransition.of(p[SLIDE_TRANSITION]).name,
+            vaultLockDelay = VaultLockDelay.of(p[VAULT_LOCK_DELAY]).name,
         )
     }
 
@@ -125,6 +132,7 @@ class Preferences(private val context: Context) {
         backup.autoplayMotion?.let { p[AUTOPLAY_MOTION] = it }
         backup.slideSeconds?.let { p[SLIDE_SECONDS] = Slideshow.seconds(it) }
         backup.slideTransition?.let { p[SLIDE_TRANSITION] = SlideTransition.of(it).name }
+        backup.vaultLockDelay?.let { p[VAULT_LOCK_DELAY] = VaultLockDelay.of(it).name }
     }
 
     /** Restore defaults (Settings › Reset): every setting of this store back to its default. */
@@ -144,5 +152,6 @@ class Preferences(private val context: Context) {
         val COLLECTIONS_OLDEST_FIRST = stringSetPreferencesKey("collections_oldest_first")
         val SLIDE_SECONDS = intPreferencesKey("slide_seconds")
         val SLIDE_TRANSITION = stringPreferencesKey("slide_transition")
+        val VAULT_LOCK_DELAY = stringPreferencesKey("vault_lock_delay")
     }
 }

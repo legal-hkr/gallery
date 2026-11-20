@@ -21,6 +21,7 @@ sealed interface Screen : NavKey {
     /** A collection of the Albums tab, by [sh.hnet.gallery.model.CollectionKind] name. */
     @Serializable data class Collection(val kind: String) : Screen
     @Serializable data object Trash : Screen
+    @Serializable data object Vault : Screen
 
     /** Places (SPEC §13.1) and its pages; a country's or town's index is valid for the place data of [version] only. */
     @Serializable data object Places : Screen
@@ -42,6 +43,7 @@ sealed interface Screen : NavKey {
     @Serializable data object SettingsViewer : Screen
     @Serializable data object SettingsSharing : Screen
     @Serializable data object SettingsSlideshow : Screen
+    @Serializable data object SettingsVault : Screen
     @Serializable data object SettingsPlaces : Screen
     @Serializable data object SettingsBackup : Screen
     @Serializable data object SettingsAbout : Screen

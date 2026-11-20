@@ -75,6 +75,7 @@ import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.settings.icon
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
+import sh.hnet.gallery.ui.vault.LocalVaultActions
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -106,6 +107,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
     }
     val folder = (key as? PageKey.Folder)?.folder
     val slideshow = LocalSlideshow.current
+    val vault = LocalVaultActions.current
     val userAlbum = (key as? PageKey.User)?.id
     val title = when (key) {
         is PageKey.Collection -> stringResource(key.kind.title)
@@ -327,6 +329,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                         selection.clear()
                         slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, title))
                     },
+                    onMoveToVault = vault?.let { v -> { v.moveIn(chosen) { selection.clear() } } },
                     // Remove from album: this album only, at once, with Undo (SPEC-albums §9.8)
                     onRemoveFromAlbum = userAlbum?.let { id ->
                         {

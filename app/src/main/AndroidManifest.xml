@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- S1: the optional special access "Media management" (SPEC §10.6), offered in the wizard; declared so the system lists the app on its page -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA" />
+    <!-- The vault's prompt: fingerprint, or the screen lock (S8b) -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Media3 merges this in for streaming; the app plays only local files (as Music) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <!-- Media3 merges this in for playback with the screen off (setWakeMode); the app plays only on screen and keeps it on with FLAG_KEEP_SCREEN_ON -->

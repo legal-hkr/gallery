@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -65,6 +66,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import sh.hnet.gallery.GalleryApplication
@@ -80,6 +82,7 @@ import sh.hnet.gallery.ui.albums.AlbumPage
 import sh.hnet.gallery.ui.albums.AlbumsScreen
 import sh.hnet.gallery.ui.albums.PageKey
 import sh.hnet.gallery.ui.albums.TrashScreen
+import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
 import sh.hnet.gallery.ui.components.ErrorDetails
 import sh.hnet.gallery.ui.components.ErrorDetailsDialog
 import sh.hnet.gallery.ui.components.LocalConsent
@@ -112,11 +115,15 @@ import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
 import sh.hnet.gallery.ui.settings.SharingSettingsScreen
 import sh.hnet.gallery.ui.settings.SlideshowSettingsScreen
+import sh.hnet.gallery.ui.settings.VaultSettingsScreen
 import sh.hnet.gallery.ui.settings.ViewerSettingsScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.slideshow.SlideshowScreen
+import sh.hnet.gallery.ui.vault.LocalVaultActions
+import sh.hnet.gallery.ui.vault.VaultActions
+import sh.hnet.gallery.ui.vault.VaultScreen
 import sh.hnet.gallery.ui.viewer.LocalMediaOrigins
 import sh.hnet.gallery.ui.viewer.MediaOrigins
 import sh.hnet.gallery.ui.viewer.ViewerHost
@@ -181,6 +188,18 @@ fun GalleryApp() {
     val consent = rememberConsent()
     val activity = LocalActivity.current
     val actions = remember(consent) { MediaActions(appContext, MediaWriter(appContext), consent, snackbars, messages) }
+    // The vault's opening and moving in (S8b), from any grid and the viewer
+    val shellActivity = LocalActivity.current
+    val vaultActions = remember(consent, shellActivity) { shellActivity?.let { VaultActions(it, app.vault, MediaWriter(appContext), consent, actions, messages) } }
+    val moving by (vaultActions?.progress ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
+    var movingShown by remember { mutableStateOf(false) }
+    LaunchedEffect(moving != null) {
+        movingShown = false
+        if (moving != null) {
+            delay(1000)
+            movingShown = true
+        }
+    }
     var errorShown by remember { mutableStateOf<ErrorDetails?>(null) }
     SideEffect {
         actions.start = { intent -> activity?.startActivity(intent) }
@@ -245,7 +264,10 @@ fun GalleryApp() {
         // Show in a snackbar, a chip in Info: the album's page over the viewer when it is open, else on the current tab
         LocalOpenAlbum provides { id -> if (viewer != null) overViewer = Screen.Album(id) else stacks.getValue(tab).add(Screen.Album(id)) },
         LocalSlideshow provides { slideshow = it },
+        LocalVaultActions provides vaultActions,
     ) {
+    // Moving in with the vault not there (not set up, its key lost): its page on the current tab
+    SideEffect { vaultActions?.openVault = { viewer = null; stacks.getValue(tab).add(Screen.Vault) } }
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -325,6 +347,7 @@ fun GalleryApp() {
                             onOpenAlbum = { currentStack.add(Screen.Album(it)) },
                             onOpenTrash = { currentStack.add(Screen.Trash) },
                             onOpenPlaces = { currentStack.add(Screen.Places) },
+                            onOpenVault = { currentStack.add(Screen.Vault) },
                             onNewAlbum = { id ->
                                 currentStack.add(Screen.Album(id))
                                 currentStack.add(Screen.PickForAlbum(id))
@@ -347,6 +370,8 @@ fun GalleryApp() {
                         if (folder != null) AlbumPage(PageKey.Folder(folder), onBack = back, onOpen = { viewer = it }) else LaunchedEffect(Unit) { back() }
                     }
                     entry<Screen.Trash> { TrashScreen(onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Vault> { VaultScreen(onBack = back) }
+                    entry<Screen.SettingsVault> { VaultSettingsScreen(onBack = back, onOpenVault = { currentStack.add(Screen.Vault) }) }
                     entry<Screen.Places> {
                         PlacesScreen(
                             onBack = back,
@@ -378,6 +403,7 @@ fun GalleryApp() {
                             onOpenSharing = { currentStack.add(Screen.SettingsSharing) },
                             onOpenSlideshow = { currentStack.add(Screen.SettingsSlideshow) },
                             onOpenPlaces = { currentStack.add(Screen.SettingsPlaces) },
+                            onOpenVault = { currentStack.add(Screen.SettingsVault) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
@@ -421,8 +447,20 @@ fun GalleryApp() {
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp + padding.calculateBottomPadding()),
             )
         }
+        val movingNow = moving
+        if (movingShown && movingNow != null && !wizard) {
+            StatusCard(
+                title = stringResource(R.string.status_moving_to_vault),
+                line = stringResource(R.string.progress_moved, movingNow.done, movingNow.total),
+                progress = movingNow.done.toFloat() / movingNow.total.coerceAtLeast(1),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .then(if (stack.size == 1 && !hideNavigationBar.value) Modifier else Modifier.navigationBarsPadding())
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp + padding.calculateBottomPadding()),
+            )
+        }
         val progress = reading
-        if (readingShown && progress != null && !wizard && !(shareShown && sharingNow != null)) {
+        if (readingShown && progress != null && !wizard && !(shareShown && sharingNow != null) && !(movingShown && movingNow != null)) {
             StatusCard(
                 title = stringResource(R.string.status_reading),
                 line = stringResource(R.string.progress_read, progress.done, progress.total),
@@ -516,6 +554,17 @@ fun GalleryApp() {
                 request.onEnd(last)
             }
         }
+    }
+    // Move to vault's question (SPEC §18.5): it can't be undone – the items leave the gallery and every other app
+    vaultActions?.asking?.let { (items, _) ->
+        ConfirmDestructiveDialog(
+            R.drawable.ic_lock,
+            if (items.size == 1) stringResource(R.string.title_move_to_vault_one) else stringResource(R.string.title_move_to_vault, items.size),
+            AnnotatedString(stringResource(R.string.desc_move_to_vault)),
+            stringResource(R.string.button_move),
+            onConfirm = vaultActions::confirm,
+            onDismiss = vaultActions::dismiss,
+        )
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }
     if (offering) {

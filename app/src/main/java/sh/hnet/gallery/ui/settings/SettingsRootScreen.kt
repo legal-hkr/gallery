@@ -13,8 +13,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.hnet.gallery.BuildConfig
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
+import sh.hnet.gallery.data.vault.Vault
 import sh.hnet.gallery.model.SlideTransition
 import sh.hnet.gallery.model.Slideshow
+import sh.hnet.gallery.model.VaultLockDelay
 import sh.hnet.gallery.ui.components.MediaManagement
 import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
@@ -26,10 +28,12 @@ import sh.hnet.gallery.ui.components.SettingsPage
  * tab by the top bar's icon, so with Back.
  */
 @Composable
-fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenSlideshow: () -> Unit, onOpenPlaces: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenSlideshow: () -> Unit, onOpenPlaces: () -> Unit, onOpenVault: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     val removeLocation by (context.applicationContext as GalleryApplication).preferences.shareWithoutLocation.collectAsStateWithLifecycle(true)
     val placeNames by (context.applicationContext as GalleryApplication).preferences.placeNames.collectAsStateWithLifecycle(true)
+    val vaultState by (context.applicationContext as GalleryApplication).vault.state.collectAsStateWithLifecycle()
+    val vaultDelay by (context.applicationContext as GalleryApplication).preferences.vaultLockDelay.collectAsStateWithLifecycle(VaultLockDelay.AT_ONCE)
     val slideSeconds by (context.applicationContext as GalleryApplication).preferences.slideSeconds.collectAsStateWithLifecycle(Slideshow.DEFAULT_SECONDS)
     val slideTransition by (context.applicationContext as GalleryApplication).preferences.slideTransition.collectAsStateWithLifecycle(SlideTransition.CROSSFADE)
     val version = BuildConfig.VERSION_NAME.removePrefix("v")
@@ -64,6 +68,9 @@ fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewe
                     stringResource(if (placeNames) R.string.settings_places_on else R.string.settings_places_off),
                     onClick = onOpenPlaces,
                 )
+            }
+            row { shapes ->
+                SettingsNavigationRow(shapes, R.drawable.ic_lock, stringResource(R.string.label_vault), vaultSettingsLine(vaultState, vaultDelay), error = vaultState is Vault.State.Lost, onClick = onOpenVault)
             }
         }
         // Media management (SPEC §20.1, LOGIKA §15.11): whether it is given, and the system's page; read again on every return

@@ -96,8 +96,7 @@ internal val CollectionKind.icon: Int
 
 /**
  * The Albums tab (SPEC §9.1–§9.2, SPEC-albums §9.2–§9.6): the top bar with New album and Settings, the
- * partial-access card, the collections as tonal tiles in two columns – Places (S6) and the vault (S8)
- * disabled, the vault never with a count, Trash without one when empty, Screenshots gone when its folders
+ * partial-access card, the collections as tonal tiles in two columns – Places (S6) and the vault (S8b), the vault never with a count, Trash without one when empty, Screenshots gone when its folders
  * are hidden – then the albums of both kinds in one list, pinned first, sorted by the header's menu. A long
  * press selects albums (the collections leave meanwhile); the toolbar offers only what applies to all.
  */
@@ -109,6 +108,7 @@ fun AlbumsScreen(
     onOpenAlbum: (Long) -> Unit,
     onOpenTrash: () -> Unit,
     onOpenPlaces: () -> Unit = {},
+    onOpenVault: () -> Unit = {},
     /** A new album: its page with the picker over it (SPEC-albums §9.6). */
     onNewAlbum: (Long) -> Unit = onOpenAlbum,
     viewModel: AlbumsViewModel = viewModel(),
@@ -178,7 +178,7 @@ fun AlbumsScreen(
                         }
                     }
                     item(key = "trash") { CollectionTile(R.drawable.ic_delete, stringResource(R.string.label_trash), state.trash.takeIf { it > 0 }?.let(number::format), onClick = onOpenTrash) }
-                    item(key = "vault") { CollectionTile(R.drawable.ic_lock, stringResource(R.string.label_vault), null, enabled = false) {} }
+                    item(key = "vault") { CollectionTile(R.drawable.ic_lock, stringResource(R.string.label_vault), null, onClick = onOpenVault) }
                 }
                 if (albums.isNotEmpty()) {
                     if (selected.isEmpty()) item(key = "header:albums", span = { GridItemSpan(maxLineSpan) }) { AlbumsHeader(state.sort, viewModel::setSort) }

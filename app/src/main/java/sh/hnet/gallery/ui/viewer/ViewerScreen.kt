@@ -134,6 +134,7 @@ import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.ShareButton
 import sh.hnet.gallery.ui.slideshow.LocalSlideshow
 import sh.hnet.gallery.ui.slideshow.SlideshowRequest
+import sh.hnet.gallery.ui.vault.LocalVaultActions
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
 private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
@@ -205,6 +206,7 @@ fun ViewerScreen(
     }
     var currentId by rememberSaveable { mutableLongStateOf(start) }
     val slideshow = LocalSlideshow.current
+    val vault = LocalVaultActions.current
     // The pages as they are when a slideshow ends (items may have gone meanwhile)
     val latestPages by rememberUpdatedState(pages)
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
@@ -491,6 +493,8 @@ fun ViewerScreen(
                                 })
                             }
                         } else null,
+                        // Move to vault (SPEC §18.5): the item leaves the pages as one this viewer removed itself
+                        onMoveToVault = vault?.takeIf { !readOnly && !trash && !item.outside }?.let { v -> { v.moveIn(listOf(item)) { ownTrashed.add(item.id) } } },
                     )
                 }
             }
@@ -655,6 +659,7 @@ private fun Toolbar(
     onOpenWith: () -> Unit,
     onEdit: (() -> Unit)? = null,
     onSlideshow: (() -> Unit)? = null,
+    onMoveToVault: (() -> Unit)? = null,
 ) {
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
@@ -670,7 +675,7 @@ private fun Toolbar(
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         Box {
             TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { if (locked) unlock { more = true } else more = true })
-            MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith, onSlideshow = onSlideshow)
+            MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith, onSlideshow = onSlideshow, onMoveToVault = onMoveToVault)
         }
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
@@ -689,6 +694,7 @@ private fun MoreMenu(
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
     onSlideshow: (() -> Unit)?,
+    onMoveToVault: (() -> Unit)?,
 ) {
     DropdownMenuPopup(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 3)) {
@@ -711,7 +717,7 @@ private fun MoreMenu(
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(1, 3)) {
             MenuItem(stringResource(R.string.menu_set_as), R.drawable.ic_wallpaper, 0, 3) { onDismiss(); onSetAs() }
             MenuItem(stringResource(R.string.menu_slideshow_from_here), R.drawable.ic_slideshow, 1, 3, enabled = onSlideshow != null) { onDismiss(); onSlideshow?.invoke() }
-            MenuItem(stringResource(R.string.action_move_to_vault), R.drawable.ic_lock, 2, 3, enabled = false) {}
+            MenuItem(stringResource(R.string.action_move_to_vault), R.drawable.ic_lock, 2, 3, enabled = onMoveToVault != null) { onDismiss(); onMoveToVault?.invoke() }
         }
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(2, 3)) {

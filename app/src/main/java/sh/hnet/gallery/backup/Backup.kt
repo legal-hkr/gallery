@@ -69,6 +69,8 @@ data class BackupSettings(
     /** A slideshow photo's seconds and the transition (Settings › Slideshow). */
     val slideSeconds: Int? = null,
     val slideTransition: String? = null,
+    /** When the vault locks (Settings › Vault): `AT_ONCE`, `ONE_MINUTE`, `FIVE_MINUTES`. Never the vault itself. */
+    val vaultLockDelay: String? = null,
 )
 
 /**
