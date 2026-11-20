@@ -53,8 +53,9 @@ import sh.hnet.gallery.ui.viewer.ViewerScreen
  */
 class ViewerActivity : ComponentActivity() {
 
-    // Dark mode switched in place (configChanges has uiMode, so nothing on screen is lost – review before v0.1.0): the
-    // system bars' icons follow it again
+    // Dark mode or the language switched in place (configChanges has uiMode and locale, so nothing on screen is lost –
+    // review before v0.1.0; the owner: a change of language closed the editor and reset the map): the system bars'
+    // icons follow the mode again
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         enableEdgeToEdge()

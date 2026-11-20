@@ -81,6 +81,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -697,7 +698,9 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
             // The value in a width of its own, the widest it can be ("-45,0°"), figures of one width: a value of other length
             // made the slider beside it longer or shorter, so the same finger meant another angle (owner's test of S7)
             val style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum")
-            val number = remember { NumberFormat.getNumberInstance().apply { minimumFractionDigits = 1; maximumFractionDigits = 1 } }
+            // In the app's language as it is now (a change of language keeps the editor open)
+            val locale = LocalConfiguration.current.locales[0]
+            val number = remember(locale) { NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = 1; maximumFractionDigits = 1 } }
             val measurer = rememberTextMeasurer()
             val widest = stringResource(R.string.format_degrees, number.format(-EditGeometry.MAX_ANGLE))
             val valueWidth = with(LocalDensity.current) { remember(widest, style) { measurer.measure(widest, style).size.width }.toDp() }
