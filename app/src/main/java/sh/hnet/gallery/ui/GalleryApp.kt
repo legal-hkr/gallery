@@ -73,6 +73,7 @@ import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.model.CollectionKind
 import sh.hnet.gallery.model.FolderKey
+import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.PickRequest
 import sh.hnet.gallery.model.TimelineFolders
 import sh.hnet.gallery.ui.albums.AlbumPage
@@ -91,6 +92,7 @@ import sh.hnet.gallery.ui.components.MediaManagementOfferSheet
 import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.rememberConsent
+import sh.hnet.gallery.ui.editor.EditorScreen
 import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
 import sh.hnet.gallery.ui.map.MapScreen
 import sh.hnet.gallery.ui.photos.PhotosScreen
@@ -166,6 +168,8 @@ fun GalleryApp() {
     var wizard by rememberSaveable { mutableStateOf(!MediaAccess.wizardDone(appContext)) }
     // The viewer over everything, while open (LOGIKA §1); not kept over the process's death (SPEC §3.3)
     var viewer by remember { mutableStateOf<ViewerRequest?>(null) }
+    // The editor over the viewer (S7, D24)
+    var editing by remember { mutableStateOf<MediaItem?>(null) }
     var overViewer by remember { mutableStateOf<Screen?>(null) }
     val origins = remember { MediaOrigins() }
     val consent = rememberConsent()
@@ -428,7 +432,7 @@ fun GalleryApp() {
         key(request) {
             ViewerHost(request, snackbars, messages, onClose = { viewer = null }, onOpenFolder = { item ->
                 overViewer = if (TimelineFolders.isScreenshots(item.path)) Screen.Collection(CollectionKind.SCREENSHOTS.name) else Screen.Folder(item.folder.key)
-            }, onOpenMap = { lat, lon -> overViewer = Screen.Map(lat, lon) })
+            }, onOpenMap = { lat, lon -> overViewer = Screen.Map(lat, lon) }, onEdit = { editing = it })
         }
     }
     // An album opened from Info's folder row lies over the viewer; Back returns to the photo (the owner, over SPEC-albums §3.3's "with the sheet open": the row closes the sheet)
@@ -468,6 +472,28 @@ fun GalleryApp() {
                 }, lat = screen.lat, lon = screen.lon)
             }
         }
+        }
+    }
+    // In and out with the shared axis X, as the page over the viewer (owner's test of S7: it came and went at once);
+    // the item kept for its way out
+    val shownEditing = remember { arrayOfNulls<MediaItem>(1) }
+    editing?.let { shownEditing[0] = it }
+    AnimatedVisibility(
+        visible = editing != null,
+        enter = slideInHorizontally(spatial) { shift } + fadeIn(effects),
+        exit = slideOutHorizontally(spatial) { shift } + fadeOut(fastEffects),
+    ) {
+        val item = shownEditing[0] ?: return@AnimatedVisibility
+        key(item.id) {
+            EditorScreen(item, onClose = { editing = null }, onCopySaved = { copy ->
+                // The viewer goes on to the copy, right after the photo it was made from
+                val open = viewer
+                val ids = open?.ids.orEmpty().toMutableList()
+                val at = ids.indexOf(item.id)
+                if (at >= 0) ids.add(at + 1, copy) else ids.add(copy)
+                editing = null
+                viewer = ViewerRequest(ids, copy, album = open?.album) {}
+            })
         }
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }

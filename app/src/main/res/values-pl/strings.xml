@@ -391,4 +391,45 @@
     <string name="label_country">Kraj</string>
     <string name="label_album">Album</string>
     <string name="label_date">Data</string>
+    <!-- Stage S7 (mine) -->
+    <string name="content_description_hold_original">Przytrzymaj, aby zobaczyć oryginał</string>
+    <string name="desc_replace_format">Ten typ można zapisać tylko jako kopię (JPEG).</string>
+    <string name="desc_replace_location">Aplikacja nie ma dostępu do lokalizacji w zdjęciach, więc zastąpienie usunęłoby ją z oryginału.</string>
+    <string name="content_description_swap_ratio">Zamień orientację proporcji</string>
+    <!-- Stage S7 -->
+    <string name="button_discard">Odrzuć</string>
+    <string name="button_keep_editing">Edytuj dalej</string>
+    <string name="button_replace">Zastąp</string>
+    <string name="button_saving">Zapisywanie…</string>
+    <string name="content_description_flip">Odbij</string>
+    <string name="content_description_redo">Ponów</string>
+    <string name="content_description_reset_all">Cofnij wszystkie zmiany</string>
+    <string name="content_description_reset_value">Przywróć wartość (%1$s)</string>
+    <string name="content_description_rotate">Obróć</string>
+    <string name="content_description_undo">Cofnij</string>
+    <string name="desc_discard_photo">Zmiany w tym zdjęciu nie zostały zapisane.</string>
+    <string name="desc_replace_motion">Ruch zdjęcia ruchomego zostanie usunięty.</string>
+    <string name="desc_replace_original">Tej operacji nie można cofnąć.</string>
+    <string name="desc_replace_original_confirm">Oryginał (%1$s) zostanie zastąpiony edytowaną wersją. Tej operacji nie można cofnąć.</string>
+    <string name="desc_save_copy">Obok oryginału, w tym samym folderze.</string>
+    <string name="file_suffix_edited">-edytowane</string>
+    <string name="format_degrees">%1$s°</string>
+    <string name="label_original">Oryginał</string>
+    <string name="label_straighten">Prostowanie</string>
+    <string name="menu_motion_note">Zdjęcie ruchome zostanie zapisane bez ruchu.</string>
+    <string name="menu_replace_original">Zastąp oryginał</string>
+    <string name="menu_save_copy">Zapisz jako kopię</string>
+    <string name="msg_copy_saved">Zapisano kopię</string>
+    <string name="msg_copy_saved_no_motion">Zapisano kopię (bez ruchu)</string>
+    <string name="msg_original_replaced">Zastąpiono oryginał</string>
+    <string name="msg_original_replaced_no_motion">Zastąpiono oryginał (bez ruchu)</string>
+    <string name="ratio_free">Dowolne</string>
+    <string name="ratio_original">Oryginalne</string>
+    <string name="ratio_square">Kwadrat</string>
+    <string name="tab_adjust">Dostosuj</string>
+    <string name="tab_crop">Kadruj</string>
+    <string name="tab_draw">Rysuj</string>
+    <string name="tab_filters">Filtry</string>
+    <string name="title_discard_changes">Odrzucić zmiany?</string>
+    <string name="title_replace_original">Zastąpić oryginał?</string>
 </resources>

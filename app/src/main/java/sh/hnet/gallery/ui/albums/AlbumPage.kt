@@ -53,6 +53,7 @@ import kotlinx.coroutines.launch
 import sh.hnet.gallery.R
 import sh.hnet.gallery.model.CollectionKind
 import sh.hnet.gallery.model.MediaItem
+import sh.hnet.gallery.model.PlaceKey
 import sh.hnet.gallery.model.SourceState
 import sh.hnet.gallery.model.TimelineEntry
 import sh.hnet.gallery.ui.components.EmptyState
@@ -62,7 +63,6 @@ import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.components.albumPath
-import sh.hnet.gallery.model.PlaceKey
 import sh.hnet.gallery.ui.components.groupName
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage

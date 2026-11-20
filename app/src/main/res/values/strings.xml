@@ -390,4 +390,45 @@
     <string name="label_country">Country</string>
     <string name="label_album">Album</string>
     <string name="label_date">Date</string>
+    <!-- Stage S7 (mine) -->
+    <string name="content_description_hold_original">Hold to see the original</string>
+    <string name="desc_replace_format">This type is saved as a copy only (JPEG).</string>
+    <string name="desc_replace_location">Gallery can’t read the location in photos, so replacing would remove it from the original.</string>
+    <string name="content_description_swap_ratio">Swap the ratio’s orientation</string>
+    <!-- Stage S7 -->
+    <string name="button_discard">Discard</string>
+    <string name="button_keep_editing">Keep editing</string>
+    <string name="button_replace">Replace</string>
+    <string name="button_saving">Saving…</string>
+    <string name="content_description_flip">Flip</string>
+    <string name="content_description_redo">Redo</string>
+    <string name="content_description_reset_all">Reset all</string>
+    <string name="content_description_reset_value">Reset (%1$s)</string>
+    <string name="content_description_rotate">Rotate</string>
+    <string name="content_description_undo">Undo</string>
+    <string name="desc_discard_photo">Changes to this photo haven’t been saved.</string>
+    <string name="desc_replace_motion">The motion will be removed from the motion photo.</string>
+    <string name="desc_replace_original">This can’t be undone.</string>
+    <string name="desc_replace_original_confirm">The original (%1$s) will be replaced with the edited version. This can’t be undone.</string>
+    <string name="desc_save_copy">Next to the original, in the same folder.</string>
+    <string name="file_suffix_edited">-edited</string>
+    <string name="format_degrees">%1$s°</string>
+    <string name="label_original">Original</string>
+    <string name="label_straighten">Straighten</string>
+    <string name="menu_motion_note">The motion photo will be saved without motion.</string>
+    <string name="menu_replace_original">Replace original</string>
+    <string name="menu_save_copy">Save as copy</string>
+    <string name="msg_copy_saved">Copy saved</string>
+    <string name="msg_copy_saved_no_motion">Copy saved (without motion)</string>
+    <string name="msg_original_replaced">Original replaced</string>
+    <string name="msg_original_replaced_no_motion">Original replaced (without motion)</string>
+    <string name="ratio_free">Free</string>
+    <string name="ratio_original">Original</string>
+    <string name="ratio_square">Square</string>
+    <string name="tab_adjust">Adjust</string>
+    <string name="tab_crop">Crop</string>
+    <string name="tab_draw">Draw</string>
+    <string name="tab_filters">Filters</string>
+    <string name="title_discard_changes">Discard changes?</string>
+    <string name="title_replace_original">Replace the original?</string>
 </resources>

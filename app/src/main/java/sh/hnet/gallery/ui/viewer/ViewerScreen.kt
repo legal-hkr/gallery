@@ -169,6 +169,8 @@ fun ViewerScreen(
     onOpenFolder: (MediaItem) -> Unit = {},
     /** Info's small map (SPEC §7.3): the map page at the item's point; none where no map can open. */
     onOpenMap: ((Double, Double) -> Unit)? = null,
+    /** The editor over the viewer (S7); none where it can't open (another app's viewer). */
+    onEdit: ((MediaItem) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -332,6 +334,7 @@ fun ViewerScreen(
     }
     // HDR only while an HDR photo is settled, and not after its toggle (SPEC §6.1, §7.4)
     LaunchedEffect(currentId, hdr, sdr, window) {
+        // At once: easing the headroom in and out looked worse on Android 17 than the switch (owner's test of S7)
         window?.colorMode = if (hdr && !sdr) ActivityInfo.COLOR_MODE_HDR else ActivityInfo.COLOR_MODE_DEFAULT
     }
     // A motion photo plays once, muted, when its page settles (SPEC §7.5)
@@ -467,6 +470,7 @@ fun ViewerScreen(
                         },
                         onSetAs = { open(context, item, Intent.ACTION_ATTACH_DATA) },
                         onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
+                        onEdit = onEdit?.let { edit -> { unlock { edit(item) } } },
                         onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
                     )
                 }
@@ -630,11 +634,13 @@ private fun Toolbar(
     onSetAs: () -> Unit,
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
+    onEdit: (() -> Unit)? = null,
 ) {
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
         ShareButton(onShare)
-        if (item.mime !in NOT_EDITABLE) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), {}, enabled = false)
+        // Edit (S7): photos; videos' trimming comes with S9 (D5)
+        if (item.mime !in NOT_EDITABLE) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), { onEdit?.invoke() }, enabled = onEdit != null && !item.video)
         TooltipIconButton(
             if (item.favorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite,
             stringResource(if (item.favorite) R.string.action_unfavorite else R.string.action_favorite),
