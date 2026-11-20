@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,7 +40,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
@@ -92,7 +90,6 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
     val facts by viewModel.facts.collectAsStateWithLifecycle()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     val grid = rememberLazyGridState()
     val today = remember(state) { LocalDate.now() }
     val scope = rememberCoroutineScope()
@@ -122,7 +119,6 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
             TopAppBar(
                 title = { Text(stringResource(R.string.label_nav_photos), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
                 actions = { TooltipIconButton(R.drawable.ic_settings, stringResource(R.string.content_description_settings), onOpenSettings) },
-                scrollBehavior = scrollBehavior,
             )
         }
         when (val current = state) {
@@ -152,7 +148,7 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                     val topCountNow by rememberUpdatedState(topCount)
                     val entries = timeline.entries
                     val monthYear = stringResource(R.string.format_month_year)
-                    Box(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
+                    Box(Modifier.fillMaxSize()) {
                         MediaGrid(
                             current.days,
                             current.months,
