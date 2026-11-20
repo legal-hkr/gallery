@@ -1,5 +1,7 @@
 package sh.hnet.gallery.ui.map
 
+import android.graphics.Paint
+import android.graphics.Path
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.VectorConverter
@@ -13,9 +15,11 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -24,12 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -45,11 +47,14 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.withTranslation
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.model.Border
@@ -169,7 +174,17 @@ fun WorldMap(
     val countryStyle = MaterialTheme.typography.labelMedium.copy(color = scheme.onSurface, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
     val regionStyle = MaterialTheme.typography.labelSmall.copy(color = scheme.outline, fontStyle = FontStyle.Italic)
     val locale = LocalConfiguration.current.locales[0]
-    val paths = remember(data) { HashMap<Long, Path>() }
+    // The base map drawn as vectors on every frame, the way the GPU does it cheaply (owner's phone tests of S6b2:
+    // the first vector map was slow, a picture drawn off the main thread and then tiles loaded in visibly). What made
+    // the first one slow was ours: lines 1 dp wide at a scale new every frame, which the system turns into outlines on
+    // the processor again each frame, and dashes cut on the processor too; and paths made while a frame was drawn.
+    // Now borders are hairlines (one screen pixel at any scale, drawn by the GPU as they are), solid, and paths are
+    // made off the main thread – a place not made yet at its level shows a coarser one meanwhile
+    val store = remember(data) { MapPaths(data) }
+    LaunchedEffect(store) { store.build() }
+    val land = remember(scheme.surfaceContainerLowest) { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = scheme.surfaceContainerLowest.toArgb(); style = Paint.Style.FILL } }
+    val countryLine = remember(scheme.outline) { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = scheme.outline.toArgb(); style = Paint.Style.STROKE; strokeWidth = 0f } }
+    val regionLine = remember(scheme.outlineVariant) { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = scheme.outlineVariant.toArgb(); style = Paint.Style.STROKE; strokeWidth = 0f } }
     val labels = remember(data, language) { HashMap<Long, TextLayoutResult>() }
     val anchors = remember(data) { HashMap<Long, Offset>() }
     // Boxes and the labels' order (largest first) once, not on every frame
@@ -272,30 +287,26 @@ fun WorldMap(
         if (state.size.width == 0) return@Canvas
         drawRect(scheme.surfaceContainerHigh)
         val world = state.world
-        // The coarsest level whose simplification stays under a pixel and a half
         val perDegree = state.pxPerDegree
-        val level = LEVELS.indexOfFirst { it * perDegree <= 1.5 }.let { if (it < 0) LEVELS.lastIndex else it }
         val view = viewBox(state)
-        val hair = with(density) { 1.dp.toPx() }
-        val regions = perDegree >= REGIONS_FROM
-        withTransform({
-            translate((state.size.width / 2.0 - state.x * world).toFloat(), (state.size.height / 2.0 - state.y * world).toFloat())
-            scale(world.toFloat(), world.toFloat(), Offset.Zero)
-        }) {
-            val stroke = Stroke(width = (hair / world).toFloat())
-            for (c in 0 until data.countryCount) {
-                if (!view.meets(countryBoxes[c])) continue
-                val path = paths.getOrPut(key(0, c, level)) { pathOf(data.countryBorder(c, level)) }
-                drawPath(path, scheme.surfaceContainerLowest)
-                drawPath(path, scheme.outlineVariant, style = stroke)
-            }
-            if (regions) {
-                val dash = with(density) { floatArrayOf((3.dp.toPx() / world).toFloat(), (2.dp.toPx() / world).toFloat()) }
-                val dashed = Stroke(width = (hair / world).toFloat(), pathEffect = PathEffect.dashPathEffect(dash))
-                for (r in 0 until data.regionCount) {
-                    if (!view.meets(regionBoxes[r])) continue
-                    val path = paths.getOrPut(key(1, r, 2)) { pathOf(data.regionBorder(r, 2)) }
-                    drawPath(path, scheme.outlineVariant, style = dashed)
+        // Land, country borders, then regions from where they are useful; coarser paths while finer ones are made
+        store.version
+        val level = LEVELS.indexOfFirst { it * perDegree <= 1.5 }.let { if (it < 0) LEVELS.lastIndex else it }
+        drawIntoCanvas { canvas ->
+            val native = canvas.nativeCanvas
+            native.withTranslation((state.size.width / 2.0 - state.x * world).toFloat(), (state.size.height / 2.0 - state.y * world).toFloat()) {
+                scale(world.toFloat(), world.toFloat())
+                for (c in 0 until data.countryCount) {
+                    if (!view.meets(countryBoxes[c])) continue
+                    val path = store.country(c, level) ?: continue
+                    drawPath(path, land)
+                    drawPath(path, countryLine)
+                }
+                if (perDegree >= REGIONS_FROM) {
+                    for (r in 0 until data.regionCount) {
+                        if (!view.meets(regionBoxes[r])) continue
+                        drawPath(store.region(r) ?: continue, regionLine)
+                    }
                 }
             }
         }
@@ -329,7 +340,7 @@ fun WorldMap(
             val cy = state.screenY(city.y)
             if (cx < 0 || cy < 0 || cx > size.width || cy > size.height) continue
             val text = cityLabels.getOrPut(city.index) { measurer.measure(data.settlementName(city.index, language), cityStyle) }
-            val rect = androidx.compose.ui.geometry.Rect(cx - dot, cy - text.size.height / 2f, cx + dot + gap + text.size.width, cy + text.size.height / 2f)
+            val rect = Rect(cx - dot, cy - text.size.height / 2f, cx + dot + gap + text.size.width, cy + text.size.height / 2f)
             if (rect.right > size.width || taken.any { it.overlaps(rect) }) continue
             taken.add(rect)
             drawCircle(scheme.onSurfaceVariant, dot, Offset(cx, cy))
@@ -358,9 +369,62 @@ private fun DrawScope.viewBox(state: MapState): ViewBox {
     )
 }
 
+/**
+ * The map's paths (the unit square, once per place and level), made off the main thread: the whole world's coarsest
+ * at once, the rest as a frame asks for them. A frame takes what is made – for a country, the finest made up to the
+ * level asked – and [version] moves with every batch made, for the frame to take the new ones.
+ */
+@Stable
+private class MapPaths(private val data: PlaceData) {
+    var version by mutableIntStateOf(0)
+        private set
+    private val made = ConcurrentHashMap<Long, Path>()
+    private val asked = Channel<Long>(Channel.UNLIMITED)
+    private val pending = ConcurrentHashMap.newKeySet<Long>()
+
+    /** A country's path at [level], else the finest made below it; null until its coarsest is made. */
+    fun country(index: Int, level: Int): Path? {
+        made[key(0, index, level)]?.let { return it }
+        ask(key(0, index, level))
+        for (l in level - 1 downTo 0) made[key(0, index, l)]?.let { return it }
+        return null
+    }
+
+    fun region(index: Int): Path? = made[key(1, index, 2)] ?: run {
+        ask(key(1, index, 2))
+        null
+    }
+
+    private fun ask(key: Long) {
+        if (pending.add(key)) asked.trySend(key)
+    }
+
+    /** Makes the world's coarsest paths, then what frames ask for, in batches; runs while the map is shown. */
+    suspend fun build() {
+        withContext(Dispatchers.Default) {
+            for (c in 0 until data.countryCount) made[key(0, c, 0)] = pathOf(data.countryBorder(c, 0))
+        }
+        version++
+        while (true) {
+            val first = asked.receive()
+            val batch = ArrayList<Long>().apply { add(first) }
+            while (true) batch.add(asked.tryReceive().getOrNull() ?: break)
+            withContext(Dispatchers.Default) {
+                for (key in batch) {
+                    val kind = (key shr 40).toInt()
+                    val level = ((key shr 32) and 0xFF).toInt()
+                    val index = (key and 0xFFFFFFFFL).toInt()
+                    made[key] = pathOf(if (kind == 0) data.countryBorder(index, level) else data.regionBorder(index, level))
+                }
+            }
+            version++
+        }
+    }
+}
+
 /** A border as a path on the unit square; holes by the even–odd rule, as the data's rings are. */
 private fun pathOf(border: Border): Path = Path().apply {
-    fillType = PathFillType.EvenOdd
+    fillType = Path.FillType.EVEN_ODD
     for (ring in border.rings) {
         for (i in 0 until ring.size / 2) {
             val px = Mercator.x(ring[i * 2] / 1e4).toFloat()
