@@ -67,6 +67,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -131,6 +132,8 @@ import sh.hnet.gallery.ui.components.label
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.ShareButton
+import sh.hnet.gallery.ui.slideshow.LocalSlideshow
+import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
 private val NOT_EDITABLE = setOf("image/gif", "image/x-adobe-dng")
@@ -158,6 +161,8 @@ fun ViewerScreen(
     revealed: Boolean = true,
     /** Opened by the picker's long press to check an item (SPEC §17.4): Info is the only action. */
     readOnly: Boolean = false,
+    /** Where the opening came from (an album's name, Photos): the slideshow's position line; none, no slideshow from here. */
+    title: String? = null,
     extra: List<MediaItem> = emptyList(),
     locked: Boolean = false,
     unlock: (() -> Unit) -> Unit = { it() },
@@ -199,6 +204,9 @@ fun ViewerScreen(
         return allAlbums.orEmpty().filter { it.id in ids }.sortedBy { it.name.lowercase() }.map { it.id to it.name }
     }
     var currentId by rememberSaveable { mutableLongStateOf(start) }
+    val slideshow = LocalSlideshow.current
+    // The pages as they are when a slideshow ends (items may have gone meanwhile)
+    val latestPages by rememberUpdatedState(pages)
     val pager = rememberPagerState(initialPage = pages.indexOf(start).coerceAtLeast(0)) { pages.size }
     val dismiss = rememberViewerDismissState()
     var chrome by rememberSaveable { mutableStateOf(true) }
@@ -472,6 +480,17 @@ fun ViewerScreen(
                         onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
                         onEdit = onEdit?.let { edit -> { unlock { edit(item) } } },
                         onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
+                        // Slideshow from here (SPEC §16): this opening's pages from this one; on its end the viewer goes on
+                        // at the item the show stopped at
+                        onSlideshow = if (title != null && slideshow != null && !trash) {
+                            {
+                                playback.item?.let { player.pauseFor(it) }
+                                slideshow(SlideshowRequest(pages, item.id, title) { last ->
+                                    val at = latestPages.indexOf(last)
+                                    if (at >= 0) scope.launch { pager.scrollToPage(at) }
+                                })
+                            }
+                        } else null,
                     )
                 }
             }
@@ -635,6 +654,7 @@ private fun Toolbar(
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
     onEdit: (() -> Unit)? = null,
+    onSlideshow: (() -> Unit)? = null,
 ) {
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
@@ -650,7 +670,7 @@ private fun Toolbar(
         TooltipIconButton(R.drawable.ic_info, stringResource(R.string.action_info), onInfo)
         Box {
             TooltipIconButton(R.drawable.ic_more_horiz, stringResource(R.string.action_more), { if (locked) unlock { more = true } else more = true })
-            MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith)
+            MoreMenu(more, onDismiss = { more = false }, removeFrom = removeFrom, onRemoveFromAlbum = onRemoveFromAlbum, onAddToAlbum = onAddToAlbum, onRename = onRename, onSetAs = onSetAs, onEditElsewhere = onEditElsewhere, onOpenWith = onOpenWith, onSlideshow = onSlideshow)
         }
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error))
     }
@@ -668,6 +688,7 @@ private fun MoreMenu(
     onSetAs: () -> Unit,
     onEditElsewhere: () -> Unit,
     onOpenWith: () -> Unit,
+    onSlideshow: (() -> Unit)?,
 ) {
     DropdownMenuPopup(expanded = expanded, onDismissRequest = onDismiss) {
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, 3)) {
@@ -689,7 +710,7 @@ private fun MoreMenu(
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(1, 3)) {
             MenuItem(stringResource(R.string.menu_set_as), R.drawable.ic_wallpaper, 0, 3) { onDismiss(); onSetAs() }
-            MenuItem(stringResource(R.string.menu_slideshow_from_here), R.drawable.ic_slideshow, 1, 3, enabled = false) {}
+            MenuItem(stringResource(R.string.menu_slideshow_from_here), R.drawable.ic_slideshow, 1, 3, enabled = onSlideshow != null) { onDismiss(); onSlideshow?.invoke() }
             MenuItem(stringResource(R.string.action_move_to_vault), R.drawable.ic_lock, 2, 3, enabled = false) {}
         }
         Spacer(Modifier.height(MenuDefaults.GroupSpacing))

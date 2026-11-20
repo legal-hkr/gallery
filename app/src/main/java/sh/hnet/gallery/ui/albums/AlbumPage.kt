@@ -73,6 +73,8 @@ import sh.hnet.gallery.ui.grid.SelectionTopBar
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.settings.icon
+import sh.hnet.gallery.ui.slideshow.LocalSlideshow
+import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -80,7 +82,7 @@ import sh.hnet.gallery.ui.viewer.ViewerRequest
  * album (SPEC-albums §9.10). The timeline's grid (the same steps and pinch, selecting as in Photos) over
  * its items, with a sort chip – newest or oldest first, a source also by file name (a plain grid) – and,
  * for a source and Screenshots, the state chip. A source's ⋮ has Pin and Hide folder; hiding, or the folder
- * emptied, closes the page. Slideshow is S8's (disabled, D5).
+ * emptied, closes the page. Slideshow from the top bar (S8a).
  */
 @Composable
 fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, onAddPhotos: (() -> Unit)? = null, viewModel: PageViewModel = viewModel(key = key.toString())) {
@@ -103,6 +105,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         if (selection.selected.any { it !in present }) selection.selected = selection.selected.filterTo(HashSet()) { it in present }
     }
     val folder = (key as? PageKey.Folder)?.folder
+    val slideshow = LocalSlideshow.current
     val userAlbum = (key as? PageKey.User)?.id
     val title = when (key) {
         is PageKey.Collection -> stringResource(key.kind.title)
@@ -181,8 +184,10 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                     }
                 },
                 actions = {
-                    // Slideshow (S8) hides while a user album is empty (SPEC-albums §9.9)
-                    if (!(userAlbum != null && shown?.count == 0)) TooltipIconButton(R.drawable.ic_slideshow, stringResource(R.string.action_slideshow), {}, enabled = false)
+                    // Slideshow hides while a user album is empty (SPEC-albums §9.9); the page's order, from its first item
+                    if (!(userAlbum != null && shown?.count == 0)) {
+                        TooltipIconButton(R.drawable.ic_slideshow, stringResource(R.string.action_slideshow), { allIds.firstOrNull()?.let { slideshow?.invoke(SlideshowRequest(allIds, it, title)) } }, enabled = slideshow != null && allIds.isNotEmpty())
+                    }
                     if (userAlbum != null && shown != null) {
                         Box {
                             TooltipIconButton(R.drawable.ic_more_vert, stringResource(R.string.action_more), { menu = true })
@@ -291,7 +296,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                 selection = selection,
                 bottomPadding = if (selection.active) 96.dp else 0.dp,
                 onOpen = { item ->
-                    onOpen(ViewerRequest(allIds, item.id, album = userAlbum) { id ->
+                    onOpen(ViewerRequest(allIds, item.id, album = userAlbum, title = title) { id ->
                         // The grid under the viewer follows the item shown, so the flight back lands on its tile
                         val index = timeline.indexOf[id] ?: return@ViewerRequest
                         if (grid.layoutInfo.visibleItemsInfo.none { it.index == index }) scope.launch { grid.scrollToItem(index) }
@@ -318,6 +323,10 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                                 onAddToAlbum = { adding = chosen },
                     onDelete = { actions.trash(chosen) { selection.clear() } },
                     modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+                    onSlideshow = {
+                        selection.clear()
+                        slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, title))
+                    },
                     // Remove from album: this album only, at once, with Undo (SPEC-albums §9.8)
                     onRemoveFromAlbum = userAlbum?.let { id ->
                         {

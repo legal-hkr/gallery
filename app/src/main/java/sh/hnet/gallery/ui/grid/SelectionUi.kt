@@ -139,6 +139,7 @@ fun MediaSelectionToolbar(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     onRemoveFromAlbum: (() -> Unit)? = null,
+    onSlideshow: (() -> Unit)? = null,
 ) {
     val allFavorite = items.isNotEmpty() && items.all { it.favorite }
     val scheme = MaterialTheme.colorScheme
@@ -158,8 +159,8 @@ fun MediaSelectionToolbar(
         // Remove from album on the toolbar in every grid, enabled only in a user album (the owner, over SPEC-albums §9.8's FAB),
         // after Add to album and far from Move to Trash
         TooltipIconButton(R.drawable.ic_library_remove, stringResource(R.string.action_remove_from_album), onRemoveFromAlbum ?: {}, enabled = onRemoveFromAlbum != null)
-        // S8, S8
-        TooltipIconButton(R.drawable.ic_slideshow, stringResource(R.string.action_slideshow), {}, enabled = false)
+        TooltipIconButton(R.drawable.ic_slideshow, stringResource(R.string.action_slideshow), onSlideshow ?: {}, enabled = onSlideshow != null)
+        // S8b
         TooltipIconButton(R.drawable.ic_lock, stringResource(R.string.action_move_to_vault), {}, enabled = false)
         TooltipIconButton(R.drawable.ic_delete, stringResource(R.string.action_delete), onDelete, colors = IconButtonDefaults.iconButtonColors(contentColor = scheme.error))
     }

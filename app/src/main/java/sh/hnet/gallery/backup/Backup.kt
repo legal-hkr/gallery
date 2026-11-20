@@ -66,6 +66,9 @@ data class BackupSettings(
     val collectionsOldestFirst: List<String>? = null,
     val mediaManagementOffers: Int? = null,
     val autoplayMotion: Boolean? = null,
+    /** A slideshow photo's seconds and the transition (Settings › Slideshow). */
+    val slideSeconds: Int? = null,
+    val slideTransition: String? = null,
 )
 
 /**

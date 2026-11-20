@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import sh.hnet.gallery.backup.BackupSettings
 import sh.hnet.gallery.model.GridStep
+import sh.hnet.gallery.model.SlideTransition
+import sh.hnet.gallery.model.Slideshow
 import sh.hnet.gallery.model.SourceRules
 import sh.hnet.gallery.model.SourceState
 
@@ -51,6 +53,16 @@ class Preferences(private val context: Context) {
     val autoplayMotion: Flow<Boolean> = context.settings.data.map { it[AUTOPLAY_MOTION] ?: true }.distinctUntilChanged()
 
     suspend fun setAutoplayMotion(on: Boolean) = context.settings.edit { it[AUTOPLAY_MOTION] = on }
+
+    /** A slideshow photo's seconds (Settings › Slideshow, SPEC §20.6; 5 by default). */
+    val slideSeconds: Flow<Int> = context.settings.data.map { Slideshow.seconds(it[SLIDE_SECONDS]) }.distinctUntilChanged()
+
+    suspend fun setSlideSeconds(seconds: Int) = context.settings.edit { it[SLIDE_SECONDS] = Slideshow.seconds(seconds) }
+
+    /** A slideshow's transition (Settings › Slideshow, SPEC §20.6; crossfade by default). */
+    val slideTransition: Flow<SlideTransition> = context.settings.data.map { SlideTransition.of(it[SLIDE_TRANSITION]) }.distinctUntilChanged()
+
+    suspend fun setSlideTransition(transition: SlideTransition) = context.settings.edit { it[SLIDE_TRANSITION] = transition.name }
 
     /** The collections shown oldest first (their sort chip, remembered per collection; LOGIKA §15.11), by [CollectionKind] name. */
     val collectionsOldestFirst: Flow<Set<String>> = context.settings.data.map { it[COLLECTIONS_OLDEST_FIRST].orEmpty() }.distinctUntilChanged()
@@ -95,6 +107,8 @@ class Preferences(private val context: Context) {
             collectionsOldestFirst = p[COLLECTIONS_OLDEST_FIRST].orEmpty().sorted(),
             mediaManagementOffers = p[MEDIA_MANAGEMENT_OFFERS] ?: 0,
             autoplayMotion = p[AUTOPLAY_MOTION] ?: true,
+            slideSeconds = Slideshow.seconds(p[SLIDE_SECONDS]),
+            slideTransition = SlideTransition.of(p[SLIDE_TRANSITION]).name,
         )
     }
 
@@ -109,6 +123,8 @@ class Preferences(private val context: Context) {
         backup.collectionsOldestFirst?.let { p[COLLECTIONS_OLDEST_FIRST] = it.toSet() }
         backup.mediaManagementOffers?.let { p[MEDIA_MANAGEMENT_OFFERS] = it.coerceIn(0, 2) }
         backup.autoplayMotion?.let { p[AUTOPLAY_MOTION] = it }
+        backup.slideSeconds?.let { p[SLIDE_SECONDS] = Slideshow.seconds(it) }
+        backup.slideTransition?.let { p[SLIDE_TRANSITION] = SlideTransition.of(it).name }
     }
 
     /** Restore defaults (Settings › Reset): every setting of this store back to its default. */
@@ -126,5 +142,7 @@ class Preferences(private val context: Context) {
         val MEDIA_MANAGEMENT_OFFERS = intPreferencesKey("media_management_offers")
         val AUTOPLAY_MOTION = booleanPreferencesKey("autoplay_motion")
         val COLLECTIONS_OLDEST_FIRST = stringSetPreferencesKey("collections_oldest_first")
+        val SLIDE_SECONDS = intPreferencesKey("slide_seconds")
+        val SLIDE_TRANSITION = stringPreferencesKey("slide_transition")
     }
 }

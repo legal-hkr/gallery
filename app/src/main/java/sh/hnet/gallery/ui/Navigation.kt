@@ -41,6 +41,7 @@ sealed interface Screen : NavKey {
     @Serializable data object SettingsPhotos : Screen
     @Serializable data object SettingsViewer : Screen
     @Serializable data object SettingsSharing : Screen
+    @Serializable data object SettingsSlideshow : Screen
     @Serializable data object SettingsPlaces : Screen
     @Serializable data object SettingsBackup : Screen
     @Serializable data object SettingsAbout : Screen

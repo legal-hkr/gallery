@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -89,6 +90,8 @@ import sh.hnet.gallery.ui.grid.SelectionTopBar
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.rememberSelection
 import sh.hnet.gallery.ui.places.TownRow
+import sh.hnet.gallery.ui.slideshow.LocalSlideshow
+import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -151,6 +154,8 @@ fun SearchScreen(onOpen: (ViewerRequest) -> Unit, viewModel: SearchViewModel = v
         }
         when {
             shown != null -> Results(shown, step, facts, selection, onOpen, viewModel, locale) { chosen ->
+                val slideshow = LocalSlideshow.current
+                val searchTitle = stringResource(R.string.label_nav_search)
                 MediaSelectionToolbar(
                     chosen,
                     onFavorite = { favorite -> actions.favorite(chosen, favorite, say = true) { selection.clear() } },
@@ -158,6 +163,10 @@ fun SearchScreen(onOpen: (ViewerRequest) -> Unit, viewModel: SearchViewModel = v
                     onAddToAlbum = { adding = chosen },
                     onDelete = { actions.trash(chosen) { selection.clear() } },
                     modifier = Modifier.navigationBarsPadding().padding(bottom = 16.dp),
+                    onSlideshow = {
+                        selection.clear()
+                        slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, searchTitle))
+                    },
                 )
             }
             text.isBlank() -> home?.let { Home(it, viewModel, locale) }
@@ -262,6 +271,7 @@ private fun Results(
     locale: Locale,
     toolbar: @Composable (List<MediaItem>) -> Unit,
 ) {
+    val resources = LocalResources.current
     if (!selection.active) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (part in results.parts) PartChip(part, viewModel, locale)
@@ -292,7 +302,8 @@ private fun Results(
             yearInDays = true,
             onOpen = { item ->
                 val ids = entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
-                onOpen(ViewerRequest(ids, item.id) { id ->
+                val searchName = resources.getString(R.string.label_nav_search)
+                onOpen(ViewerRequest(ids, item.id, title = searchName) { id ->
                     val index = timeline.indexOf[id] ?: return@ViewerRequest
                     if (grid.layoutInfo.visibleItemsInfo.none { it.index == index }) scope.launch { grid.scrollToItem(index) }
                 })

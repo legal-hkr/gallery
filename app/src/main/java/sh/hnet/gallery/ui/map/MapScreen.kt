@@ -204,7 +204,7 @@ fun MapScreen(onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, lat: Double? 
                             val item = items[id] ?: return@items
                             MediaThumbnail(
                                 item, 256,
-                                Modifier.aspectRatio(1f).mediaOrigin(id.toString(), 0.dp).clickable { onOpen(ViewerRequest(ids, id) {}) },
+                                Modifier.aspectRatio(1f).mediaOrigin(id.toString(), 0.dp).clickable { onOpen(ViewerRequest(ids, id, title = title) {}) },
                             )
                         }
                     }

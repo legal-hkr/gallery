@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -12,6 +13,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import sh.hnet.gallery.BuildConfig
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
+import sh.hnet.gallery.model.SlideTransition
+import sh.hnet.gallery.model.Slideshow
 import sh.hnet.gallery.ui.components.MediaManagement
 import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsNavigationRow
@@ -23,10 +26,12 @@ import sh.hnet.gallery.ui.components.SettingsPage
  * tab by the top bar's icon, so with Back.
  */
 @Composable
-fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenPlaces: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenSlideshow: () -> Unit, onOpenPlaces: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     val removeLocation by (context.applicationContext as GalleryApplication).preferences.shareWithoutLocation.collectAsStateWithLifecycle(true)
     val placeNames by (context.applicationContext as GalleryApplication).preferences.placeNames.collectAsStateWithLifecycle(true)
+    val slideSeconds by (context.applicationContext as GalleryApplication).preferences.slideSeconds.collectAsStateWithLifecycle(Slideshow.DEFAULT_SECONDS)
+    val slideTransition by (context.applicationContext as GalleryApplication).preferences.slideTransition.collectAsStateWithLifecycle(SlideTransition.CROSSFADE)
     val version = BuildConfig.VERSION_NAME.removePrefix("v")
     val language = appLanguages.firstOrNull { it.tag == currentLanguageTag(context) } ?: appLanguages.first()
     SettingsPage(title = stringResource(R.string.title_settings), onBack = onBack) {
@@ -43,6 +48,15 @@ fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewe
                     stringResource(if (removeLocation) R.string.settings_sharing_removed else R.string.settings_sharing_included),
                     onClick = onOpenSharing,
                 )
+            }
+            row { shapes ->
+                // "5 s, crossfade": the transition in lower case after the comma (SPEC's note), except a name (Ken Burns)
+                val locale = LocalConfiguration.current.locales[0]
+                val transition = when (slideTransition) {
+                    SlideTransition.CROSSFADE -> stringResource(R.string.transition_crossfade).lowercase(locale)
+                    SlideTransition.KEN_BURNS -> stringResource(R.string.transition_ken_burns)
+                }
+                SettingsNavigationRow(shapes, R.drawable.ic_slideshow, stringResource(R.string.title_slideshow), stringResource(R.string.settings_slideshow_desc, slideSeconds, transition), onClick = onOpenSlideshow)
             }
             row { shapes ->
                 SettingsNavigationRow(

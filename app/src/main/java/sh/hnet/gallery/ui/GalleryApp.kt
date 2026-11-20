@@ -111,8 +111,12 @@ import sh.hnet.gallery.ui.settings.PlacesSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
 import sh.hnet.gallery.ui.settings.SharingSettingsScreen
+import sh.hnet.gallery.ui.settings.SlideshowSettingsScreen
 import sh.hnet.gallery.ui.settings.ViewerSettingsScreen
 import sh.hnet.gallery.ui.settings.WhatsNewScreen
+import sh.hnet.gallery.ui.slideshow.LocalSlideshow
+import sh.hnet.gallery.ui.slideshow.SlideshowRequest
+import sh.hnet.gallery.ui.slideshow.SlideshowScreen
 import sh.hnet.gallery.ui.viewer.LocalMediaOrigins
 import sh.hnet.gallery.ui.viewer.MediaOrigins
 import sh.hnet.gallery.ui.viewer.ViewerHost
@@ -171,6 +175,8 @@ fun GalleryApp() {
     // The editor over the viewer (S7, D24)
     var editing by remember { mutableStateOf<MediaItem?>(null) }
     var overViewer by remember { mutableStateOf<Screen?>(null) }
+    // The slideshow over everything (S8a), the viewer under it when started from there
+    var slideshow by remember { mutableStateOf<SlideshowRequest?>(null) }
     val origins = remember { MediaOrigins() }
     val consent = rememberConsent()
     val activity = LocalActivity.current
@@ -238,6 +244,7 @@ fun GalleryApp() {
         LocalHideNavigationBar provides hideNavigationBar,
         // Show in a snackbar, a chip in Info: the album's page over the viewer when it is open, else on the current tab
         LocalOpenAlbum provides { id -> if (viewer != null) overViewer = Screen.Album(id) else stacks.getValue(tab).add(Screen.Album(id)) },
+        LocalSlideshow provides { slideshow = it },
     ) {
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -369,6 +376,7 @@ fun GalleryApp() {
                             onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
                             onOpenViewer = { currentStack.add(Screen.SettingsViewer) },
                             onOpenSharing = { currentStack.add(Screen.SettingsSharing) },
+                            onOpenSlideshow = { currentStack.add(Screen.SettingsSlideshow) },
                             onOpenPlaces = { currentStack.add(Screen.SettingsPlaces) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
@@ -388,6 +396,7 @@ fun GalleryApp() {
                     entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
                     entry<Screen.SettingsViewer> { ViewerSettingsScreen(onBack = back) }
                     entry<Screen.SettingsSharing> { SharingSettingsScreen(onBack = back) }
+                    entry<Screen.SettingsSlideshow> { SlideshowSettingsScreen(onBack = back) }
                     entry<Screen.SettingsPlaces> { PlacesSettingsScreen(onBack = back) }
                     entry<Screen.SettingsBackup> { BackupScreen(onBack = back, snackbars = snackbars, messageScope = messages) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
@@ -492,8 +501,20 @@ fun GalleryApp() {
                 val at = ids.indexOf(item.id)
                 if (at >= 0) ids.add(at + 1, copy) else ids.add(copy)
                 editing = null
-                viewer = ViewerRequest(ids, copy, album = open?.album) {}
+                viewer = ViewerRequest(ids, copy, album = open?.album, title = open?.title) {}
             })
+        }
+    }
+    // The slideshow fades in and out over whatever started it; the request kept for its way out
+    val shownSlideshow = remember { arrayOfNulls<SlideshowRequest>(1) }
+    slideshow?.let { shownSlideshow[0] = it }
+    AnimatedVisibility(visible = slideshow != null, enter = fadeIn(effects), exit = fadeOut(fastEffects)) {
+        val request = shownSlideshow[0] ?: return@AnimatedVisibility
+        key(request) {
+            SlideshowScreen(request) { last ->
+                slideshow = null
+                request.onEnd(last)
+            }
         }
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }

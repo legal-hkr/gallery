@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -73,6 +74,8 @@ import sh.hnet.gallery.ui.grid.SelectionEffects
 import sh.hnet.gallery.ui.grid.SelectionTopBar
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.rememberSelection
+import sh.hnet.gallery.ui.slideshow.LocalSlideshow
+import sh.hnet.gallery.ui.slideshow.SlideshowRequest
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 
 /**
@@ -83,6 +86,7 @@ import sh.hnet.gallery.ui.viewer.ViewerRequest
  */
 @Composable
 fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen: (ViewerRequest) -> Unit, viewModel: PhotosViewModel = viewModel()) {
+    val resources = LocalResources.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val step by viewModel.step.collectAsStateWithLifecycle()
     val facts by viewModel.facts.collectAsStateWithLifecycle()
@@ -161,7 +165,8 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                             bottomPadding = if (selection.active) 96.dp else 0.dp,
                             onOpen = { item ->
                                 val ids = timeline.entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
-                                onOpen(ViewerRequest(ids, item.id) { id ->
+                                val photosName = resources.getString(R.string.label_nav_photos)
+                                onOpen(ViewerRequest(ids, item.id, title = photosName) { id ->
                                     // The grid under the viewer follows the item shown, so the flight back lands on its tile
                                     val index = timeline.indexOf[id] ?: return@ViewerRequest
                                     val target = index + topCount
@@ -177,6 +182,8 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                         }, modifier = Modifier.align(Alignment.TopEnd))
                         if (selection.active) {
                             val chosen = shownItems.filter { it.id in selection.selected }
+                            val slideshow = LocalSlideshow.current
+                            val photosTitle = stringResource(R.string.label_nav_photos)
                             MediaSelectionToolbar(
                                 chosen,
                                 // Both end the selection once done (owner's test of S4a, over SPEC §5.4: as in the family's other apps)
@@ -185,6 +192,10 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 onAddToAlbum = { adding = chosen },
                                 onDelete = { actions.trash(chosen) { selection.clear() } },
                                 modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp),
+                                onSlideshow = {
+                                    selection.clear()
+                                    slideshow?.invoke(SlideshowRequest(chosen.map { it.id }, chosen.first().id, photosTitle))
+                                },
                             )
                         }
                     }
