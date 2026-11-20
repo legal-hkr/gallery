@@ -339,4 +339,17 @@
     <string name="title_pick_video">Wybierz film</string>
     <string name="title_pick_videos">Wybierz filmy</string>
     <string name="title_pick_for_album">Dodaj do albumu %1$s</string>
+    <!-- Stage S6a -->
+    <string name="desc_place_names">Miasta, regiony i kraje dla zdjęć z lokalizacją, na podstawie danych wbudowanych w aplikację. Po wyłączeniu wyświetlane są tylko współrzędne.</string>
+    <string name="label_place_names">Nazwy miejsc</string>
+    <string name="settings_places_off">Nazwy miejsc: wyłączone</string>
+    <string name="settings_places_on">Nazwy miejsc: włączone</string>
+    <!-- Stage S6a -->
+    <string name="label_two_places">%1$s i %2$s</string>
+    <!-- Stage S6a: place data in About (mine) -->
+    <string name="title_place_data">Dane miejsc</string>
+    <string name="desc_place_data">Nazwy miejsc i mapa korzystają z danych wbudowanych w aplikację. Aplikacja niczego nie pobiera z Internetu.</string>
+    <string name="desc_wikidata">Miejscowości: nazwy, położenie i liczba mieszkańców. Licencja CC0 1.0 (domena publiczna).</string>
+    <string name="desc_natural_earth">Granice i nazwy krajów oraz regionów. Domena publiczna.</string>
+    <string name="label_place_data_date">Stan danych: %1$s</string>
 </resources>

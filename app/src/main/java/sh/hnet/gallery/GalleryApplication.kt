@@ -4,6 +4,7 @@ import android.app.Application
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,12 +20,14 @@ import sh.hnet.gallery.backup.BackupManager
 import sh.hnet.gallery.data.AlbumStore
 import sh.hnet.gallery.data.MediaIndex
 import sh.hnet.gallery.data.MediaSource
+import sh.hnet.gallery.data.Places
 import sh.hnet.gallery.data.ShareMaker
 import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.facts.FactReader
 import sh.hnet.gallery.facts.FactScanner
 import sh.hnet.gallery.facts.GalleryDatabase
 import sh.hnet.gallery.model.Library
+import sh.hnet.gallery.model.PlaceData
 
 class GalleryApplication : Application() {
     /** Work that outlives a screen; lives as long as the process. */
@@ -40,7 +43,17 @@ class GalleryApplication : Application() {
     private val database: GalleryDatabase by lazy { GalleryDatabase.create(this) }
 
     /** What the files say beyond MediaStore, read while the app runs (LOGIKA §2.3). */
-    val facts: FactScanner by lazy { FactScanner(database.factDao(), FactReader(contentResolver), appScope, media::canLocate) }
+    // The scanner takes the place data only once it is known: a null before the file is mapped would clear every place at each start
+    val facts: FactScanner by lazy { FactScanner(database.factDao(), FactReader(contentResolver), appScope, media::canLocate, placesKnown) }
+
+    /** The place data in the app, unpacked and mapped once (LOGIKA §17.3); null in a build without it. */
+    private val placeData: PlaceData? by lazy { Places.load(this) }
+
+    /** The place data while place names are on, null while off – each value once it is known. */
+    private val placesKnown: Flow<PlaceData?> by lazy { preferences.placeNames.map { on -> if (on) placeData else null }.flowOn(Dispatchers.IO) }
+
+    /** The place data while place names are on (SPEC §20.5); null while off, and until the file is mapped. */
+    val places: StateFlow<PlaceData?> by lazy { placesKnown.stateIn(appScope, SharingStarted.Eagerly, null) }
 
     /** The sources' states (SPEC-albums §9.1). */
     val sources: SourceStore by lazy { SourceStore(database.sourceDao(), appScope) }

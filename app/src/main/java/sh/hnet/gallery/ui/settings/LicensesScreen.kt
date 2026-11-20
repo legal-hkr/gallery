@@ -32,7 +32,7 @@ import sh.hnet.gallery.ui.components.settingsRowColors
  * classpath; update when a dependency with another license is added).
  */
 private val COMPONENTS = listOf(
-    "AndroidX (Jetpack Compose, Material 3, Navigation 3, DataStore, Lifecycle, Activity, Core)",
+    "AndroidX (Jetpack Compose, Material 3, Navigation 3, Room, DataStore, Lifecycle, Activity, Core, ExifInterface, Media3)",
     "Kotlin",
     "kotlinx.coroutines",
     "kotlinx.serialization",

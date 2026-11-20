@@ -40,11 +40,11 @@ const val SOURCE_ADDRESS = "git.hnet.sh/hkr/gallery"
 
 /**
  * Settings › About, as ComfyChair's: the app's mark, name and version, then What's new (badge New
- * until opened for this version), License with the open-source licenses under it, Source code; then
+ * until opened for this version), License with the open-source licenses and the place data under it, Source code; then
  * the privacy note.
  */
 @Composable
-fun AboutScreen(onBack: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenLicense: () -> Unit, onOpenLicenses: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenLicense: () -> Unit, onOpenLicenses: () -> Unit, onOpenPlaceData: () -> Unit) {
     val context = LocalContext.current
     // No row without this version's notes; the badge until the page was opened (checked again on coming back)
     val notes = remember { WhatsNew.notes(context) }
@@ -82,6 +82,10 @@ fun AboutScreen(onBack: () -> Unit, onOpenWhatsNew: () -> Unit, onOpenLicense: (
             }
             row { shapes ->
                 SettingsNavigationRow(shapes, R.drawable.ic_description, stringResource(R.string.label_licenses), stringResource(R.string.desc_licenses), onClick = onOpenLicenses)
+            }
+            // Where the place names come from, under what license (the owner, 20 Nov 2026)
+            row { shapes ->
+                SettingsNavigationRow(shapes, R.drawable.ic_public, stringResource(R.string.title_place_data), "Wikidata, Natural Earth", onClick = onOpenPlaceData)
             }
             row { shapes ->
                 SettingsLinkRow(shapes, R.drawable.ic_code, stringResource(R.string.title_about_source), SOURCE_ADDRESS) {

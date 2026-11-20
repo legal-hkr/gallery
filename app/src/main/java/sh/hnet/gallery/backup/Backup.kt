@@ -58,6 +58,8 @@ data class BackupSettings(
     val sourceSorts: Map<String, String>? = null,
     /** Shares go without location (Settings › Sharing). */
     val shareWithoutLocation: Boolean? = null,
+    /** Place names (Settings › Places). */
+    val placeNames: Boolean? = null,
     /** The Albums tab's order (`RECENT`, `NAME`, `COUNT`). */
     val albumSort: String? = null,
     /** The collections shown oldest first, by name. */

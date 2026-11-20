@@ -22,6 +22,8 @@ cd gallery
 
 Set the Android SDK path in `local.properties` (`sdk.dir=…`) first. Unit tests run with `./gradlew test`.
 
+The place data (`app/src/main/assets/places.bin.gz`) is kept in the repository, so a build needs no network; `tools/places/build.py` makes it again from its sources (see the script for how).
+
 ## Contributing
 
 Development happens on [git.hnet.sh](https://git.hnet.sh/hkr/gallery). The [GitHub repository](https://github.com/legal-hkr/gallery) is a read-only mirror, updated on every push, and the place to report problems:
@@ -34,6 +36,7 @@ Development happens on [git.hnet.sh](https://git.hnet.sh/hkr/gallery). The [GitH
 - **Language**: Kotlin
 - **Min SDK**: Android 14 (API 34), **target SDK**: API 37
 - **UI**: Jetpack Compose with Material 3 Expressive
+- **Places**: Built-in data and its own lookup of the nearest town, region and country, all on the device
 
 ## License
 
@@ -41,4 +44,6 @@ Development happens on [git.hnet.sh](https://git.hnet.sh/hkr/gallery). The [GitH
 
 ## Acknowledgments
 
+- Names, positions and populations of towns and villages come from [Wikidata](https://www.wikidata.org), available under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- Borders and names of countries and regions come from [Natural Earth](https://www.naturalearthdata.com), in the public domain
 - [Claude](https://claude.ai) by Anthropic – AI assistant that provided valuable support during the development process, helping with code implementation, architecture decisions, and documentation

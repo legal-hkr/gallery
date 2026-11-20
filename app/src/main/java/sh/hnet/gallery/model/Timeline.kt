@@ -110,3 +110,37 @@ class Timeline(val entries: List<TimelineEntry>, val indexOf: Map<Long, Int>, va
         }
     }
 }
+
+/**
+ * The place under each day's header (SPEC §4.3, LOGIKA §17.5): the settlement most of the day's located items come
+ * from; exactly two settlements give both, the more frequent first; none, no line. By the day's key.
+ */
+object DayPlaces {
+    fun of(entries: List<TimelineEntry>, settlementOf: (Long) -> Int?): Map<String, IntArray> {
+        val result = HashMap<String, IntArray>()
+        var day: String? = null
+        var counts = HashMap<Int, Int>()
+        fun close() {
+            val key = day ?: return
+            if (counts.isEmpty()) return
+            val ranked = counts.entries.sortedWith(compareByDescending<Map.Entry<Int, Int>> { it.value }.thenBy { it.key })
+            result[key] = if (ranked.size == 2) intArrayOf(ranked[0].key, ranked[1].key) else intArrayOf(ranked[0].key)
+        }
+        for (entry in entries) {
+            when (entry) {
+                is TimelineEntry.Day -> {
+                    close()
+                    day = entry.key
+                    counts = HashMap()
+                }
+                is TimelineEntry.Tile -> if (day != null) settlementOf(entry.item.id)?.let { counts[it] = (counts[it] ?: 0) + 1 }
+                else -> {
+                    close()
+                    day = null
+                }
+            }
+        }
+        close()
+        return result
+    }
+}

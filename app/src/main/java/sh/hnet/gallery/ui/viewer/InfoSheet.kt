@@ -96,6 +96,9 @@ import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.components.albumPath
 import sh.hnet.gallery.ui.components.groupShapes
+import sh.hnet.gallery.ui.components.label
+import sh.hnet.gallery.ui.components.placeData
+import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.components.settingsRowColors
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.formatDuration
@@ -260,7 +263,9 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
     val lon = info?.longitude
     if (lat != null && lon != null) {
         val coordinates = stringResource(R.string.format_coordinates, ExifText.coordinate(lat, locale), if (lat >= 0) "N" else "S", ExifText.coordinate(lon, locale), if (lon >= 0) "E" else "W")
-        rows.add(Row(R.drawable.ic_location_on, coordinates, emptyList()))
+        // The place in words, the coordinates under it (SPEC §7.1); with place names off or no place, the coordinates alone (§20.5)
+        val place = placeData()?.label(fact, placeLanguage(), full = true)
+        rows.add(if (place != null) Row(R.drawable.ic_location_on, place, listOf(coordinates)) else Row(R.drawable.ic_location_on, coordinates, emptyList()))
     } else if (info != null) {
         val why = when {
             !info.located -> stringResource(R.string.desc_place_unavailable)

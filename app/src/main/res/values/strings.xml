@@ -338,4 +338,17 @@
     <string name="title_pick_video">Choose a video</string>
     <string name="title_pick_videos">Choose videos</string>
     <string name="title_pick_for_album">Add to %1$s</string>
+    <!-- Stage S6a -->
+    <string name="desc_place_names">Towns, regions and countries for photos with a location, from data built into the app. When off, only coordinates are shown.</string>
+    <string name="label_place_names">Place names</string>
+    <string name="settings_places_off">Place names: off</string>
+    <string name="settings_places_on">Place names: on</string>
+    <!-- Stage S6a -->
+    <string name="label_two_places">%1$s and %2$s</string>
+    <!-- Stage S6a: place data in About (mine) -->
+    <string name="title_place_data">Place data</string>
+    <string name="desc_place_data">Place names and the map use data built into the app. Gallery doesn’t download anything from the Internet.</string>
+    <string name="desc_wikidata">Towns and villages: names, positions and populations. CC0 1.0 license (public domain).</string>
+    <string name="desc_natural_earth">Borders and names of countries and regions. Public domain.</string>
+    <string name="label_place_data_date">Data as of %1$s</string>
 </resources>

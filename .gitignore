@@ -48,4 +48,9 @@ CLAUDE.md
 # VSCodium
 .vscode/
 # Local release tooling (signing), not published
-tools/
+tools/sign-release*.sh
+
+# Python (tools/places: its environment, the downloaded sources, bytecode)
+__pycache__/
+tools/places/venv/
+tools/places/cache/

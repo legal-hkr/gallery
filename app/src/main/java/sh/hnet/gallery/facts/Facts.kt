@@ -2,6 +2,7 @@ package sh.hnet.gallery.facts
 
 import android.content.Context
 import androidx.room3.AutoMigration
+import androidx.room3.ColumnInfo
 import androidx.room3.Dao
 import androidx.room3.Database
 import androidx.room3.Entity
@@ -25,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
  * @param located Whether the location could be read (the app had `ACCESS_MEDIA_LOCATION`); read again once it can
  * @param offsetMinutes The zone the photo was taken in (`OffsetTimeOriginal`)
  * @param motionLength A motion photo's video length in bytes from the file's end, when the file says
+ * @param settlement The place's settlement in [sh.hnet.gallery.model.PlaceData] (LOGIKA §17.4); with [region] and
+ *   [country] valid only for the place data of version [places] (0: not placed – place names off, no data, no location)
  */
 @Entity(tableName = "fact")
 data class Fact(
@@ -38,6 +41,10 @@ data class Fact(
     val motion: Boolean,
     val motionLength: Long?,
     val gainmap: Boolean,
+    val settlement: Int? = null,
+    val region: Int? = null,
+    val country: Int? = null,
+    @ColumnInfo(defaultValue = "0") val places: Int = 0,
 )
 
 @Dao
@@ -169,7 +176,7 @@ interface AlbumDao {
  * The app's database (LOGIKA §2.3, §15.3): facts derived from the files, rebuilt if lost; since version 2
  * also the user's own data – the sources' states and the albums – which the backup carries.
  */
-@Database(entities = [Fact::class, SourceRow::class, AlbumRow::class, AlbumItemRow::class], version = 2, autoMigrations = [AutoMigration(from = 1, to = 2)])
+@Database(entities = [Fact::class, SourceRow::class, AlbumRow::class, AlbumItemRow::class], version = 3, autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)])
 abstract class GalleryDatabase : RoomDatabase() {
     abstract fun factDao(): FactDao
 

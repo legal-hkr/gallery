@@ -69,8 +69,9 @@ class GridGeometry private constructor(
          * width less the gaps, the first ones a pixel wider for what doesn't divide, and a line is as
          * high as its widest cell – fractions here drifted from the real grid line by line, and the
          * grid jumped when it took over from the pinch's layer (owner's phone test, 19 Nov 2026).
+         * A day's header with its place under it (LOGIKA §17.5) is [placedHeight] high, [placed] tells which.
          */
-        fun of(entries: List<TimelineEntry>, columns: Int, width: Int, gap: Int, headerHeight: Int, lead: Int = 0): GridGeometry {
+        fun of(entries: List<TimelineEntry>, columns: Int, width: Int, gap: Int, headerHeight: Int, lead: Int = 0, placedHeight: Int = headerHeight, placed: (TimelineEntry) -> Boolean = { false }): GridGeometry {
             val inner = width - gap * (columns - 1)
             val slot = inner / columns
             val wider = inner % columns
@@ -104,8 +105,9 @@ class GridGeometry private constructor(
                     tops[i] = y.toFloat()
                     lefts[i] = 0f
                     widths[i] = width.toFloat()
-                    heights[i] = headerHeight.toFloat()
-                    y += headerHeight + gap
+                    val high = if (placed(entry)) placedHeight else headerHeight
+                    heights[i] = high.toFloat()
+                    y += high + gap
                     column = 0
                     line = 0
                 }

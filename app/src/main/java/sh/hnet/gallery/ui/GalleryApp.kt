@@ -99,6 +99,8 @@ import sh.hnet.gallery.ui.settings.BackupScreen
 import sh.hnet.gallery.ui.settings.LanguageScreen
 import sh.hnet.gallery.ui.settings.LicensesScreen
 import sh.hnet.gallery.ui.settings.PhotosSettingsScreen
+import sh.hnet.gallery.ui.settings.PlaceDataScreen
+import sh.hnet.gallery.ui.settings.PlacesSettingsScreen
 import sh.hnet.gallery.ui.settings.ResetScreen
 import sh.hnet.gallery.ui.settings.SettingsRootScreen
 import sh.hnet.gallery.ui.settings.SharingSettingsScreen
@@ -335,6 +337,7 @@ fun GalleryApp() {
                             onOpenPhotos = { currentStack.add(Screen.SettingsPhotos) },
                             onOpenViewer = { currentStack.add(Screen.SettingsViewer) },
                             onOpenSharing = { currentStack.add(Screen.SettingsSharing) },
+                            onOpenPlaces = { currentStack.add(Screen.SettingsPlaces) },
                             onOpenLanguage = { currentStack.add(Screen.SettingsLanguage) },
                             onOpenBackup = { currentStack.add(Screen.SettingsBackup) },
                             onOpenReset = { currentStack.add(Screen.SettingsReset) },
@@ -347,13 +350,16 @@ fun GalleryApp() {
                             onOpenWhatsNew = { currentStack.add(Screen.SettingsWhatsNew) },
                             onOpenLicense = { currentStack.add(Screen.SettingsLicense) },
                             onOpenLicenses = { currentStack.add(Screen.SettingsLicenses) },
+                            onOpenPlaceData = { currentStack.add(Screen.SettingsPlaceData) },
                         )
                     }
                     entry<Screen.SettingsPhotos> { PhotosSettingsScreen(onBack = back) }
                     entry<Screen.SettingsViewer> { ViewerSettingsScreen(onBack = back) }
                     entry<Screen.SettingsSharing> { SharingSettingsScreen(onBack = back) }
+                    entry<Screen.SettingsPlaces> { PlacesSettingsScreen(onBack = back) }
                     entry<Screen.SettingsBackup> { BackupScreen(onBack = back, snackbars = snackbars, messageScope = messages) }
                     entry<Screen.SettingsLicenses> { LicensesScreen(onBack = back) }
+                    entry<Screen.SettingsPlaceData> { PlaceDataScreen(onBack = back) }
                     entry<Screen.SettingsLanguage> { LanguageScreen(onBack = back) }
                     entry<Screen.SettingsReset> { ResetScreen(onBack = back) }
                     entry<Screen.SettingsWhatsNew> { WhatsNewScreen(onBack = back) }

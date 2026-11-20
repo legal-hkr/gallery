@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -60,12 +62,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -75,10 +79,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import sh.hnet.gallery.R
 import sh.hnet.gallery.facts.Fact
+import sh.hnet.gallery.model.DayPlaces
 import sh.hnet.gallery.model.GridGeometry
 import sh.hnet.gallery.model.GridStep
 import sh.hnet.gallery.model.MediaItem
@@ -91,6 +98,9 @@ import sh.hnet.gallery.model.lerp
 import sh.hnet.gallery.ui.components.MediaThumbnail
 import sh.hnet.gallery.ui.components.Thumb
 import sh.hnet.gallery.ui.components.Thumbnails
+import sh.hnet.gallery.ui.components.placeData
+import sh.hnet.gallery.ui.components.placeLanguage
+import sh.hnet.gallery.ui.components.settlementOf
 import sh.hnet.gallery.ui.viewer.mediaOrigin
 
 /** Where the grid should stand after a tap in the month view: the item tapped, at its height (SPEC §4.4). */
@@ -183,13 +193,29 @@ fun MediaGrid(
         val cellPx = with(density) { ((maxWidth - gap * (columns - 1)) / columns).toPx() }
         // The headers' height as the grid draws them (font scale included), for the layer's geometry
         var headerPx by remember { mutableIntStateOf(with(density) { 44.dp.roundToPx() }) }
+        // A day's header with its place under it (LOGIKA §17.5), as last measured
+        var placedPx by remember { mutableIntStateOf(with(density) { 64.dp.roundToPx() }) }
+        val places = placeData()
+        val language = placeLanguage()
+        val dayPlaces by produceState(emptyMap<String, IntArray>(), days, facts, places) {
+            val data = places
+            value = if (data == null) emptyMap() else withContext(Dispatchers.Default) { DayPlaces.of(days.entries) { id -> data.settlementOf(facts[id]) } }
+        }
+        // The lines in words, for the grid and the pinch's layer alike
+        val resources = LocalResources.current
+        val placeLines = remember(dayPlaces, places, language) {
+            dayPlaces.mapValues { (_, ids) ->
+                val names = ids.map { places?.settlementName(it, language).orEmpty() }
+                if (names.size == 2) resources.getString(R.string.label_two_places, names[0], names[1]) else names[0]
+            }
+        }
         // The items before the entries (the partial-access card), as last measured: the layer's layouts start after them
         var leadPx by remember { mutableIntStateOf(0) }
         val lead = if (topCount > 0) leadPx else 0
         // Each step's layout, made when a pinch first needs it
-        val geometries = remember(days, months, widthPx, headerPx, widthFactor, lead) { HashMap<GridStep, GridGeometry>() }
+        val geometries = remember(days, months, widthPx, headerPx, placedPx, dayPlaces, widthFactor, lead) { HashMap<GridStep, GridGeometry>() }
         fun geometry(s: GridStep): GridGeometry = geometries.getOrPut(s) {
-            GridGeometry.of((if (s.months) months else days).entries, columnsOf(s), widthPx, with(density) { gapOf(s).roundToPx() }, headerPx, lead)
+            GridGeometry.of((if (s.months) months else days).entries, columnsOf(s), widthPx, with(density) { gapOf(s).roundToPx() }, headerPx, lead, placedPx) { it.key in dayPlaces }
         }
 
         /**
@@ -373,8 +399,9 @@ fun MediaGrid(
                         val pick = if ((alwaysSelecting || selection?.active == true) && selection != null && group.isNotEmpty()) {
                             HeaderPick(selected = selection.selected.containsAll(group)) { selection.selected = Selection.toggleGroup(selection.selected, group) }
                         } else null
-                        val measured = Modifier.onSizeChanged { if (it.height > 0) headerPx = it.height }
-                        if (entry is TimelineEntry.Day) DayHeader(entry.date, today, measured, pick) else MonthHeader((entry as TimelineEntry.Month).month, today, measured, pick)
+                        val place = placeLines[entry.key]
+                        val measured = Modifier.onSizeChanged { if (it.height > 0) { if (place != null) placedPx = it.height else headerPx = it.height } }
+                        if (entry is TimelineEntry.Day) DayHeader(entry.date, today, measured, pick, place) else MonthHeader((entry as TimelineEntry.Month).month, today, measured, pick)
                     }
                     is TimelineEntry.Tile -> Tile(
                         entry.item,
@@ -417,7 +444,7 @@ fun MediaGrid(
             }
         }
 
-        morph?.let { change -> MorphLayer(change, ::geometry, days, months, today, heightPx) }
+        morph?.let { change -> MorphLayer(change, ::geometry, days, months, today, heightPx, placeLines) }
     }
 }
 
@@ -427,7 +454,7 @@ fun MediaGrid(
  * meanwhile); headers of the same day move with their tiles, those of only one step fade.
  */
 @Composable
-private fun MorphLayer(change: Morph, geometry: (GridStep) -> GridGeometry, days: Timeline, months: Timeline, today: LocalDate, viewport: Float) {
+private fun MorphLayer(change: Morph, geometry: (GridStep) -> GridGeometry, days: Timeline, months: Timeline, today: LocalDate, viewport: Float, placeLines: Map<String, String>) {
     val t = change.progress.value
     val from = geometry(change.from)
     val to = geometry(change.to)
@@ -447,7 +474,7 @@ private fun MorphLayer(change: Morph, geometry: (GridStep) -> GridGeometry, days
                     .graphicsLayer { alpha = piece.alpha }
                 when (entry) {
                     is TimelineEntry.Tile -> MorphTile(entry.item, place.clip(RoundedCornerShape(corner)))
-                    is TimelineEntry.Day -> DayHeader(entry.date, today, place)
+                    is TimelineEntry.Day -> DayHeader(entry.date, today, place, place = placeLines[entry.key])
                     is TimelineEntry.Month -> MonthHeader(entry.month, today, place)
                 }
             }
@@ -466,14 +493,14 @@ private fun MorphTile(item: MediaItem, modifier: Modifier) {
 
 /** A day's header (SPEC §4.3): "Today", "Yesterday", the date with the weekday, the year only when it isn't this one. */
 @Composable
-private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null) {
+private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null, place: String? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val text = when (date) {
         today -> stringResource(R.string.label_today)
         today.minusDays(1) -> stringResource(R.string.label_yesterday)
         else -> formatDate(stringResource(if (date.year == today.year) R.string.format_day else R.string.format_day_year), date, locale)
     }
-    Header(text, modifier, pick)
+    Header(text, modifier, pick, place)
 }
 
 /** A month's header in the month view (SPEC §4.4). */
@@ -493,15 +520,19 @@ private class DragRun(val anchor: Int, val base: Set<Long>, val select: Boolean)
 }
 
 @Composable
-private fun Header(text: String, modifier: Modifier, pick: HeaderPick? = null) {
+private fun Header(text: String, modifier: Modifier, pick: HeaderPick? = null, place: String? = null) {
     Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            modifier = Modifier.weight(1f).semantics { heading() },
-        )
+        Column(Modifier.weight(1f)) {
+            Text(
+                text,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                modifier = Modifier.semantics { heading() },
+            )
+            // The day's place (SPEC §4.3): one line, cut short rather than wrapped
+            if (place != null) Text(place, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         if (pick != null) {
             val label = stringResource(R.string.content_description_select_day)
             Box(

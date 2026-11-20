@@ -65,6 +65,11 @@ class Preferences(private val context: Context) {
 
     suspend fun setShareWithoutLocation(on: Boolean) = context.settings.edit { it[SHARE_WITHOUT_LOCATION] = on }
 
+    /** Town, region and country names from the data in the app (SPEC §20.5, on); off, only coordinates and no place index. */
+    val placeNames: Flow<Boolean> = context.settings.data.map { it[PLACE_NAMES] ?: true }.distinctUntilChanged()
+
+    suspend fun setPlaceNames(on: Boolean) = context.settings.edit { it[PLACE_NAMES] = on }
+
     /** The Albums tab's order (SPEC-albums §9.4): `RECENT` (default), `NAME`, `COUNT`. */
     val albumSort: Flow<String> = context.settings.data.map { it[ALBUM_SORT] ?: "RECENT" }.distinctUntilChanged()
 
@@ -86,6 +91,7 @@ class Preferences(private val context: Context) {
             newFoldersInPhotos = p[NEW_FOLDERS_IN_PHOTOS] ?: false,
             albumSort = p[ALBUM_SORT] ?: "RECENT",
             shareWithoutLocation = p[SHARE_WITHOUT_LOCATION] ?: true,
+            placeNames = p[PLACE_NAMES] ?: true,
             collectionsOldestFirst = p[COLLECTIONS_OLDEST_FIRST].orEmpty().sorted(),
             mediaManagementOffers = p[MEDIA_MANAGEMENT_OFFERS] ?: 0,
             autoplayMotion = p[AUTOPLAY_MOTION] ?: true,
@@ -98,6 +104,7 @@ class Preferences(private val context: Context) {
         // The timeline's choice of older backups goes to the sources' states (BackupManager); the old switch meant something else
         backup.newFoldersInPhotos?.let { p[NEW_FOLDERS_IN_PHOTOS] = it }
         backup.shareWithoutLocation?.let { p[SHARE_WITHOUT_LOCATION] = it }
+        backup.placeNames?.let { p[PLACE_NAMES] = it }
         backup.albumSort?.takeIf { it in setOf("RECENT", "NAME", "COUNT") }?.let { p[ALBUM_SORT] = it }
         backup.collectionsOldestFirst?.let { p[COLLECTIONS_OLDEST_FIRST] = it.toSet() }
         backup.mediaManagementOffers?.let { p[MEDIA_MANAGEMENT_OFFERS] = it.coerceIn(0, 2) }
@@ -115,6 +122,7 @@ class Preferences(private val context: Context) {
         val NEW_FOLDERS_IN_PHOTOS = booleanPreferencesKey("new_folders_in_photos")
         val ALBUM_SORT = stringPreferencesKey("album_sort")
         val SHARE_WITHOUT_LOCATION = booleanPreferencesKey("share_without_location")
+        val PLACE_NAMES = booleanPreferencesKey("place_names")
         val MEDIA_MANAGEMENT_OFFERS = intPreferencesKey("media_management_offers")
         val AUTOPLAY_MOTION = booleanPreferencesKey("autoplay_motion")
         val COLLECTIONS_OLDEST_FIRST = stringSetPreferencesKey("collections_oldest_first")

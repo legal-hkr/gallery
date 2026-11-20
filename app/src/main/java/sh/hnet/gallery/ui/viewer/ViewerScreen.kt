@@ -127,6 +127,9 @@ import sh.hnet.gallery.ui.components.MenuItem
 import sh.hnet.gallery.ui.components.RenameDialog
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
+import sh.hnet.gallery.ui.components.label
+import sh.hnet.gallery.ui.components.placeData
+import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.grid.ShareButton
 
 /** Formats the editor can't write (SPEC §6.2): Edit doesn't show for them at all. */
@@ -553,10 +556,12 @@ private fun TopBar(item: MediaItem, hdr: Boolean, sdr: Boolean, motionPhoto: Boo
                 // A file from outside: its name and "Outside Gallery" (SPEC §17.2); one another app opened in its folder: the
                 // date and the folder's album (SPEC §17.1, §17.3)
                 Text(if (item.outside) item.name else viewerTitle(item, facts?.get(item.id)), style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // The place under the date (SPEC §6.2: town and country), when the item has one
+                val place = placeData()?.label(facts?.get(item.id), placeLanguage(), full = false)
                 val subtitle = when {
                     item.outside -> stringResource(R.string.label_outside_gallery)
                     folderName != null -> albumName(folderName)
-                    else -> null
+                    else -> place
                 }
                 if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

@@ -23,9 +23,10 @@ import sh.hnet.gallery.ui.components.SettingsPage
  * tab by the top bar's icon, so with Back.
  */
 @Composable
-fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
+fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewer: () -> Unit, onOpenSharing: () -> Unit, onOpenPlaces: () -> Unit, onOpenLanguage: () -> Unit, onOpenBackup: () -> Unit, onOpenReset: () -> Unit, onOpenAbout: () -> Unit) {
     val context = LocalContext.current
     val removeLocation by (context.applicationContext as GalleryApplication).preferences.shareWithoutLocation.collectAsStateWithLifecycle(true)
+    val placeNames by (context.applicationContext as GalleryApplication).preferences.placeNames.collectAsStateWithLifecycle(true)
     val version = BuildConfig.VERSION_NAME.removePrefix("v")
     val language = appLanguages.firstOrNull { it.tag == currentLanguageTag(context) } ?: appLanguages.first()
     SettingsPage(title = stringResource(R.string.title_settings), onBack = onBack) {
@@ -41,6 +42,13 @@ fun SettingsRootScreen(onBack: () -> Unit, onOpenPhotos: () -> Unit, onOpenViewe
                     shapes, R.drawable.ic_share, stringResource(R.string.settings_sharing),
                     stringResource(if (removeLocation) R.string.settings_sharing_removed else R.string.settings_sharing_included),
                     onClick = onOpenSharing,
+                )
+            }
+            row { shapes ->
+                SettingsNavigationRow(
+                    shapes, R.drawable.ic_location_on, stringResource(R.string.label_places),
+                    stringResource(if (placeNames) R.string.settings_places_on else R.string.settings_places_off),
+                    onClick = onOpenPlaces,
                 )
             }
         }
