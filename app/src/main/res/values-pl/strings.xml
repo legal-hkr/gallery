@@ -426,10 +426,6 @@
     <string name="ratio_free">Dowolne</string>
     <string name="ratio_original">Oryginalne</string>
     <string name="ratio_square">Kwadrat</string>
-    <string name="tab_adjust">Dostosuj</string>
-    <string name="tab_crop">Kadruj</string>
-    <string name="tab_draw">Rysuj</string>
-    <string name="tab_filters">Filtry</string>
     <string name="title_discard_changes">Odrzucić zmiany?</string>
     <string name="title_replace_original">Zastąpić oryginał?</string>
 

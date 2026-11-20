@@ -13,6 +13,9 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -42,13 +45,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.withClip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.NumberFormat
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -283,13 +285,9 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         }
         Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)) {
             if (upright != null) CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
-            // The tools' tabs (SPEC §15.1); Adjust, Filters and Markup come with S9–S10 (D5)
-            PrimaryTabRow(selectedTabIndex = 0, containerColor = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.navigationBarsPadding()) {
-                EditorTab(true, R.drawable.ic_crop, R.string.tab_crop, enabled = true)
-                EditorTab(false, R.drawable.ic_tune, R.string.tab_adjust, enabled = false)
-                EditorTab(false, R.drawable.ic_photo_filter, R.string.tab_filters, enabled = false)
-                EditorTab(false, R.drawable.ic_draw, R.string.tab_draw, enabled = false)
-            }
+            // No tabs while Crop is the only tool (the owner, 20 Nov 2026: no buttons that do nothing in a release);
+            // Adjust, Filters and Draw bring them back with S9–S10
+            Spacer(Modifier.navigationBarsPadding())
         }
     }
     }
@@ -318,10 +316,6 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
 }
 
 /** A tool's tab: its icon and name; tools of later stages shown disabled (D5). */
-@Composable
-private fun EditorTab(selected: Boolean, icon: Int, label: Int, enabled: Boolean) {
-    Tab(selected = selected, onClick = {}, enabled = enabled, text = { Text(stringResource(label)) }, icon = { Icon(painterResource(icon), contentDescription = null) })
-}
 
 /**
  * Save's menu (SPEC §15.6): Save as copy and Replace original, with what each means; for a motion photo a note
@@ -390,9 +384,7 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
     var area by remember { mutableStateOf(IntSize.Zero) }
     val margin = with(density) { 24.dp.toPx() }
     val turned = EditGeometry.turned(upright, state)
-    val fit = if (area.width == 0) 0.0 else min((area.width - 2 * margin) / turned.width, (area.height - 2 * margin) / turned.height)
-    val ox = (area.width - turned.width * fit) / 2
-    val oy = (area.height - turned.height * fit) / 2
+    val scope = rememberCoroutineScope()
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
     val reach = with(density) { 24.dp.toPx() }
 
@@ -403,14 +395,22 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
     val cropProgress = remember(cropMoves) { Animatable(if (cropMoves == 0) 1f else 0f) }
     val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
     LaunchedEffect(cropMoves) { cropProgress.animateTo(1f, effects) }
-    val p = cropProgress.value
-    val shownCrop = if (p >= 1f) state.crop else sh.hnet.gallery.model.Crop(
-        cropFrom.left + (state.crop.left - cropFrom.left) * p,
-        cropFrom.top + (state.crop.top - cropFrom.top) * p,
-        cropFrom.right + (state.crop.right - cropFrom.right) * p,
-        cropFrom.bottom + (state.crop.bottom - cropFrom.bottom) * p,
-    )
+    val shownCrop = lerp(cropFrom, state.crop, cropProgress.value)
     SideEffect { lastShown[0] = shownCrop }
+
+    // The view fits the crop (owner, 20 Nov 2026, as the Photos editor of iOS): the frame fills the area and the photo
+    // lies under it, the rest of it dimmed around. A corner resizes the frame over a view that holds still ([frozen]);
+    // let go, the view eases to fit the new crop ([viewFrom] → the crop). One finger anywhere else moves the photo and
+    // two fingers zoom and move it, under a frame that stays – the view follows the crop as it changes (the owner,
+    // after trying one finger on the frame: the photo moving is much better)
+    var frozen by remember { mutableStateOf<sh.hnet.gallery.model.Crop?>(null) }
+    var viewFrom by remember { mutableStateOf<sh.hnet.gallery.model.Crop?>(null) }
+    val viewProgress = remember { Animatable(1f) }
+    val viewCrop = frozen ?: viewFrom?.let { lerp(it, shownCrop, viewProgress.value) } ?: shownCrop
+    val view = if (area.width == 0) null else viewOf(viewCrop, turned, area, margin)
+    val viewNow = remember { arrayOfNulls<sh.hnet.gallery.model.Crop>(1) }
+    SideEffect { viewNow[0] = viewCrop }
+    val fit = view?.scale ?: 0.0
 
     // A turn or a mirror shown, not jumped to (owner's test of S7): the photo starts where it was – turned back by a
     // quarter at its old size, or turned over – and the motion scheme's spring brings it to its new place. The way it
@@ -430,10 +430,11 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
         val next = when {
             fit <= 0.0 -> Turn(0f, 1f, 0f)
             quarters == 1 || quarters == 3 -> {
-                // The old look was the new one turned back: a turn left starts a quarter to the right
+                // The old look was the new one turned back: a turn left starts a quarter to the right; the view fitted the
+                // crop as it lay then – its sides the other way round
                 val left = (quarters == 1) != state.flipped
-                val before = PxSize(turned.height, turned.width)
-                val fitBefore = min((area.width - 2 * margin) / before.width, (area.height - 2 * margin) / before.height)
+                val c = state.crop
+                val fitBefore = min((area.width - 2 * margin) / (c.height * turned.height), (area.height - 2 * margin) / (c.width * turned.width))
                 Turn(spin + if (left) 90f else -90f, zoom * (fitBefore / fit).toFloat(), over)
             }
             // The shorter way round: a mirror while one runs goes back the way it came
@@ -456,11 +457,12 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                 // The state as it is now, not as last drawn: a quick second drag began from the one before the first
                 val start = now()
                 val t = EditGeometry.turned(upright, start)
-                val s = if (area.width == 0) return@awaitEachGesture else min((area.width - 2 * margin) / t.width, (area.height - 2 * margin) / t.height)
-                val x0 = (area.width - t.width * s) / 2
-                val y0 = (area.height - t.height * s) / 2
-                fun sx(share: Double) = x0 + share * t.width * s
-                fun sy(share: Double) = y0 + share * t.height * s
+                if (area.width == 0) return@awaitEachGesture
+                // The view as drawn now (it may be easing): one finger works over it as it holds still
+                val held = viewNow[0] ?: start.crop
+                val v = viewOf(held, t, area, margin)
+                fun sx(share: Double) = v.x0 + share * t.width * v.scale
+                fun sy(share: Double) = v.y0 + share * t.height * v.scale
                 val c = start.crop
                 val corners = listOf(sx(c.left) to sy(c.top), sx(c.right) to sy(c.top), sx(c.right) to sy(c.bottom), sx(c.left) to sy(c.bottom))
                 // The nearest corner within reach; on a crop too small for its handles to be apart, only right at one
@@ -469,20 +471,61 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                 val nearest = distances.indices.minBy { distances[it] }
                 val small = sx(c.right) - sx(c.left) < 3 * reach || sy(c.bottom) - sy(c.top) < 3 * reach
                 val corner = if (distances[nearest] < (if (small) reach / 2 else reach)) nearest else -1
-                val within = down.position.x in sx(c.left)..sx(c.right) && down.position.y in sy(c.top)..sy(c.bottom)
-                var moved = false
+                // The photo moved by one finger: the view fitting the crop as it is (its size doesn't change while moved)
+                val fitted = viewOf(start.crop, t, area, margin)
+                // Nothing yet, a corner (the frame), two fingers or one off the corners (the photo under the frame)
+                var mode = 0
                 var last = start
                 while (true) {
                     val event = awaitPointerEvent()
+                    val pressed = event.changes.count { it.pressed }
+                    if (pressed == 0) break
+                    // A second finger on a moving photo zooms it from there on; a corner's drag keeps to its one finger
+                    if (mode != 1 && pressed >= 2) {
+                        if (mode != 2) {
+                            mode = 2
+                            viewFrom = null
+                        }
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+                        if (zoom != 1f || pan != Offset.Zero) {
+                            // The frame stays: the view fits the crop as it is; the fingers' point in the photo's shares
+                            val now = viewOf(last.crop, t, area, margin)
+                            val centroid = event.calculateCentroid(useCurrent = false)
+                            val after = now.scale * zoom
+                            last = EditGeometry.zoom(
+                                last,
+                                (centroid.x - now.x0) / (t.width * now.scale), (centroid.y - now.y0) / (t.height * now.scale),
+                                zoom.toDouble(), pan.x / (t.width * after), pan.y / (t.height * after), t,
+                            )
+                            onLive(last)
+                        }
+                        event.changes.forEach { if (it.positionChange() != Offset.Zero) it.consume() }
+                        continue
+                    }
+                    // After two fingers, the one left lifts without moving anything
+                    if (mode == 2) {
+                        event.changes.forEach { it.consume() }
+                        continue
+                    }
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
                     val total = change.position - down.position
-                    if (!moved && total.getDistance() > slop) moved = true
-                    if (moved) {
-                        last = when {
-                            corner >= 0 -> EditGeometry.drag(start, corner, (change.position.x - x0) / (t.width * s), (change.position.y - y0) / (t.height * s), t)
-                            within -> EditGeometry.move(start, total.x / (t.width * s), total.y / (t.height * s), t)
-                            else -> start
+                    if (mode == 0 && total.getDistance() > slop) {
+                        if (corner >= 0) {
+                            mode = 1
+                            frozen = held
+                        } else {
+                            mode = 3
+                            viewFrom = null
+                        }
+                    }
+                    if (mode == 1 || mode == 3) {
+                        last = if (mode == 1) {
+                            EditGeometry.drag(start, corner, (change.position.x - v.x0) / (t.width * v.scale), (change.position.y - v.y0) / (t.height * v.scale), t)
+                        } else {
+                            // The photo follows the finger, so the crop goes the other way
+                            EditGeometry.move(start, -total.x / (t.width * fitted.scale), -total.y / (t.height * fitted.scale), t)
                         }
                         onLive(last)
                         change.consume()
@@ -490,7 +533,17 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                         change.consume()
                     }
                 }
-                onCommit(if (moved) last else start)
+                if (mode == 1) {
+                    // Let go: from the view held to one fitting the new crop
+                    viewFrom = held
+                    frozen = null
+                    scope.launch {
+                        viewProgress.snapTo(0f)
+                        viewProgress.animateTo(1f, spatial)
+                        viewFrom = null
+                    }
+                }
+                onCommit(if (mode != 0) last else start)
             }
         },
     ) {
@@ -517,20 +570,22 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                     native.drawBitmap(bitmap, m, paint)
                 } else {
                     // The photo turned, mirrored and straightened, before the crop: the frame shows the crop over it
+                    val shown = view ?: return@drawIntoCanvas
                     val m = Matrix().apply {
                         setValues(EditGeometry.matrix(upright, Orientation.NORMAL, state.copy(crop = sh.hnet.gallery.model.Crop.WHOLE)).values())
-                        postScale(fit.toFloat(), fit.toFloat())
-                        postTranslate(ox.toFloat(), oy.toFloat())
+                        postScale(shown.scale.toFloat(), shown.scale.toFloat())
+                        postTranslate(shown.x0.toFloat(), shown.y0.toFloat())
                     }
                     native.withClip(0f, 0f, size.width, size.height) { drawBitmap(bitmap, m, paint) }
                 }
             }
             if (original) return@Canvas
+            val shown = view ?: return@Canvas
             val c = shownCrop
-            val l = (ox + c.left * turned.width * fit).toFloat()
-            val t = (oy + c.top * turned.height * fit).toFloat()
-            val r = (ox + c.right * turned.width * fit).toFloat()
-            val b = (oy + c.bottom * turned.height * fit).toFloat()
+            val l = (shown.x0 + c.left * turned.width * shown.scale).toFloat()
+            val t = (shown.y0 + c.top * turned.height * shown.scale).toFloat()
+            val r = (shown.x0 + c.right * turned.width * shown.scale).toFloat()
+            val b = (shown.y0 + c.bottom * turned.height * shown.scale).toFloat()
             // Outside the crop under the scrim (SPEC §15.2, approved by the owner)
             val shade = scheme.scrim.copy(alpha = 0.32f)
             drawRect(shade, Offset.Zero, Size(size.width, t))
@@ -643,6 +698,25 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
         }
     }
 }
+
+/** How the crop area shows the turned photo: its shares to the area's pixels ([x0] + share × size × [scale]). */
+private class CropView(val scale: Double, val x0: Double, val y0: Double)
+
+/** The view fitting [crop] to the area less its margin, the crop in the middle. */
+private fun viewOf(crop: sh.hnet.gallery.model.Crop, turned: PxSize, area: IntSize, margin: Float): CropView {
+    val w = max(crop.width * turned.width, 1e-6)
+    val h = max(crop.height * turned.height, 1e-6)
+    val scale = min((area.width - 2 * margin) / w, (area.height - 2 * margin) / h)
+    return CropView(scale, area.width / 2.0 - crop.centerX * turned.width * scale, area.height / 2.0 - crop.centerY * turned.height * scale)
+}
+
+/** Between two crops, [p] of the way. */
+private fun lerp(a: sh.hnet.gallery.model.Crop, b: sh.hnet.gallery.model.Crop, p: Float): sh.hnet.gallery.model.Crop = if (p >= 1f) b else sh.hnet.gallery.model.Crop(
+    a.left + (b.left - a.left) * p,
+    a.top + (b.top - a.top) * p,
+    a.right + (b.right - a.right) * p,
+    a.bottom + (b.bottom - a.bottom) * p,
+)
 
 /** A turn's or a mirror's motion: where it starts, each going home to none. */
 private class Turn(spin: Float, zoom: Float, over: Float) {

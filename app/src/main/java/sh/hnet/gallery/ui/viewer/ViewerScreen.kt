@@ -696,8 +696,9 @@ private fun Toolbar(
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
         ShareButton(onShare)
-        // Edit (S7): photos; videos' trimming comes with S9 (D5)
-        if (item.mime !in NOT_EDITABLE) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), { onEdit?.invoke() }, enabled = onEdit != null && !item.video)
+        // Edit (S7): photos only – videos' trimming comes with S9, and no button that does nothing goes into a release
+        // (the owner, 20 Nov 2026)
+        if (item.mime !in NOT_EDITABLE && !item.video) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), { onEdit?.invoke() }, enabled = onEdit != null)
         TooltipIconButton(
             if (item.favorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite,
             stringResource(if (item.favorite) R.string.action_unfavorite else R.string.action_favorite),

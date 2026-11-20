@@ -221,3 +221,59 @@ class EditingStraightenTest {
         assertEquals(dragged.crop, straight.crop)
     }
 }
+
+/** Two fingers zoom and move the photo under a frame that stays (owner, 20 Nov 2026, as iOS). */
+class EditingZoomTest {
+    private val photo = PxSize(4000, 3000)
+    private val turned = EditGeometry.turned(photo, EditState())
+
+    @Test
+    fun closerShrinksTheCropAboutTheFingers() {
+        val zoomed = EditGeometry.zoom(EditState(), 0.5, 0.5, 2.0, 0.0, 0.0, turned).crop
+        assertEquals(Crop(0.25, 0.25, 0.75, 0.75).left, zoomed.left, 1e-9)
+        assertEquals(0.75, zoomed.bottom, 1e-9)
+        // About a point off the middle: that point stays where it was in the crop
+        val off = EditGeometry.zoom(EditState(), 0.2, 0.3, 2.0, 0.0, 0.0, turned).crop
+        assertEquals(0.2, off.left + (0.2 - 0.0) / 1.0 * off.width, 1e-9)
+        assertEquals(0.5, off.width, 1e-9)
+    }
+
+    @Test
+    fun theShapeStays() {
+        val start = EditState(crop = Crop(0.1, 0.2, 0.5, 0.4))
+        val zoomed = EditGeometry.zoom(start, 0.3, 0.3, 1.7, 0.0, 0.0, turned).crop
+        assertEquals(start.crop.width / start.crop.height, zoomed.width / zoomed.height, 1e-9)
+    }
+
+    @Test
+    fun fartherStopsAtThePhotoPushedBackIn() {
+        // Near the top-left corner, twice as far: grown about the fingers, pushed back in, the whole photo at most
+        val zoomed = EditGeometry.zoom(EditState(crop = Crop(0.0, 0.0, 0.5, 0.5)), 0.1, 0.1, 0.5, 0.0, 0.0, turned).crop
+        assertEquals(Crop.WHOLE, zoomed)
+        val far = EditGeometry.zoom(EditState(crop = Crop(0.25, 0.25, 0.75, 0.75)), 0.5, 0.5, 0.01, 0.0, 0.0, turned).crop
+        assertEquals(Crop.WHOLE, far)
+    }
+
+    @Test
+    fun neverSmallerThanTheSmallest() {
+        val zoomed = EditGeometry.zoom(EditState(), 0.5, 0.5, 1000.0, 0.0, 0.0, turned).crop
+        assertTrue(zoomed.height * 3000 >= 0.05 * 3000 - 1e-6)
+    }
+
+    @Test
+    fun straightenedStaysInside() {
+        val tilted = EditGeometry.withAngle(EditState(), 12.0, turned)
+        for (factor in listOf(0.2, 0.7, 1.3, 3.0)) {
+            val zoomed = EditGeometry.zoom(tilted, 0.1, 0.9, factor, 0.0, 0.0, turned)
+            assertTrue(EditGeometry.inside(zoomed.crop, 12.0, turned))
+        }
+    }
+
+    @Test
+    fun theFingersMoveThePhotoSoTheCropGoesTheOtherWay() {
+        val start = EditState(crop = Crop(0.25, 0.25, 0.75, 0.75))
+        val moved = EditGeometry.zoom(start, 0.5, 0.5, 1.0, 0.1, 0.0, turned).crop
+        assertEquals(0.15, moved.left, 1e-9)
+        assertEquals(0.25, moved.top, 1e-9)
+    }
+}

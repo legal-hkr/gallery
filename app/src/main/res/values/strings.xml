@@ -425,10 +425,6 @@
     <string name="ratio_free">Free</string>
     <string name="ratio_original">Original</string>
     <string name="ratio_square">Square</string>
-    <string name="tab_adjust">Adjust</string>
-    <string name="tab_crop">Crop</string>
-    <string name="tab_draw">Draw</string>
-    <string name="tab_filters">Filters</string>
     <string name="title_discard_changes">Discard changes?</string>
     <string name="title_replace_original">Replace the original?</string>
 

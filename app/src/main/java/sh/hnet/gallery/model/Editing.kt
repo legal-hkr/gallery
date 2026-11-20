@@ -279,6 +279,53 @@ object EditGeometry {
     }
 
     /**
+     * Two fingers on the photo (owner, 20 Nov 2026, as the Photos editor of iOS): the photo zoomed by [factor] (above 1:
+     * closer) about ([fx], [fy]) – shares of the turned photo, the point between the fingers – and moved by the fingers'
+     * [dx], [dy] (shares), under a frame that stays where it is. So the crop scales the other way about that point and
+     * moves against the fingers, keeping its shape: as close as the smallest crop, as far as the photo reaches – pushed
+     * back in where growing would take it past an edge – and never past the straightened photo's edge.
+     */
+    fun zoom(state: EditState, fx: Double, fy: Double, factor: Double, dx: Double, dy: Double, turned: PxSize): EditState {
+        val c = state.crop
+        if (!inside(c, state.angle, turned)) return state.copy(crop = fit(c, state.angle, turned))
+        fun about(f: Double) = Crop(fx + (c.left - fx) * f, fy + (c.top - fy) * f, fx + (c.right - fx) * f, fy + (c.bottom - fy) * f)
+        // Shifted back into the photo's square where it would stick out; wider than the photo it can't be
+        fun pushedIn(k: Crop): Crop {
+            val x = when {
+                k.width > 1 -> 0.0
+                k.left < 0 -> -k.left
+                k.right > 1 -> 1 - k.right
+                else -> 0.0
+            }
+            val y = when {
+                k.height > 1 -> 0.0
+                k.top < 0 -> -k.top
+                k.bottom > 1 -> 1 - k.bottom
+                else -> 0.0
+            }
+            return Crop(k.left + x, k.top + y, k.right + x, k.bottom + y)
+        }
+        val leastPx = LEAST * min(turned.width, turned.height)
+        val smallest = leastPx / min(c.width * turned.width, c.height * turned.height)
+        val wanted = max(1 / factor, min(smallest, 1.0))
+        var crop = pushedIn(about(wanted))
+        if (!inside(crop, state.angle, turned)) {
+            // As far towards the wanted size as fits (the present crop does)
+            var low = 0.0
+            var high = 1.0
+            repeat(40) {
+                val mid = (low + high) / 2
+                if (inside(pushedIn(about(1 + (wanted - 1) * mid)), state.angle, turned)) low = mid else high = mid
+            }
+            crop = pushedIn(about(1 + (wanted - 1) * low))
+        }
+        // The search's last hair past an edge cut off: the photo's own edge exactly
+        crop = Crop(crop.left.coerceIn(0.0, 1.0), crop.top.coerceIn(0.0, 1.0), crop.right.coerceIn(0.0, 1.0), crop.bottom.coerceIn(0.0, 1.0))
+        val zoomed = state.copy(crop = crop, wanted = null)
+        return if (dx == 0.0 && dy == 0.0) zoomed else move(zoomed, -dx, -dy, turned)
+    }
+
+    /**
      * From ([fx], [fy]) – which fits – towards ([tx], [ty]), each axis as far as it fits: x then y, and y then x (a
      * straightened photo's edge is slanted, so the order matters), whichever ends nearer the target. What fits is
      * convex, so along an axis it is one stretch from the start.
