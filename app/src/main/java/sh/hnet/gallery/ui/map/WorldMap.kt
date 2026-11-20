@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -32,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -205,84 +207,7 @@ fun WorldMap(
     val cityStyle = MaterialTheme.typography.bodySmall.copy(color = scheme.onSurface)
     val cityLabels = remember(data, language) { HashMap<Int, TextLayoutResult>() }
     val regionOrder = remember(data) { regionBoxes.indices.sortedByDescending { area(regionBoxes[it]) } }
-    val scope = rememberCoroutineScope()
-    val slop = LocalViewConfiguration.current.touchSlop
-    var fling by remember { mutableStateOf<Job?>(null) }
-    var lastTap by remember { mutableStateOf(0L to Offset.Zero) }
-
-    fun animateZoom(factor: Float, focus: Offset) {
-        fling?.cancel()
-        fling = scope.launch {
-            val progress = Animatable(1f)
-            var applied = 1f
-            progress.animateTo(factor) {
-                state.zoomBy(value / applied, focus)
-                applied = value
-            }
-        }
-    }
-
-    val gestures = if (!interactive) Modifier else Modifier.pointerInput(state) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false)
-            fling?.cancel()
-            val tracker = VelocityTracker()
-            tracker.addPosition(down.uptimeMillis, down.position)
-            var moved = false
-            var travelled = 0f
-            var zoomed = 1f
-            var pointers = 1
-            var centroid = down.position
-            var last = down.uptimeMillis
-            do {
-                val event = awaitPointerEvent()
-                val pressed = event.changes.count { it.pressed }
-                pointers = max(pointers, pressed)
-                val zoom = event.calculateZoom()
-                val pan = event.calculatePan()
-                event.calculateCentroid(useCurrent = false).takeIf { it != Offset.Unspecified }?.let { centroid = it }
-                if (!moved) {
-                    travelled += pan.getDistance()
-                    zoomed *= zoom
-                    if (travelled > slop || abs(1 - zoomed) > 0.05f) moved = true
-                }
-                if (moved) {
-                    state.zoomBy(zoom, centroid)
-                    state.panBy(pan.x, pan.y)
-                    event.changes.forEach { if (it.positionChanged()) it.consume() }
-                }
-                event.changes.firstOrNull()?.let {
-                    last = it.uptimeMillis
-                    if (pressed == 1) tracker.addPosition(it.uptimeMillis, it.position)
-                }
-            } while (event.changes.any { it.pressed })
-            when {
-                // Two fingers tapped together: out (SPEC §13.3)
-                !moved && pointers >= 2 && last - down.uptimeMillis < 400 -> animateZoom(0.5f, centroid)
-                !moved && pointers == 1 -> {
-                    val (time, where) = lastTap
-                    if (down.uptimeMillis - time < 300 && (down.position - where).getDistance() < slop * 4) {
-                        lastTap = 0L to Offset.Zero
-                        animateZoom(2f, down.position)
-                    } else {
-                        lastTap = down.uptimeMillis to down.position
-                        onTap()
-                    }
-                }
-                moved && pointers == 1 -> {
-                    val velocity = tracker.calculateVelocity()
-                    fling = scope.launch {
-                        var previous = Offset.Zero
-                        AnimationState(Offset.VectorConverter, Offset.Zero, Offset(velocity.x, velocity.y)).animateDecay(exponentialDecay(frictionMultiplier = 2f)) {
-                            state.panBy(value.x - previous.x, value.y - previous.y)
-                            previous = value
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    val gestures = if (interactive) Modifier.mapGestures(state, onTap) else Modifier
     Canvas(modifier.onSizeChanged { state.size = it; state.clamp() }.then(gestures)) {
         if (state.size.width == 0) return@Canvas
         drawRect(scheme.surfaceContainerHigh)
@@ -348,6 +273,100 @@ fun WorldMap(
             drawn++
         }
     }
+}
+
+/**
+ * The map's gestures (SPEC §13.3): pinch and drag together, a fling, double tap in, two-finger tap out, a tap.
+ * Put on whatever holds the map and what lies over it (the clusters): a finger landing on a cluster is still one of
+ * the map's (owner's phone test of S6b2: a pinch with a finger on a cluster did nothing – the cluster alone got that
+ * finger). A tap a cluster took isn't the map's.
+ */
+@Composable
+fun Modifier.mapGestures(state: MapState, onTap: () -> Unit): Modifier {
+    val tap by rememberUpdatedState(onTap)
+    val scope = rememberCoroutineScope()
+    val slop = LocalViewConfiguration.current.touchSlop
+    var fling by remember { mutableStateOf<Job?>(null) }
+    var lastTap by remember { mutableStateOf(0L to Offset.Zero) }
+
+    fun animateZoom(factor: Float, focus: Offset) {
+        fling?.cancel()
+        fling = scope.launch {
+            val progress = Animatable(1f)
+            var applied = 1f
+            progress.animateTo(factor) {
+                state.zoomBy(value / applied, focus)
+                applied = value
+            }
+        }
+    }
+
+    return this.pointerInput(state) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            fling?.cancel()
+            val tracker = VelocityTracker()
+            tracker.addPosition(down.uptimeMillis, down.position)
+            var moved = false
+            var travelled = 0f
+            var zoomed = 1f
+            var pointers = 1
+            var centroid = down.position
+            var last = down.uptimeMillis
+            var taken = false
+            do {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.count { it.pressed }
+                pointers = max(pointers, pressed)
+                val zoom = event.calculateZoom()
+                val pan = event.calculatePan()
+                event.calculateCentroid(useCurrent = false).takeIf { it != Offset.Unspecified }?.let { centroid = it }
+                if (!moved) {
+                    travelled += pan.getDistance()
+                    zoomed *= zoom
+                    if (travelled > slop || abs(1 - zoomed) > 0.05f) moved = true
+                }
+                if (moved) {
+                    state.zoomBy(zoom, centroid)
+                    state.panBy(pan.x, pan.y)
+                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                }
+                event.changes.firstOrNull()?.let {
+                    last = it.uptimeMillis
+                    if (pressed == 1) tracker.addPosition(it.uptimeMillis, it.position)
+                }
+                // A cluster's tap is the cluster's (it consumed the lift): not the map's tap too. `changedToUp` itself
+                // skips a consumed lift, so it never saw one (owner's test: a cluster opened only on a double tap – the
+                // map's tap let the cluster go at once, its double tap zoomed instead)
+                taken = taken || event.changes.any { it.changedToUpIgnoreConsumed() && it.isConsumed }
+            } while (event.changes.any { it.pressed })
+            when {
+                // Two fingers tapped together: out (SPEC §13.3)
+                !moved && pointers >= 2 && last - down.uptimeMillis < 400 -> animateZoom(0.5f, centroid)
+                !moved && pointers == 1 && !taken -> {
+                    val (time, where) = lastTap
+                    if (down.uptimeMillis - time < 300 && (down.position - where).getDistance() < slop * 4) {
+                        lastTap = 0L to Offset.Zero
+                        animateZoom(2f, down.position)
+                    } else {
+                        lastTap = down.uptimeMillis to down.position
+                        tap()
+                    }
+                }
+                moved && pointers == 1 -> {
+                    val velocity = tracker.calculateVelocity()
+                    fling = scope.launch {
+                        var previous = Offset.Zero
+                        AnimationState(Offset.VectorConverter, Offset.Zero, Offset(velocity.x, velocity.y)).animateDecay(exponentialDecay(frictionMultiplier = 2f)) {
+                            state.panBy(value.x - previous.x, value.y - previous.y)
+                            previous = value
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }
 
 /** What the view shows, in the data's units (1e-4°), for leaving out what's beyond it. */

@@ -212,11 +212,10 @@ fun MapScreen(onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit, lat: Double? 
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding())) {
-            if (data != null) {
-                // A tap on the map lets the cluster go
-                WorldMap(state, data, language, Modifier.fillMaxSize(), onTap = { selected = null })
-            }
+        // The gestures on what holds the map and the clusters, so a finger on a cluster pinches too; a tap on the map
+        // (not on a cluster) lets the cluster go
+        Box(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).mapGestures(state) { selected = null }) {
+            if (data != null) WorldMap(state, data, language, Modifier.fillMaxSize(), interactive = false)
             for (cluster in visible) {
                 key(cluster.newest) {
                     val item = items[cluster.newest]
