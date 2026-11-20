@@ -394,6 +394,7 @@ private suspend fun readInfo(resolver: ContentResolver, item: MediaItem, fact: F
     var camera: String? = null
     var settings: String? = null
     var lens: String? = null
+    var latLong: DoubleArray? = null
     val locale = Locale.getDefault()
     if (!item.video) {
         try {
@@ -409,12 +410,15 @@ private suspend fun readInfo(resolver: ContentResolver, item: MediaItem, fact: F
                     exif.getAttributeDouble(ExifInterface.TAG_FOCAL_LENGTH, 0.0).takeIf { it > 0 }?.let { ExifText.focalLength(it, locale) },
                 ).joinToString(", ").ifEmpty { null }
                 lens = exif.getAttribute(ExifInterface.TAG_LENS_MODEL)?.trim()?.ifEmpty { null }
+                // A file from outside (an attachment, the vault's) has no facts: its location from itself, its whole bytes
+                // being read (review before v0.1.0: Info said location access was missing)
+                if (item.outside) latLong = exif.latLong
             }
         } catch (_: Exception) {
         }
     }
     val motionMs = if (fact?.motion == true && fact.motionLength != null) motionDuration(resolver, item, fact.motionLength) else null
-    FileInfo(camera, settings, lens, fact?.latitude, fact?.longitude, fact?.located ?: false, motionMs)
+    FileInfo(camera, settings, lens, fact?.latitude ?: latLong?.get(0), fact?.longitude ?: latLong?.get(1), fact?.located ?: item.outside, motionMs)
 }
 
 /** A motion photo's video length, read from the tail of the file without copying it. */

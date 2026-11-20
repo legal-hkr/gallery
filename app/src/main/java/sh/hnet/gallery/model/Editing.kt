@@ -92,8 +92,8 @@ data class EditState(
      */
     val wanted: Crop? = null,
 ) {
-    /** Anything to save: the crop as set is bookkeeping, not a change of its own. */
-    val changed: Boolean get() = copy(wanted = null) != EditState()
+    /** Anything to save: the crop as set is bookkeeping, and a ratio alone that left the crop as it was changes nothing. */
+    val changed: Boolean get() = copy(wanted = null, ratio = CropRatio.FREE, portrait = false) != EditState()
 
     /** The crop the angle is fitted from. */
     val base: Crop get() = wanted ?: crop
@@ -189,7 +189,9 @@ object EditGeometry {
     fun ratioOf(state: EditState, turned: PxSize): Double? {
         val r = when (state.ratio) {
             CropRatio.FREE -> return null
-            CropRatio.ORIGINAL -> turned.width / turned.height
+            // The photo's own shape as it lies, the other way only when swapped (review before v0.1.0: a portrait photo's
+            // Original came out landscape)
+            CropRatio.ORIGINAL -> return (turned.width / turned.height).let { if (state.portrait) 1 / it else it }
             else -> state.ratio.wide.toDouble() / state.ratio.high
         }
         return if (state.portrait == (r > 1)) 1 / r else r

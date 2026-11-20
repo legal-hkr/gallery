@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -286,6 +287,7 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
         val entries = timeline.entries
         val locale = LocalConfiguration.current.locales[0]
         val monthYear = stringResource(R.string.format_month_year)
+        val timelineNow by rememberUpdatedState(timeline)
         Box(Modifier.fillMaxSize()) {
             MediaGrid(
                 shown.days,
@@ -299,8 +301,9 @@ fun AlbumPage(key: PageKey, onBack: () -> Unit, onOpen: (ViewerRequest) -> Unit,
                 bottomPadding = if (selection.active) 96.dp else 0.dp,
                 onOpen = { item ->
                     onOpen(ViewerRequest(allIds, item.id, album = userAlbum, title = title) { id ->
-                        // The grid under the viewer follows the item shown, so the flight back lands on its tile
-                        val index = timeline.indexOf[id] ?: return@ViewerRequest
+                        // The grid under the viewer follows the item shown (the timeline as it is now), so the flight
+                        // back lands on its tile
+                        val index = timelineNow.indexOf[id] ?: return@ViewerRequest
                         if (grid.layoutInfo.visibleItemsInfo.none { it.index == index }) scope.launch { grid.scrollToItem(index) }
                     })
                 },

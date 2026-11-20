@@ -250,6 +250,13 @@ fun MediaGrid(
             selection?.selected = Selection.run(run.base, order, run.anchor, index, run.select)
         }
 
+        // The gestures below live as long as the grid (pointerInput(Unit)): they reach the layouts, the order and the
+        // card's height of the composition that is current, not of the first one – with the first screenful's 300
+        // items a pinch landed at the top and a drag selected nothing past them (review before v0.1.0)
+        val geometryNow by rememberUpdatedState<(GridStep) -> GridGeometry>(::geometry)
+        val prefetchNow by rememberUpdatedState<suspend (Morph) -> Unit>(::prefetch)
+        val dragToNow by rememberUpdatedState(::dragTo)
+
         // Near the top or bottom 64 dp the grid scrolls by itself while a drag selects, faster closer to the edge (SPEC §5.3)
         val edgePx = with(density) { 64.dp.toPx() }
         val fastestPx = with(density) { 24.dp.toPx() }
@@ -266,7 +273,7 @@ fun MediaGrid(
                 }
                 if (speed != 0f) {
                     state.scrollBy(speed)
-                    dragTo(run, run.pointer)
+                    dragToNow(run, run.pointer)
                 }
             }
         }
@@ -290,6 +297,9 @@ fun MediaGrid(
             }?.let { info ->
                 (info.key as String) to ((point.y - info.offset.y) / info.size.height).coerceIn(0f, 1f)
             }
+
+        val measureLeadNow by rememberUpdatedState(::measureLead)
+        val tileAtNow by rememberUpdatedState(::tileAt)
 
         // After a tap in the month view: the tapped tile back at its height, once the entries are those of the new step
         LaunchedEffect(timeline, columns) {
@@ -343,16 +353,16 @@ fun MediaGrid(
                                     zoom = rest
                                     if (target != null) {
                                         val centroid = event.calculateCentroid(useCurrent = true)
-                                        measureLead()
-                                        tileAt(centroid)?.let { (key, fy) ->
+                                        measureLeadNow()
+                                        tileAtNow(centroid)?.let { (key, fy) ->
                                             val change = Morph(key, fy, centroid, stepNow, target)
                                             morph = change
                                             scope.launch {
                                                 // The new step's thumbnails read meanwhile, so the grid shows them sharp when it takes over
-                                                val prefetch = launch { prefetch(change) }
+                                                val prefetch = launch { prefetchNow(change) }
                                                 change.progress.animateTo(1f, motion.defaultSpatialSpec())
                                                 prefetch.cancel()
-                                                val geo = geometry(target)
+                                                val geo = geometryNow(target)
                                                 val index = geo.index(change.anchor)
                                                 val y = if (index != null) -Morphs.offset(geo, index, change.pivot.y, change.fy, heightPx) else 0f
                                                 settle = Settle(target, y)
@@ -377,7 +387,7 @@ fun MediaGrid(
                             if (run != null && event.changes.size == 1) {
                                 val change = event.changes.first()
                                 run.pointer = change.position
-                                dragTo(run, change.position)
+                                dragToNow(run, change.position)
                                 change.consume()
                             }
                             if (event.changes.none { it.pressed }) break

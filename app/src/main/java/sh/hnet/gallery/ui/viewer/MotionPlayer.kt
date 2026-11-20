@@ -96,7 +96,7 @@ fun MotionVideo(item: MediaItem, length: Long, playing: Boolean, loop: Boolean, 
     val context = LocalContext.current
     val resolver = context.contentResolver
     val ended by rememberUpdatedState(onEnded)
-    var started by remember { mutableStateOf(false) }
+    var started by remember(item.id, item.generation) { mutableStateOf(false) }
     val player = remember(item.id, item.generation) {
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(ProgressiveMediaSource.Factory { TailDataSource(resolver, length) })
@@ -137,7 +137,15 @@ fun MotionVideo(item: MediaItem, length: Long, playing: Boolean, loop: Boolean, 
     }
     // Hidden until its first frame is drawn, so the still doesn't blink to black
     AndroidView(
-        factory = { TextureView(it).also { view -> player.setVideoTextureView(view) } },
+        // The surface given to the player of now: a new one comes with a new version of the file (a favorite, a
+        // rename), and the view made once never reached it (review before v0.1.0: the motion stopped moving)
+        factory = { TextureView(it) },
+        update = { view ->
+            if (view.tag !== player) {
+                player.setVideoTextureView(view)
+                view.tag = player
+            }
+        },
         modifier = modifier.graphicsLayer { alpha = if (playing && started) 1f else 0f },
     )
 }

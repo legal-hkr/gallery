@@ -90,6 +90,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.exifinterface.media.ExifInterface
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -244,6 +246,9 @@ fun ViewerScreen(
     val player = remember { ViewerPlayer(context) }
     DisposableEffect(player) { onDispose { player.release() } }
     val playback by player.state.collectAsStateWithLifecycle()
+    // The app leaving the screen pauses the video (review before v0.1.0: its sound went on in the background, a short
+    // clip looped for good)
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playback.item?.let { player.pauseFor(it) } }
     // A zoomed photo's drag past its edge moves the pages; released, they settle by how far and how fast (the owner, 19 Nov 2026)
     val flingPx = with(density) { 400.dp.toPx() }
     val handoff = remember { PagerHandoff() }
@@ -297,7 +302,9 @@ fun ViewerScreen(
     LaunchedEffect(pages) {
         val follow = ViewerList.follow(currentId, opened, pages)
         val gone = currentId !in pages
-        if (gone && currentId !in ownTrashed) {
+        // The vault locking empties its pages: the viewer just closes, nothing was deleted (review before v0.1.0)
+        val vaultLocked = vault && app.vault.state.value !is Vault.State.Open
+        if (gone && currentId !in ownTrashed && !vaultLocked) {
             messageScope.launch {
                 snackbars.currentSnackbarData?.dismiss()
                 snackbars.showSnackbar(deletedElsewhere, duration = SnackbarDuration.Short)
@@ -332,6 +339,12 @@ fun ViewerScreen(
     val item = byId[currentId]
     val fact = facts?.get(currentId)
     val video = item?.video == true
+    // The screen stays on while a video plays (CLAUDE.md, S2a: FLAG_KEEP_SCREEN_ON; review before v0.1.0: it went dark)
+    val keepOn = video && playback.playing
+    DisposableEffect(keepOn) {
+        if (keepOn) view.keepScreenOn = true
+        onDispose { if (keepOn) view.keepScreenOn = false }
+    }
     val hdr = if (video) playback.item == currentId && playback.hdr != null else hdrOf[currentId] == true
     // A video plays when its page settles and pauses when it is left (SPEC §8.2)
     LaunchedEffect(currentId, video) {
@@ -406,7 +419,7 @@ fun ViewerScreen(
                             touched++
                             chrome = !chrome
                         },
-                        onOpenWith = { open(context, pageItem, Intent.ACTION_VIEW) },
+                        onOpenWith = if (vault) null else ({ open(context, pageItem, Intent.ACTION_VIEW) }),
                     )
                     LaunchedEffect(pageItem.id) { onLoaded(pageItem.id, null) }
                 } else {
@@ -429,7 +442,7 @@ fun ViewerScreen(
                                 if (!held) motion = false
                             }
                         },
-                        onOpenWith = { open(context, pageItem, Intent.ACTION_VIEW) },
+                        onOpenWith = if (vault) null else ({ open(context, pageItem, Intent.ACTION_VIEW) }),
                         zoomKey = isCurrent,
                         pager = handoff,
                     )
@@ -575,7 +588,8 @@ fun ViewerScreen(
                 val folderShown = sources?.let { SourceStore.stateOf(item.folder, it, newFolders) != SourceState.HIDDEN } == true
                 InfoSheet(
                     item, fact, hdr, landscape, playback.takeIf { it.item == item.id },
-                    onChangeDate = if (readOnly || vault) null else ({ date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }),
+                    // Not for a file from outside: nothing changes it (SPEC §17.2), and MediaStore can't ask for another app's file
+                    onChangeDate = if (readOnly || vault || item.outside) null else ({ date, time -> changeDate(context, item, date, time, writer, consent, snackbars, messageScope) }),
                     onDismiss = { info = false },
                     // The sheet is a window of its own, above anything the viewer's host lays over it: it closes as the album opens (owner's test of S4b1)
                     onOpenFolder = if (folderShown && !trash && !readOnly) ({
@@ -670,8 +684,8 @@ private fun Tooltip(label: String, content: @Composable () -> Unit) {
 }
 
 /**
- * The floating toolbar (SPEC §6.2): Share, Edit, Favorite, Info, More, Delete. Share and Edit come
- * with S5 and S7: shown disabled meanwhile (D5); Edit is left out for formats the editor can't write.
+ * The floating toolbar (SPEC §6.2): Share, Edit, Favorite, Info, More, Delete. Edit is left out for formats the
+ * editor can't write and for videos (their trimming comes with S9).
  */
 @Composable
 private fun Toolbar(

@@ -51,7 +51,6 @@ class PlaceGroups(val countries: List<CountryGroup>, val noLocation: List<MediaI
          */
         fun of(items: List<MediaItem>, placeOf: (Long) -> Place?): PlaceGroups {
             val noLocation = ArrayList<MediaItem>()
-            val countryItems = LinkedHashMap<Int, Int>()
             val towns = LinkedHashMap<Int, MutableList<MediaItem>>()
             val townPlace = HashMap<Int, Place>()
             for (item in items) {
@@ -61,7 +60,6 @@ class PlaceGroups(val countries: List<CountryGroup>, val noLocation: List<MediaI
                     noLocation.add(item)
                     continue
                 }
-                if (place.country >= 0) countryItems[place.country] = (countryItems[place.country] ?: 0) + 1
                 if (place.country >= 0) {
                     val key = PlaceKey.of(place)
                     towns.getOrPut(key) { ArrayList() }.add(item)
@@ -71,8 +69,11 @@ class PlaceGroups(val countries: List<CountryGroup>, val noLocation: List<MediaI
             val byCountry = towns.entries
                 .map { (settlement, list) -> townPlace.getValue(settlement).let { TownGroup(settlement, it.region, it.country, list) } }
                 .groupBy { it.country }
-            val countries = countryItems.map { (country, count) ->
-                val list = byCountry[country].orEmpty().sortedWith(townOrder)
+            // A country counts what its towns hold: a town near a border may hold items whose own point lies across it,
+            // and counted by their own country they showed under a country with no town (review before v0.1.0)
+            val countries = byCountry.map { (country, groups) ->
+                val count = groups.sumOf { it.items.size }
+                val list = groups.sortedWith(townOrder)
                 val regions = list.groupBy { it.region }
                     .map { (region, regionTowns) -> RegionGroup(region, regionTowns, regionTowns.sumOf { it.items.size }) }
                     // Towns outside every region last

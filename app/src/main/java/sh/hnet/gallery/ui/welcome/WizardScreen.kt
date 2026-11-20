@@ -147,7 +147,14 @@ private fun AccessStep(step: String, onNext: () -> Unit) {
 private fun MediaManagementStep(step: String, onNext: () -> Unit) {
     val context = LocalContext.current
     val app = context.applicationContext as GalleryApplication
-    LaunchedEffect(Unit) { app.preferences.markMediaManagementOffered() }
+    // Once: a return to this step (a turn, the process restored) must not use up the second offer (review before v0.1.0)
+    var counted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!counted) {
+            counted = true
+            app.preferences.markMediaManagementOffered()
+        }
+    }
     val settings = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { onNext() }
     WizardStep(step, stringResource(R.string.title_media_management), stringResource(R.string.msg_wizard_media_management), stringResource(R.string.button_open_settings), onConfirm = {
         try {

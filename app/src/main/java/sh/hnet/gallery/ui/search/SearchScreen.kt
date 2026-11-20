@@ -44,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -294,6 +295,7 @@ private fun Results(
     val entries = timeline.entries
     val monthYear = stringResource(R.string.format_month_year)
     Box(Modifier.fillMaxSize()) {
+        val timelineNow by rememberUpdatedState(timeline)
         MediaGrid(
             results.days, results.months, step,
             onStepChange = viewModel::setStep,
@@ -307,7 +309,7 @@ private fun Results(
                 val ids = entries.mapNotNull { (it as? TimelineEntry.Tile)?.item?.id }
                 val searchName = resources.getString(R.string.label_nav_search)
                 onOpen(ViewerRequest(ids, item.id, title = searchName) { id ->
-                    val index = timeline.indexOf[id] ?: return@ViewerRequest
+                    val index = timelineNow.indexOf[id] ?: return@ViewerRequest
                     if (grid.layoutInfo.visibleItemsInfo.none { it.index == index }) scope.launch { grid.scrollToItem(index) }
                 })
             },

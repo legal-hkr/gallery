@@ -32,6 +32,14 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
     /** Every item, trashed included; null until the first read. */
     val items: StateFlow<List<MediaItem>?> = _items.asStateFlow()
 
+    /**
+     * The whole list only – never the first screenful read first: what judges items gone by their absence (the facts'
+     * rows, album members) must not see the 4 700 of 5 000 not read yet as deleted (review before v0.1.0: every cold
+     * start dropped and read again every fact outside the newest 300).
+     */
+    private val _complete = MutableStateFlow<List<MediaItem>?>(null)
+    val complete: StateFlow<List<MediaItem>?> = _complete.asStateFlow()
+
     private val lock = Mutex()
     private var volumes: Map<String, VolumeState> = emptyMap()
 
@@ -40,6 +48,7 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
             _access.collectLatest { access ->
                 if (access == Access.NONE) {
                     _items.value = emptyList()
+                    _complete.value = emptyList()
                     return@collectLatest
                 }
                 val first = _items.value == null
@@ -70,15 +79,18 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
         val states = source.volumes()
         if (firstScreen) _items.value = source.items(limit = FIRST_SCREEN).sortedWith(MediaItem.NEWEST_FIRST)
         _items.value = source.items().sortedWith(MediaItem.NEWEST_FIRST)
+        _complete.value = _items.value
         volumes = states
     }
 
     /** What changed since the last read, by generation; everything again when a volume is new, gone back or replaced. */
     private suspend fun refresh() {
-        val current = _items.value
         // With partial access, newly selected items keep their old generation, so only a full read finds them
-        if (current == null || _access.value == Access.PARTIAL) return load(firstScreen = false)
+        if (_items.value == null || _access.value == Access.PARTIAL) return load(firstScreen = false)
         lock.withLock {
+            // Read under the lock: taken before it, a refresh waiting for the first start's full read merged into the
+            // first screenful and left the library at 300 items (review before v0.1.0)
+            val current = _items.value ?: return@withLock
             val states = source.volumes()
             val replaced = states.any { (name, state) -> volumes[name]?.let { it.version != state.version || it.generation > state.generation } ?: true }
             if (replaced) {
@@ -87,6 +99,7 @@ class MediaIndex(private val source: MediaSource, private val scope: CoroutineSc
                 val changed = states.flatMap { (name, _) -> source.items(volume = name, since = volumes.getValue(name).generation) }
                 _items.value = IndexMerge.merge(current, changed, source.ids())
             }
+            _complete.value = _items.value
             volumes = states
         }
     }

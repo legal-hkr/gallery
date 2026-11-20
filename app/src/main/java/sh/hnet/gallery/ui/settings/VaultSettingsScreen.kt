@@ -43,9 +43,6 @@ fun VaultSettingsScreen(onBack: () -> Unit, onOpenVault: () -> Unit) {
     val delay by app.preferences.vaultLockDelay.collectAsStateWithLifecycle(VaultLockDelay.AT_ONCE)
     val access = LocalVaultActions.current
     var forgetting by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (app.vault.state.value is Vault.State.Locked) access?.open(then = {}, cancelled = onBack) ?: onBack()
-    }
     SettingsPage(title = stringResource(R.string.label_vault), onBack = onBack) {
         when (state) {
             Vault.State.NotSetUp -> SettingsGroup {
@@ -55,7 +52,9 @@ fun VaultSettingsScreen(onBack: () -> Unit, onOpenVault: () -> Unit) {
             is Vault.State.Lost -> SettingsGroup {
                 row { shapes -> SettingsNavigationRow(shapes, R.drawable.ic_key_off, stringResource(R.string.label_vault), stringResource(R.string.button_delete_unreadable), error = true, onClick = onOpenVault) }
             }
-            Vault.State.Locked -> {}
+            // Locked – on the way in, or after leaving the app with the page open: the prompt again, cancelled goes back
+            // (review before v0.1.0: the page stood blank after the vault locked)
+            Vault.State.Locked -> LaunchedEffect(Unit) { access?.open(then = {}, cancelled = onBack) ?: onBack() }
             is Vault.State.Open -> {
                 SecureWindow()
                 SettingsGroup(stringResource(R.string.header_lock_vault)) {

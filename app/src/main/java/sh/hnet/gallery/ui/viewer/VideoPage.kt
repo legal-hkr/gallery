@@ -31,7 +31,7 @@ import sh.hnet.gallery.ui.components.Thumbnails
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun VideoPage(item: MediaItem, player: ViewerPlayer, live: Boolean, onTap: () -> Unit, onOpenWith: () -> Unit) {
+fun VideoPage(item: MediaItem, player: ViewerPlayer, live: Boolean, onTap: () -> Unit, onOpenWith: (() -> Unit)?) {
     val px = Thumbnails.sizeFor(Int.MAX_VALUE)
     val state by player.state.collectAsStateWithLifecycle()
     // A video the phone can't play (no decoder for it, a damaged file): the problem card, as a photo's (SPEC §6.9)

@@ -117,6 +117,15 @@ class PlaceGroupsTest {
         assertEquals(listOf(8L, 9L), groups.noLocation.map { it.id })
         assertEquals(3, groups.townCount)
     }
+    @Test
+    fun aTownAcrossABorderCountsToItsOwnCountry() {
+        // Town 30 placed in country 1 by its newest item; an older one of it whose own point lies across the border
+        val places = mapOf(1L to Place(30, 5, 1), 2L to Place(30, 9, 2))
+        val groups = PlaceGroups.of((1L..2L).map { item(it) }) { places[it] }
+        assertEquals(listOf(1), groups.countries.map { it.country })
+        assertEquals(2, groups.countries.single().count)
+        assertEquals(2, groups.town(30)!!.items.size)
+    }
 }
 
 class PlaceKeyTest {

@@ -57,9 +57,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.R
 import sh.hnet.gallery.facts.Fact
@@ -92,7 +94,7 @@ fun PhotoPage(
     onPicture: (Picture) -> Unit,
     onTap: () -> Unit,
     onHold: (Boolean) -> Unit,
-    onOpenWith: () -> Unit,
+    onOpenWith: (() -> Unit)?,
     zoomKey: Any,
     pager: PagerHandoff? = null,
 ) {
@@ -106,7 +108,10 @@ fun PhotoPage(
     }
     val picture by produceState<Picture?>(null, item.id, item.generation, longSide) { value = PhotoDecoder.screen(resolver, item, longSide) }
     val tiles by produceState<TileSource?>(null, item.id, item.generation) {
-        value = TileSource.open(resolver, item)
+        // Opened whole even if the page leaves meanwhile, and then closed: a result thrown away with the cancellation
+        // kept its descriptor and native decoder until a finalizer (review before v0.1.0)
+        val opened = withContext(NonCancellable) { TileSource.open(resolver, item) }
+        if (isActive) value = opened else opened?.close()
     }
     DisposableEffect(tiles) { onDispose { tiles?.close() } }
     val pictureNow by rememberUpdatedState(onPicture)
@@ -228,7 +233,7 @@ private const val TILE_SETTLE_MS = 80L
 
 /** The family's problem card (SPEC §6.9): the file can't be shown; Open with hands it to another app. Videos that can't be played too. */
 @Composable
-internal fun BrokenFile(onOpenWith: () -> Unit) {
+internal fun BrokenFile(onOpenWith: (() -> Unit)?) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -241,7 +246,8 @@ internal fun BrokenFile(onOpenWith: () -> Unit) {
                     Icon(painterResource(R.drawable.ic_broken_image), contentDescription = null)
                     Text(stringResource(R.string.error_cannot_display), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                 }
-                TextButton(onClick = onOpenWith, modifier = Modifier.align(Alignment.End)) {
+                // Not for the vault's items: they are handed to no other app
+                if (onOpenWith != null) TextButton(onClick = onOpenWith, modifier = Modifier.align(Alignment.End)) {
                     Text(stringResource(R.string.menu_open_with), color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }

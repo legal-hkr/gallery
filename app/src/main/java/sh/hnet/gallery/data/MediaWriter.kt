@@ -166,6 +166,18 @@ class MediaWriter(private val context: Context) {
         false
     }
 
+    /** Which of [items] MediaStore still has (after a delete that failed part of the way). */
+    suspend fun stillThere(items: List<MediaItem>): Set<Long> = withContext(Dispatchers.IO) {
+        items.filterTo(ArrayList()) { item ->
+            try {
+                resolver.query(item.uri(), arrayOf(MediaStore.MediaColumns._ID), null, null, null)?.use { it.count > 0 } ?: false
+            } catch (_: Exception) {
+                // Unknown: kept as there, its copy taken back – never a file gone from both
+                true
+            }
+        }.mapTo(HashSet()) { it.id }
+    }
+
     /** The right to write the items' files (the date taken, SPEC §7.2): null when the app may already. */
     fun writeRequest(items: List<MediaItem>): PendingIntent? =
         if (items.all { it.ours }) null else MediaStore.createWriteRequest(resolver, items.map { it.uri() })

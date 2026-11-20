@@ -111,6 +111,8 @@ class ViewerPlayer(context: Context) {
     fun show(item: MediaItem) {
         val current = _state.value.item
         if (current == item.id) {
+            // Back on the same video: the page's toggle starts at HDR again, so the decoder does too (review before v0.1.0)
+            if (sdrRequested) setSdr(false)
             player.play()
             return
         }

@@ -2,18 +2,27 @@ package sh.hnet.gallery
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.ui.GalleryApp
 import sh.hnet.gallery.ui.share.ShareSheet
 import sh.hnet.gallery.ui.theme.GalleryTheme
 
+/** How long the vault stays open while its own system picker is over the app. */
+private const val PICKING_GRACE_MS = 5 * 60_000L
+
 class MainActivity : ComponentActivity() {
+
+    // Dark mode switched in place (configChanges has uiMode, so nothing on screen is lost – review before v0.1.0): the
+    // system bars' icons follow it again
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enableEdgeToEdge()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
@@ -36,7 +45,11 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         val app = application as GalleryApplication
         // A full-screen prompt of the screen lock stops the activity too: a vault that is still locked then has nothing to lock
-        if (!isChangingConfigurations && !app.vault.picking) app.appScope.launch { app.vault.lockAfter(app.preferences.vaultLockDelay.first().ms) }
+        // At once, with the delay kept in the vault: a read launched here could come after the user was back and lock
+        // the vault in use (review before v0.1.0)
+        // Over the vault's own system picker, a grace of five minutes at least: leaving for it isn't leaving the app, but
+        // leaving the app from it must not leave the vault open for good (review before v0.1.0)
+        if (!isChangingConfigurations) app.vault.lockAfter(if (app.vault.picking) maxOf(app.vault.lockDelayMs, PICKING_GRACE_MS) else app.vault.lockDelayMs)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -55,6 +68,11 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (intent?.action != ShareSheet.ACTION_TOGGLE) return
+        // Only the app's own share sheet: the token is this process's secret
+        if (intent.getStringExtra(ShareSheet.EXTRA_TOKEN) != ShareSheet.token) {
+            setIntent(Intent())
+            return
+        }
         val ids = intent.getLongArrayExtra(ShareSheet.EXTRA_IDS)?.toList() ?: return
         (application as GalleryApplication).shareAgain.value = ShareAgain(ids, intent.getBooleanExtra(ShareSheet.EXTRA_REMOVE, true))
         setIntent(Intent())

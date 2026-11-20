@@ -7,12 +7,14 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Canvas
+import android.graphics.ColorSpace
 import android.graphics.Gainmap
 import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Rect
 import android.net.Uri
+import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withClip
@@ -72,7 +74,16 @@ class EditSaver(private val context: Context) {
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
                 put(MediaStore.MediaColumns.DATE_TAKEN, item.taken)
             }
-            val target = resolver.insert(MediaStore.Images.Media.getContentUri(item.volume), values) ?: return@withContext null
+            // Beside the original where MediaStore takes a photo (DCIM, Pictures); elsewhere – Download, another app's
+            // Android/media folder – in Pictures (review before v0.1.0: every such copy failed)
+            val target = try {
+                resolver.insert(MediaStore.Images.Media.getContentUri(item.volume), values)
+            } catch (_: Exception) {
+                null
+            } ?: resolver.insert(
+                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                values.apply { put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/") },
+            ) ?: return@withContext null
             try {
                 resolver.openOutputStream(target)?.use { to -> file.inputStream().use { it.copyTo(to, 256 * 1024) } } ?: error("No stream")
                 resolver.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null)
@@ -133,14 +144,26 @@ class EditSaver(private val context: Context) {
         val height = size.height.roundToInt()
         val map = EditGeometry.matrix(stored, orientation, state)
         val back = map.inverse()
-        val out = createBitmap(width, height)
+        // In the photo's own colours (Display P3 on many phones): an sRGB result clipped them, and the gain map, made for the
+        // original's base, then lifted a base of other colours (review before v0.1.0)
+        val space = try {
+            BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { bounds ->
+                resolver.openInputStream(source)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            }.outColorSpace
+        } catch (_: Exception) {
+            null
+        } ?: ColorSpace.get(ColorSpace.Named.SRGB)
+        val out = createBitmap(width, height, Bitmap.Config.ARGB_8888, true, space)
         val canvas = Canvas(out)
         val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
         var gain: Bitmap? = null
         var gainCanvas: Canvas? = null
         var gainScale = 0.0
         var gainTemplate: Gainmap? = null
-        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+        val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inPreferredColorSpace = space
+        }
         var y = 0
         while (y < height) {
             val y1 = min(height, y + STRIP)

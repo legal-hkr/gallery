@@ -142,7 +142,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
 
     val home: StateFlow<SearchHome?> = context.map { c ->
         c ?: return@map null
-        val towns = c.groups?.countries?.flatMap { it.towns }?.sortedByDescending { it.items.size }?.take(10).orEmpty()
+        val towns = c.groups?.countries?.flatMap { it.towns }?.filter { it.isTown }?.sortedByDescending { it.items.size }?.take(10).orEmpty()
         val kinds = SearchKind.entries.filter { c.countOf(SearchPart.Kind(it)) > 0 }
         val months = c.items.asSequence().map { YearMonth.from(c.dayOf(it)) }.distinct().sortedDescending().take(6).toList()
         SearchHome(towns, kinds, months)

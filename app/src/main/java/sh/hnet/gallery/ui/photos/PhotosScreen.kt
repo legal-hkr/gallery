@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -147,6 +148,8 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                 } else {
                     val locale = LocalConfiguration.current.locales[0]
                     val topCount = if (current.partial != null) 1 else 0
+                    val timelineNow by rememberUpdatedState(timeline)
+                    val topCountNow by rememberUpdatedState(topCount)
                     val entries = timeline.entries
                     val monthYear = stringResource(R.string.format_month_year)
                     Box(Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection)) {
@@ -169,8 +172,9 @@ fun PhotosScreen(onOpenSettings: () -> Unit, onChooseAlbums: () -> Unit, onOpen:
                                 val photosName = resources.getString(R.string.label_nav_photos)
                                 onOpen(ViewerRequest(ids, item.id, title = photosName) { id ->
                                     // The grid under the viewer follows the item shown, so the flight back lands on its tile
-                                    val index = timeline.indexOf[id] ?: return@ViewerRequest
-                                    val target = index + topCount
+                                    // The timeline and the card as they are now: new photos may have come meanwhile
+                                    val index = timelineNow.indexOf[id] ?: return@ViewerRequest
+                                    val target = index + topCountNow
                                     val visible = grid.layoutInfo.visibleItemsInfo
                                     if (visible.none { it.index == target }) scope.launch { grid.scrollToItem(target) }
                                 })

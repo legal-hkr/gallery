@@ -24,12 +24,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.KeyStore
 import java.security.SecureRandom
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -38,6 +40,7 @@ import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,8 +91,17 @@ class Vault(context: Context, private val scope: CoroutineScope) {
     private val _state = MutableStateFlow<State>(State.NotSetUp)
     val state: StateFlow<State> = _state.asStateFlow()
 
-    /** The master key's bytes while open; zeroed when it locks. */
+    /** The master key's bytes while open; zeroed when it locks – under [keyLock], so no copy is taken half zeroed. */
+    @Volatile
     private var master: ByteArray? = null
+    private val keyLock = Any()
+
+    /** Files being added now: the sweep of orphans at unlocking leaves them be. */
+    private val adding = AtomicInteger()
+
+    /** Settings' delay, kept here so leaving the app locks without waiting for a read (`GalleryApplication` keeps it). */
+    @Volatile
+    var lockDelayMs = 0L
     private var index = VaultIndex()
     private val thumbnails = LruCache<String, ImageBitmap>(200)
     private var locking: Job? = null
@@ -98,7 +110,15 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         refresh()
     }
 
-    private fun masterKey(): SecretKey = SecretKeySpec(master ?: throw IllegalStateException("Locked"), "AES")
+    private fun masterKey(): SecretKey = synchronized(keyLock) { SecretKeySpec(master ?: throw IllegalStateException("Locked"), "AES") }
+
+    /**
+     * A copy of the master key for one flow that runs on past a lock (moving in or out across the system's dialog, a
+     * long encrypting while the screen goes off): the vault locks for the user, the flow finishes its own work and the
+     * index stays true to the files (review before v0.1.0: a lock threw a whole move in away, or deleted files the index
+     * still listed). Null while locked.
+     */
+    fun hold(): SecretKey? = synchronized(keyLock) { master?.let { SecretKeySpec(it, "AES") } }
 
     /** The state from what is on disk and in the Keystore (an open vault stays open). */
     fun refresh() {
@@ -114,10 +134,11 @@ class Vault(context: Context, private val scope: CoroutineScope) {
 
     private fun keystore(): KeyStore = KeyStore.getInstance(KEYSTORE).apply { load(null) }
 
+    // Only a Keystore that answers "no such key" means lost: a failing call is no reason to offer deleting the vault
     private fun keystoreHasKey(): Boolean = try {
         keystore().containsAlias(ALIAS)
     } catch (_: Exception) {
-        false
+        true
     }
 
     // Setting up
@@ -161,9 +182,9 @@ class Vault(context: Context, private val scope: CoroutineScope) {
             val key = ByteArray(32).also(random::nextBytes)
             val sealed = cipher.doFinal(key)
             writeAtomically(keyFile, cipher.iv + sealed)
-            master = key
+            synchronized(keyLock) { master = key }
             index = VaultIndex()
-            saveIndex()
+            saveIndex(index, masterKey())
             _state.value = State.Open(index.ordered)
         }
     }
@@ -189,8 +210,10 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         mutex.withLock {
             try {
                 val stored = keyFile.readBytes()
-                master = cipher.doFinal(stored, IV, stored.size - IV)
-                index = if (indexFile.exists()) VaultIndex.decode(VaultFormat.Reader.of(masterKey(), indexFile.readBytes()).readAll()) else VaultIndex()
+                val unsealed = cipher.doFinal(stored, IV, stored.size - IV)
+                synchronized(keyLock) { master = unsealed }
+                index = readIndex(masterKey())
+                if (adding.get() == 0) sweep()
                 _state.value = State.Open(index.ordered)
                 true
             } catch (_: Exception) {
@@ -207,11 +230,15 @@ class Vault(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun lockNow() {
-        master?.fill(0)
-        master = null
+        synchronized(keyLock) {
+            val key = master
+            master = null
+            key?.fill(0)
+        }
         index = VaultIndex()
         thumbnails.evictAll()
-        refresh()
+        // No Keystore call here (the screen-off receiver runs on the main thread): a lost key shows at the next unlock
+        _state.value = if (keyFile.exists()) State.Locked else State.NotSetUp
     }
 
     /** The app went to the background: locks after [delayMs] unless it comes back first ([cancelLock]). */
@@ -290,11 +317,20 @@ class Vault(context: Context, private val scope: CoroutineScope) {
      */
     private suspend fun add(incoming: List<Incoming>, allOrNothing: Boolean, onProgress: (Int) -> Unit): Pair<List<VaultEntry>, List<String>> = withContext(Dispatchers.IO) {
         val key = masterKey()
+        adding.incrementAndGet()
+        try {
+            addWith(key, incoming, allOrNothing, onProgress)
+        } finally {
+            adding.decrementAndGet()
+        }
+    }
+
+    private suspend fun addWith(key: SecretKey, incoming: List<Incoming>, allOrNothing: Boolean, onProgress: (Int) -> Unit): Pair<List<VaultEntry>, List<String>> {
         val added = ArrayList<VaultEntry>()
         val failures = ArrayList<String>()
         try {
             for ((done, one) in incoming.withIndex()) {
-                ensureActive()
+                currentCoroutineContext().ensureActive()
                 val file = UUID.randomUUID().toString()
                 try {
                     val written = one.open()?.use { input -> writeEncrypted(File(dir, file + DATA)) { out -> VaultFormat.encrypt(key, input, out, random) } }
@@ -309,17 +345,13 @@ class Vault(context: Context, private val scope: CoroutineScope) {
                 onProgress(done + 1)
             }
             if (added.isNotEmpty()) {
-                mutex.withLock {
-                    index = index.copy(entries = index.entries + added)
-                    saveIndex()
-                    publish()
-                }
+                mutex.withLock { commit(indexWith(key).let { it.copy(entries = it.entries + added) }, key) }
             }
-            added to failures
+            return added to failures
         } catch (e: Exception) {
             for (entry in added) deleteFiles(entry.file)
             if (allOrNothing) throw e
-            added to (failures + (e.javaClass.simpleName))
+            return emptyList<VaultEntry>() to (failures + added.map { it.name + ": " + e.javaClass.simpleName })
         }
     }
 
@@ -328,6 +360,7 @@ class Vault(context: Context, private val scope: CoroutineScope) {
      * provider numbers a name taken); the vault keeps them. Each failure as "name: error".
      */
     suspend fun export(entries: List<VaultEntry>, tree: Uri, onProgress: (Int) -> Unit): List<String> = withContext(Dispatchers.IO) {
+        val key = masterKey()
         val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
         val failures = ArrayList<String>()
         for ((done, entry) in entries.withIndex()) {
@@ -335,7 +368,7 @@ class Vault(context: Context, private val scope: CoroutineScope) {
             var created: Uri? = null
             try {
                 created = DocumentsContract.createDocument(resolver, parent, entry.mime, entry.name) ?: throw IOException("Not created")
-                val (reader, stream) = open(entry)
+                val (reader, stream) = open(entry, key)
                 stream.use { reader.stream().use { from -> resolver.openOutputStream(created)?.use { to -> from.copyTo(to, 256 * 1024) } ?: throw IOException("Not writable") } }
             } catch (e: Exception) {
                 // Half a file is no file
@@ -350,17 +383,17 @@ class Vault(context: Context, private val scope: CoroutineScope) {
     /** How many items the vault holds (Forget the key's question); 0 while locked. */
     val count: Int get() = if (master == null) 0 else index.entries.size
 
-    /** Out of the vault for good (SPEC §18.3), or a move in taken back. */
-    suspend fun remove(entries: List<VaultEntry>) = withContext(Dispatchers.IO) {
+    /**
+     * Out of the vault for good (SPEC §18.3), or a move in taken back: the index first, then the files – with [key] held
+     * by a flow when the vault locked meanwhile; locked and held by none, nothing changes (the index can't be written).
+     */
+    suspend fun remove(entries: List<VaultEntry>, key: SecretKey? = hold()) = withContext(Dispatchers.IO) {
+        val held = key ?: return@withContext
         val files = entries.mapTo(HashSet()) { it.file }
         mutex.withLock {
-            if (master != null) {
-                index = index.copy(entries = index.entries.filter { it.file !in files })
-                saveIndex()
-            }
+            commit(indexWith(held).let { now -> now.copy(entries = now.entries.filter { it.file !in files }) }, held)
             files.forEach(::deleteFiles)
             files.forEach(thumbnails::remove)
-            publish()
         }
     }
 
@@ -372,8 +405,11 @@ class Vault(context: Context, private val scope: CoroutineScope) {
             } catch (_: Exception) {
                 // Gone already
             }
-            master?.fill(0)
-            master = null
+            synchronized(keyLock) {
+                val key = master
+                master = null
+                key?.fill(0)
+            }
             index = VaultIndex()
             thumbnails.evictAll()
             dir.listFiles()?.forEach { it.delete() }
@@ -453,9 +489,14 @@ class Vault(context: Context, private val scope: CoroutineScope) {
     )
 
     /** A reader of an item's content (the viewer, moving out); the caller closes the stream. */
-    fun open(entry: VaultEntry): Pair<VaultFormat.Reader, FileInputStream> {
+    fun open(entry: VaultEntry, key: SecretKey = masterKey()): Pair<VaultFormat.Reader, FileInputStream> {
         val stream = FileInputStream(File(dir, entry.file + DATA))
-        return VaultFormat.Reader.of(masterKey(), stream.channel) to stream
+        return try {
+            VaultFormat.Reader.of(key, stream.channel) to stream
+        } catch (e: Exception) {
+            stream.close()
+            throw e
+        }
     }
 
     private fun thumbnailOf(item: MediaItem): ByteArray? = try {
@@ -465,28 +506,63 @@ class Vault(context: Context, private val scope: CoroutineScope) {
         null
     }
 
+    // Written whole and on the storage itself before the rename: the originals are deleted right after, and a power cut
+    // must not leave an empty index, key or copy behind a name (review before v0.1.0)
     private fun <T> writeEncrypted(target: File, write: (OutputStream) -> T): T {
         dir.mkdirs()
         val part = File(dir, target.name + ".part")
-        val result = part.outputStream().buffered().use(write)
+        val result = FileOutputStream(part).use { file ->
+            val buffered = file.buffered()
+            val written = write(buffered)
+            buffered.flush()
+            file.fd.sync()
+            written
+        }
         if (!part.renameTo(target)) throw IOException("Can't keep ${target.name}")
         return result
     }
 
-    private fun saveIndex() {
-        val bytes = index.encode()
-        writeEncrypted(indexFile) { out -> VaultFormat.encrypt(masterKey(), bytes.inputStream(), out, random) }
+    /** The index the vault holds: the open one, or – locked meanwhile – the one on disk, read with a held [key]. */
+    private fun indexWith(key: SecretKey): VaultIndex = if (master != null) index else readIndex(key)
+
+    private fun readIndex(key: SecretKey): VaultIndex =
+        if (indexFile.exists()) VaultIndex.decode(VaultFormat.Reader.of(key, indexFile.readBytes()).readAll()) else VaultIndex()
+
+    /** [next] written as the index and shown while open. */
+    private fun commit(next: VaultIndex, key: SecretKey) {
+        saveIndex(next, key)
+        if (master != null) index = next
+        publish()
+    }
+
+    private fun saveIndex(next: VaultIndex, key: SecretKey) {
+        val bytes = next.encode()
+        writeEncrypted(indexFile) { out -> VaultFormat.encrypt(key, bytes.inputStream(), out, random) }
     }
 
     private fun writeAtomically(target: File, bytes: ByteArray) {
         val part = File(dir, target.name + ".part")
-        part.writeBytes(bytes)
+        FileOutputStream(part).use { file ->
+            file.write(bytes)
+            file.fd.sync()
+        }
         if (!part.renameTo(target)) throw IOException("Can't keep ${target.name}")
     }
 
     private fun deleteFiles(file: String) {
-        File(dir, file + DATA).delete()
-        File(dir, file + THUMB).delete()
+        for (name in listOf(file + DATA, file + THUMB, "$file$DATA.part", "$file$THUMB.part")) File(dir, name).delete()
+    }
+
+    /**
+     * Files no item of the index names – half-written parts, copies whose move in never reached the index (the process
+     * ended midway) – deleted at unlocking, while nothing is being added (review before v0.1.0: they stayed for good).
+     */
+    private fun sweep() {
+        val named = index.entries.flatMapTo(HashSet()) { listOf(it.file + DATA, it.file + THUMB) }
+        dir.listFiles()?.forEach { file ->
+            val keep = file.name == keyFile.name || file.name == indexFile.name || file.name in named
+            if (!keep) file.delete()
+        }
     }
 
     private fun publish() {

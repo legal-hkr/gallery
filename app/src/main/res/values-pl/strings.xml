@@ -517,5 +517,8 @@
     <string name="desc_forget_key_confirm">Zawartości sejfu (elementy: %1$d) nie da się już nigdy odczytać. Zaszyfrowane pliki zostaną usunięte.</string>
     <string name="button_forget_key">Zapomnij klucz</string>
     <!-- Stage S8c (mine) -->
+    <string name="status_taking_out_vault">Wyjmowanie z sejfu…</string>
+    <string name="progress_taken_out">Wyjęto: %1$d z %2$d</string>
+    <string name="error_take_out_some">Nie udało się wyjąć z sejfu niektórych elementów (%1$d).</string>
     <string name="progress_exported">Wyeksportowano: %1$d z %2$d</string>
 </resources>

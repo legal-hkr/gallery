@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -99,6 +100,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -122,8 +124,8 @@ import sh.hnet.gallery.ui.components.TooltipIconButton
 
 /**
  * The editor (SPEC §15.1, §15.2, §15.6, §15.8, §15.9; LOGIKA §18): an overlay over the viewer (D24), upright while
- * open; the photo with the crop's frame, Crop's tools, and the other tools' tabs shown disabled until their stages
- * (D5). An edit is a list of changes on a preview; the full photo is made only on saving.
+ * open; the photo under the crop's frame and Crop's tools – no tabs while Crop is the only tool (the owner: nothing
+ * that does nothing in a release). An edit is a list of changes on a preview; the full photo is made only on saving.
  *
  * @param onCopySaved A copy saved: the viewer goes on to it
  */
@@ -195,7 +197,13 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         step(history.push(next))
     }
 
-    fun leave() = if (history.present.changed) leaving = true else onClose()
+    // Not while saving: leaving cancelled the save's end, so a copy written or an original replaced was reported as a
+    // failure (review before v0.1.0); the photo and its tools hold still meanwhile too
+    fun leave() = when {
+        saving -> {}
+        history.present.changed -> leaving = true
+        else -> onClose()
+    }
     BackHandler(onBack = ::leave)
 
     fun failed() {
@@ -249,7 +257,7 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).statusBarsPadding().height(64.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_close), ::leave)
+            TooltipIconButton(R.drawable.ic_close, stringResource(R.string.content_description_close), ::leave, enabled = !saving)
             Spacer(Modifier.weight(1f))
             // Before and after (SPEC §15.1), as a button held rather than a hold on the photo (owner's test of S7: the hold
             // came late – it was checked only when the finger moved again – and the photo is the crop's to drag)
@@ -279,11 +287,11 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
                 })
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Box(Modifier.weight(1f).fillMaxWidth().holdWhile(saving)) {
             val image = preview
             if (image != null && upright != null) CropArea(image, upright, state, comparing, cropMoves, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
         }
-        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer)) {
+        Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).holdWhile(saving)) {
             if (upright != null) CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
             // No tabs while Crop is the only tool (the owner, 20 Nov 2026: no buttons that do nothing in a release);
             // Adjust, Filters and Draw bring them back with S9–S10
@@ -314,8 +322,6 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         }, onDismiss = { replacing = false })
     }
 }
-
-/** A tool's tab: its icon and name; tools of later stages shown disabled (D5). */
 
 /**
  * Save's menu (SPEC §15.6): Save as copy and Replace original, with what each means; for a motion photo a note
@@ -372,9 +378,10 @@ private fun SaveMenu(open: Boolean, motion: Boolean, canReplace: Boolean, locate
 }
 
 /**
- * The photo and the crop's frame (SPEC §15.2): the turned photo fitted with a margin, straightened about its middle;
- * outside the crop the `scrim` at 32 %, the frame 2 dp, thirds 1 dp, corner handles 24 × 6 dp (touched within
- * 48 dp). A corner drag resizes, a drag inside moves; a hold without moving shows the original (SPEC §15.1).
+ * The photo and the crop's frame (SPEC §15.2): the view fits the crop to the area less a margin, the turned and
+ * straightened photo under it; outside the crop the `scrim` at 32 %, the frame 2 dp, thirds 1 dp, corner handles
+ * 24 × 6 dp (touched within 48 dp). A corner resizes the frame; one finger elsewhere moves the photo under it and two
+ * zoom and move it (as iOS). [original] shows the original instead (the top bar's Compare, held).
  */
 @Composable
 private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, original: Boolean, cropMoves: Int, now: () -> EditState, onLive: (EditState) -> Unit, onCommit: (EditState) -> Unit) {
@@ -404,9 +411,12 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
     // two fingers zoom and move it, under a frame that stays – the view follows the crop as it changes (the owner,
     // after trying one finger on the frame: the photo moving is much better)
     var frozen by remember { mutableStateOf<sh.hnet.gallery.model.Crop?>(null) }
-    var viewFrom by remember { mutableStateOf<sh.hnet.gallery.model.Crop?>(null) }
+    var viewFrom by remember { mutableStateOf<HeldView?>(null) }
     val viewProgress = remember { Animatable(1f) }
-    val viewCrop = frozen ?: viewFrom?.let { lerp(it, shownCrop, viewProgress.value) } ?: shownCrop
+    val easing = remember { arrayOfNulls<Job>(1) }
+    // An ease begun before a turn or a mirror is in the shares of the photo as it lay then: dropped, the turn's own
+    // motion takes over (review before v0.1.0)
+    val viewCrop = frozen ?: viewFrom?.takeIf { it.quarters == state.quarters && it.flipped == state.flipped }?.let { lerp(it.crop, shownCrop, viewProgress.value) } ?: shownCrop
     val view = if (area.width == 0) null else viewOf(viewCrop, turned, area, margin)
     val viewNow = remember { arrayOfNulls<sh.hnet.gallery.model.Crop>(1) }
     SideEffect { viewNow[0] = viewCrop }
@@ -471,8 +481,6 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                 val nearest = distances.indices.minBy { distances[it] }
                 val small = sx(c.right) - sx(c.left) < 3 * reach || sy(c.bottom) - sy(c.top) < 3 * reach
                 val corner = if (distances[nearest] < (if (small) reach / 2 else reach)) nearest else -1
-                // The photo moved by one finger: the view fitting the crop as it is (its size doesn't change while moved)
-                val fitted = viewOf(start.crop, t, area, margin)
                 // Nothing yet, a corner (the frame), two fingers or one off the corners (the photo under the frame)
                 var mode = 0
                 var last = start
@@ -482,22 +490,23 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                     if (pressed == 0) break
                     // A second finger on a moving photo zooms it from there on; a corner's drag keeps to its one finger
                     if (mode != 1 && pressed >= 2) {
-                        if (mode != 2) {
-                            mode = 2
-                            viewFrom = null
-                        }
+                        mode = 2
                         val zoom = event.calculateZoom()
                         val pan = event.calculatePan()
                         if (zoom != 1f || pan != Offset.Zero) {
-                            // The frame stays: the view fits the crop as it is; the fingers' point in the photo's shares
-                            val now = viewOf(last.crop, t, area, margin)
+                            // The view as drawn (an ease after a corner may still run: it goes on, the fingers follow
+                            // what is on screen); the fingers' point in the photo's shares
+                            val drawn = viewOf(viewNow[0] ?: last.crop, t, area, margin)
                             val centroid = event.calculateCentroid(useCurrent = false)
-                            val after = now.scale * zoom
-                            last = EditGeometry.zoom(
+                            val zoomed = EditGeometry.zoom(
                                 last,
-                                (centroid.x - now.x0) / (t.width * now.scale), (centroid.y - now.y0) / (t.height * now.scale),
-                                zoom.toDouble(), pan.x / (t.width * after), pan.y / (t.height * after), t,
+                                (centroid.x - drawn.x0) / (t.width * drawn.scale), (centroid.y - drawn.y0) / (t.height * drawn.scale),
+                                zoom.toDouble(), 0.0, 0.0, t,
                             )
+                            // The fingers' move at the scale the zoom really reached (it stops at the smallest crop and
+                            // at the photo's edge)
+                            val after = drawn.scale * (last.crop.width / zoomed.crop.width.coerceAtLeast(1e-9))
+                            last = if (pan == Offset.Zero) zoomed else EditGeometry.move(zoomed, -pan.x / (t.width * after), -pan.y / (t.height * after), t)
                             onLive(last)
                         }
                         event.changes.forEach { if (it.positionChange() != Offset.Zero) it.consume() }
@@ -511,21 +520,25 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
                     val total = change.position - down.position
+                    // The move so far when the gesture becomes a move, then each step
+                    var step = change.positionChange()
                     if (mode == 0 && total.getDistance() > slop) {
                         if (corner >= 0) {
                             mode = 1
                             frozen = held
                         } else {
                             mode = 3
-                            viewFrom = null
+                            step = total
                         }
                     }
                     if (mode == 1 || mode == 3) {
                         last = if (mode == 1) {
                             EditGeometry.drag(start, corner, (change.position.x - v.x0) / (t.width * v.scale), (change.position.y - v.y0) / (t.height * v.scale), t)
                         } else {
-                            // The photo follows the finger, so the crop goes the other way
-                            EditGeometry.move(start, -total.x / (t.width * fitted.scale), -total.y / (t.height * fitted.scale), t)
+                            // The photo follows the finger, so the crop goes the other way, at the scale on screen (an
+                            // ease after a corner may still run; dropping it made the photo jump – review before v0.1.0)
+                            val drawn = viewOf(viewNow[0] ?: last.crop, t, area, margin)
+                            EditGeometry.move(last, -step.x / (t.width * drawn.scale), -step.y / (t.height * drawn.scale), t)
                         }
                         onLive(last)
                         change.consume()
@@ -535,9 +548,10 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                 }
                 if (mode == 1) {
                     // Let go: from the view held to one fitting the new crop
-                    viewFrom = held
+                    viewFrom = HeldView(held, start.quarters, start.flipped)
                     frozen = null
-                    scope.launch {
+                    easing[0]?.cancel()
+                    easing[0] = scope.launch {
                         viewProgress.snapTo(0f)
                         viewProgress.animateTo(1f, spatial)
                         viewFrom = null
@@ -698,6 +712,16 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
         }
     }
 }
+
+/** Every touch taken before the content sees it while [held] (the editor while saving). */
+private fun Modifier.holdWhile(held: Boolean): Modifier = if (!held) this else pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+    }
+}
+
+/** The view an ease starts from: a crop in the shares of the photo turned and mirrored as it was then. */
+private class HeldView(val crop: sh.hnet.gallery.model.Crop, val quarters: Int, val flipped: Boolean)
 
 /** How the crop area shows the turned photo: its shares to the area's pixels ([x0] + share × size × [scale]). */
 private class CropView(val scale: Double, val x0: Double, val y0: Double)

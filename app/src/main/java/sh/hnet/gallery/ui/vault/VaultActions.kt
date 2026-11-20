@@ -11,7 +11,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import java.util.Collections
 import javax.crypto.Cipher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,7 +82,7 @@ class VaultActions(
     /** Moving in, importing or exporting: done of all, while it runs (the shell's status card). */
     data class Progress(val kind: Kind, val done: Int, val total: Int)
 
-    enum class Kind { MOVING, IMPORTING, EXPORTING }
+    enum class Kind { MOVING, IMPORTING, EXPORTING, TAKING_OUT }
 
     private val _progress = MutableStateFlow<Progress?>(null)
     val progress: StateFlow<Progress?> = _progress.asStateFlow()
@@ -131,35 +133,62 @@ class VaultActions(
      * succeeded. [onDone] once they are out (a selection ends, the viewer drops the page).
      */
     fun takeOut(entries: List<VaultEntry>, move: Boolean, onDone: () -> Unit = {}) {
-        if (entries.isEmpty()) return
+        // An item already on its way out isn't taken out twice (review before v0.1.0: a second tap wrote two copies)
+        val these = entries.filter { it.file !in outgoing }
+        if (these.isEmpty()) return
+        // The key held to the end: the screen going off during a long copy locks the vault, not this
+        val held = vault.hold() ?: return
+        outgoing.addAll(these.map { it.file })
         scope.launch {
-            val written = ArrayList<Pair<VaultEntry, Long>>()
-            for (entry in entries) {
-                val id = try {
-                    val (reader, stream) = vault.open(entry)
-                    stream.use { writer.saveFromVault(entry) { reader.stream() } }
-                } catch (_: Exception) {
-                    null
-                }
-                if (id != null) written.add(entry to id)
+            try {
+                takeOut(these, move, held, onDone)
+            } finally {
+                outgoing.removeAll(these.map { it.file }.toSet())
+                _progress.value = null
             }
-            if (written.isEmpty()) return@launch actions.say(activity.getString(R.string.error_take_out_vault), undo = null)
-            if (move) vault.remove(written.map { it.first })
-            onDone()
-            val ids = written.map { it.second }
-            actions.say(activity.getString(if (move) R.string.msg_moved_out_vault else R.string.msg_copied_out_vault, written.size), undo = null)
-            // The index learns of the new files in a moment; the sheet needs them as items
-            val items = withTimeoutOrNull(5000) { app.index.items.first { list -> list != null && ids.all { id -> list.any { it.id == id } } } }
-                ?.filter { it.id in ids }.orEmpty()
-            if (items.isEmpty()) return@launch
-            val byId = items.associateBy { it.id }
-            val albums = app.albums.albums.value.orEmpty().mapTo(HashSet()) { it.id }
-            val putBack = written.flatMap { (entry, id) -> entry.albums.filter { it in albums }.map { it to id } }
-                .groupBy({ it.first }, { it.second })
-            val now = System.currentTimeMillis()
-            for ((album, members) in putBack) app.albums.add(album, members.mapNotNull { byId[it] }, now)
-            returned = Returned(items, putBack.toList())
         }
+    }
+
+    /** Items on their way out now. */
+    private val outgoing: MutableSet<String> = Collections.synchronizedSet(HashSet())
+
+    private suspend fun takeOut(entries: List<VaultEntry>, move: Boolean, held: javax.crypto.SecretKey, onDone: () -> Unit) {
+        val written = ArrayList<Pair<VaultEntry, Long>>()
+        val failed = ArrayList<String>()
+        // The status card, as for every long vault flow (review before v0.1.0: none while a large video went out)
+        _progress.value = Progress(Kind.TAKING_OUT, 0, entries.size)
+        for ((done, entry) in entries.withIndex()) {
+            _progress.value = Progress(Kind.TAKING_OUT, done, entries.size)
+            val id = try {
+                val (reader, stream) = vault.open(entry, held)
+                stream.use { writer.saveFromVault(entry) { reader.stream() } }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failed.add(entry.name + ": " + e.javaClass.simpleName)
+                continue
+            }
+            if (id != null) written.add(entry to id) else failed.add(entry.name)
+        }
+        _progress.value = null
+        if (written.isEmpty()) return actions.fail(activity.getString(R.string.error_take_out_vault), failed.joinToString("\n"))
+        if (move) vault.remove(written.map { it.first }, held)
+        onDone()
+        val ids = written.map { it.second }
+        // Some not taken out: said, with Show naming them (review before v0.1.0: only the ones that went were counted)
+        if (failed.isNotEmpty()) actions.fail(activity.getString(R.string.error_take_out_some, failed.size), failed.joinToString("\n"))
+        else actions.say(activity.getString(if (move) R.string.msg_moved_out_vault else R.string.msg_copied_out_vault, written.size), undo = null)
+        // The index learns of the new files in a moment; the sheet needs them as items
+        val items = withTimeoutOrNull(5000) { app.index.items.first { list -> list != null && ids.all { id -> list.any { it.id == id } } } }
+            ?.filter { it.id in ids }.orEmpty()
+        if (items.isEmpty()) return
+        val byId = items.associateBy { it.id }
+        val albums = app.albums.albums.value.orEmpty().mapTo(HashSet()) { it.id }
+        val putBack = written.flatMap { (entry, id) -> entry.albums.filter { it in albums }.map { it to id } }
+            .groupBy({ it.first }, { it.second })
+        val now = System.currentTimeMillis()
+        for ((album, members) in putBack) app.albums.add(album, members.mapNotNull { byId[it] }, now)
+        returned = Returned(items, putBack.toList())
     }
 
     /** The sheet after moving out closed; [noAlbum]: it was No album, so out of the albums they were put back in. */
@@ -206,6 +235,9 @@ class VaultActions(
                 _progress.value = Progress(Kind.IMPORTING, 0, uris.size)
                 val (added, failures) = try {
                     vault.importFiles(uris) { done -> _progress.value = Progress(Kind.IMPORTING, done, uris.size) }
+                } catch (e: Exception) {
+                    // Locked between the prompt and the start: nothing imported, said as such – not a crash
+                    emptyList<VaultEntry>() to listOf(e.javaClass.simpleName)
                 } finally {
                     _progress.value = null
                 }
@@ -265,10 +297,18 @@ class VaultActions(
         exportPending = null
         if (tree == null) return
         exportDone()
+        // The vault may have locked while the picker was open (the screen went off): the prompt first (review before
+        // v0.1.0: the export crashed the app)
+        open(then = { export(entries, tree) })
+    }
+
+    private fun export(entries: List<VaultEntry>, tree: Uri) {
         scope.launch {
             _progress.value = Progress(Kind.EXPORTING, 0, entries.size)
             val failures = try {
                 vault.export(entries, tree) { done -> _progress.value = Progress(Kind.EXPORTING, done, entries.size) }
+            } catch (e: Exception) {
+                entries.map { it.name + ": " + e.javaClass.simpleName }
             } finally {
                 _progress.value = null
             }
@@ -279,6 +319,8 @@ class VaultActions(
 
     private fun move(items: List<MediaItem>, onDone: () -> Unit) {
         if (!vault.fits(items)) return actions.say(activity.getString(R.string.error_vault_space), undo = null)
+        // The key held to the end, past the system's dialog and the screen going off: taking copies back must still work
+        val held = vault.hold() ?: return
         scope.launch {
             _progress.value = Progress(Kind.MOVING, 0, items.size)
             val entries = try {
@@ -298,12 +340,17 @@ class VaultActions(
                 scope.launch { app.albums.forget(items.map { it.id }) }
                 actions.say(activity.getString(R.string.msg_moved_to_vault, items.size), undo = null)
             }
-            val takeBack = { scope.launch { vault.remove(entries) } }
+            val takeBack = { scope.launch { vault.remove(entries, held) } }
             when (val change = writer.deleteForever(items)) {
                 MediaWriter.Change.Done -> finish()
                 is MediaWriter.Change.Ask -> consent.ask(change.request, then = finish, otherwise = { takeBack() })
                 is MediaWriter.Change.Failed -> {
-                    takeBack()
+                    // Own files are deleted one by one: those already gone keep their copy, the rest take theirs back
+                    // (review before v0.1.0: one failing delete took back the copies of photos already deleted)
+                    val left = writer.stillThere(items)
+                    val kept = items.indices.filter { items[it].id !in left }
+                    scope.launch { vault.remove(items.indices.filter { items[it].id in left }.map { entries[it] }, held) }
+                    if (kept.isNotEmpty()) scope.launch { app.albums.forget(kept.map { items[it].id }) }
                     actions.say(activity.getString(R.string.error_move_to_vault), undo = null)
                 }
             }

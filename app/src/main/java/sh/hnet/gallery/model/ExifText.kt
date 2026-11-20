@@ -18,6 +18,8 @@ object ExifText {
     fun exposure(seconds: Double, locale: Locale): String {
         if (seconds <= 0.0) return ""
         if (seconds >= 1.0) return decimal(locale, "0.#").format(seconds) + " s"
+        // From 0.3 s, as a decimal: 0.8 s was "1/1 s" and 0.6 s "1/2 s"
+        if (seconds >= 0.3) return decimal(locale, "0.#").format(seconds) + " s"
         val denominator = (1.0 / seconds).roundToLong()
         return "1/$denominator s"
     }

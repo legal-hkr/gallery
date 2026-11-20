@@ -277,3 +277,21 @@ class EditingZoomTest {
         assertEquals(0.25, moved.top, 1e-9)
     }
 }
+
+/** Review before v0.1.0: Original on a portrait photo, and a ratio alone isn't an edit. */
+class EditingRatioTest {
+    @Test
+    fun originalKeepsThePhotosOwnShape() {
+        val portrait = PxSize(3000, 4000)
+        assertEquals(0.75, EditGeometry.ratioOf(EditState(ratio = CropRatio.ORIGINAL), portrait)!!, 1e-9)
+        assertEquals(4.0 / 3, EditGeometry.ratioOf(EditState(ratio = CropRatio.ORIGINAL, portrait = true), portrait)!!, 1e-9)
+        assertEquals(4.0 / 3, EditGeometry.ratioOf(EditState(ratio = CropRatio.ORIGINAL), PxSize(4000, 3000))!!, 1e-9)
+    }
+
+    @Test
+    fun aRatioThatLeavesTheCropIsNoChange() {
+        val chosen = EditGeometry.withRatio(EditState(), CropRatio.FOUR_THREE, false, PxSize(4000, 3000))
+        assertEquals(Crop.WHOLE, chosen.crop)
+        assertFalse(chosen.changed)
+    }
+}

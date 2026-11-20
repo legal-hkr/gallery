@@ -2,6 +2,7 @@ package sh.hnet.gallery.ui.pick
 
 import android.content.ClipData
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -49,10 +50,17 @@ import sh.hnet.gallery.ui.viewer.ViewerRequest
  * right to it.
  */
 class PickerActivity : ComponentActivity() {
+
+    // Dark mode switched in place (configChanges has uiMode, so nothing on screen is lost – review before v0.1.0): the
+    // system bars' icons follow it again
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enableEdgeToEdge()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        val request = PickRequest.of(intent?.type, intent?.getStringArrayExtra(Intent.EXTRA_MIME_TYPES), intent?.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) == true)
+        val request = PickRequest.of(intent?.type ?: intent?.resolveType(this), intent?.getStringArrayExtra(Intent.EXTRA_MIME_TYPES), intent?.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) == true)
         setContent {
             GalleryTheme {
                 PickerContent(request, onCancel = {

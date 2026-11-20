@@ -41,7 +41,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:screenOrientation="portrait"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|fontScale|density"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
             <!-- Portrait (family rule), except while the viewer is open: it turns with the phone when auto-rotate is on
                  (owner's decisions of 18 Nov 2026, D1), and turning doesn't recreate the activity (LOGIKA §1). Android 16+
@@ -62,7 +62,7 @@
             android:documentLaunchMode="intoExisting"
             android:excludeFromRecents="true"
             android:taskAffinity="sh.hnet.gallery.viewer"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|fontScale|density"
             android:theme="@style/Theme.Gallery">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -87,7 +87,7 @@
             android:name=".ui.pick.PickerActivity"
             android:exported="true"
             android:screenOrientation="portrait"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|fontScale|density"
             android:theme="@style/Theme.Gallery"
             tools:ignore="DiscouragedApi,LockedOrientationActivity">
             <intent-filter>

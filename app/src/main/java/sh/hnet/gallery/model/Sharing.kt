@@ -66,7 +66,8 @@ object Mp4Location {
             } else if (size == 0L) {
                 size = to - at
             }
-            if (size < headerSize || at + size > to) break
+            // Compared as what is left: a damaged 64-bit size near the largest number overflowed `at + size`
+            if (size < headerSize || size > to - at) break
             list.add(Box(at, headerSize, size, type))
             at += size
         }

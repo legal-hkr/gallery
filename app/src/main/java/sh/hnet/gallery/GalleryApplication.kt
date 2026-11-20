@@ -125,16 +125,17 @@ class GalleryApplication : Application() {
                 }
             }
         }
+        appScope.launch { preferences.vaultLockDelay.collect { vault.lockDelayMs = it.ms } }
         // The screen turning off always locks the vault, whatever the delay (D31)
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = vault.lock()
         }, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
         // Every new list of items is checked for files not read yet
-        appScope.launch { index.items.filterNotNull().collect { facts.update(it) } }
+        appScope.launch { index.complete.filterNotNull().collect { facts.update(it) } }
         // The copies made for shares of earlier starts go (SPEC §14.1)
         appScope.launch(Dispatchers.IO) { sharing.clearOld() }
         // Album members whose ids a rescan changed are found again by fingerprint (SPEC-albums §9.12)
-        appScope.launch { index.items.filterNotNull().collect { albums.relink(it) } }
+        appScope.launch { index.complete.filterNotNull().collect { albums.relink(it) } }
         // Every folder the index shows has a state: new ones are classified once (SPEC-albums §22.2)
         appScope.launch {
             index.items.filterNotNull().map { items -> items.mapTo(HashSet()) { it.folder } }.distinctUntilChanged().collect { folders ->

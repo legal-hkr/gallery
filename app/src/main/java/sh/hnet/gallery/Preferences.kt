@@ -136,7 +136,12 @@ class Preferences(private val context: Context) {
     }
 
     /** Restore defaults (Settings › Reset): every setting of this store back to its default. */
-    suspend fun restoreDefaults() = context.settings.edit { it.clear() }
+    suspend fun restoreDefaults() = context.settings.edit {
+        // The Media management offers aren't a setting: answered, they stay answered (review before v0.1.0)
+        val offers = it[MEDIA_MANAGEMENT_OFFERS]
+        it.clear()
+        offers?.let { count -> it[MEDIA_MANAGEMENT_OFFERS] = count }
+    }
 
     private companion object {
         val GRID_STEP = stringPreferencesKey("grid_step")

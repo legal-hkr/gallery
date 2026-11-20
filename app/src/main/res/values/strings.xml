@@ -516,5 +516,8 @@
     <string name="desc_forget_key_confirm">The vault’s content (items: %1$d) can never be read again. The encrypted files will be deleted.</string>
     <string name="button_forget_key">Forget key</string>
     <!-- Stage S8c (mine) -->
+    <string name="status_taking_out_vault">Taking out of the vault…</string>
+    <string name="progress_taken_out">Done: %1$d of %2$d</string>
+    <string name="error_take_out_some">Some items couldn’t be taken out of the vault (%1$d).</string>
     <string name="progress_exported">Exported: %1$d of %2$d</string>
 </resources>

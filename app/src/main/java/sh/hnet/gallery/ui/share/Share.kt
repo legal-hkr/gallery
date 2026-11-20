@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.chooser.ChooserAction
+import java.util.UUID
 import sh.hnet.gallery.MainActivity
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.ShareMaker
@@ -19,11 +20,20 @@ object ShareSheet {
     const val ACTION_TOGGLE = "sh.hnet.gallery.share.TOGGLE"
     const val EXTRA_IDS = "sh.hnet.gallery.share.IDS"
     const val EXTRA_REMOVE = "sh.hnet.gallery.share.REMOVE"
+    const val EXTRA_TOKEN = "sh.hnet.gallery.share.TOKEN"
+
+    /**
+     * This process's secret for the toggle: the main activity is exported for the launcher, so without it any app could
+     * have it share chosen items with their location (review before v0.1.0). A sheet of an earlier process toggles nothing.
+     */
+    val token: String = UUID.randomUUID().toString()
 
     fun chooser(context: Context, maker: ShareMaker, prepared: ShareMaker.Prepared.Ready, ids: List<Long>, removeLocation: Boolean): Intent {
         val chooser = Intent.createChooser(maker.sendIntent(prepared), null)
         val plan = prepared.plan
-        if (plan.located == 0) return chooser
+        // Files from outside can't be shared again by the main activity (their grant was the outside viewer's): their
+        // share takes Settings' choice as it is, without the toggle (review before v0.1.0)
+        if (plan.located == 0 || ids.any { it < 0 }) return chooser
         // Back to the app's own activity, which opens the sheet anew – every sheet from there, as the first one: a sheet opened by
         // a trampoline activity that finished at once broke at the next toggle (owner's test of S5a). Clearing the top takes
         // the old sheet away and hands the request to the running activity, its viewer and grids as they were
@@ -32,6 +42,7 @@ object ShareSheet {
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_IDS, ids.toLongArray())
             .putExtra(EXTRA_REMOVE, !removeLocation)
+            .putExtra(EXTRA_TOKEN, token)
         val pending = PendingIntent.getActivity(context, ids.hashCode(), toggle, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val action = ChooserAction.Builder(
             Icon.createWithResource(context, if (removeLocation) R.drawable.ic_location_on else R.drawable.ic_location_off),

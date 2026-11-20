@@ -39,6 +39,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -195,7 +196,7 @@ fun GalleryApp() {
     val actions = remember(consent) { MediaActions(appContext, MediaWriter(appContext), consent, snackbars, messages) }
     // The vault's opening and moving in (S8b), from any grid and the viewer
     val shellActivity = LocalActivity.current
-    val vaultActions = remember(consent, shellActivity) { shellActivity?.let { VaultActions(it, app.vault, MediaWriter(appContext), consent, actions, messages) } }
+    val vaultActions = remember(consent, shellActivity) { shellActivity?.let { VaultActions(it, app.vault, MediaWriter(appContext), consent, actions, app.appScope) } }
     val moving by (vaultActions?.progress ?: MutableStateFlow(null)).collectAsStateWithLifecycle()
     var movingShown by remember { mutableStateOf(false) }
     LaunchedEffect(moving != null) {
@@ -467,12 +468,14 @@ fun GalleryApp() {
                         VaultActions.Kind.MOVING -> R.string.status_moving_to_vault
                         VaultActions.Kind.IMPORTING -> R.string.status_importing
                         VaultActions.Kind.EXPORTING -> R.string.status_exporting
+                        VaultActions.Kind.TAKING_OUT -> R.string.status_taking_out_vault
                     },
                 ),
                 line = when (movingNow.kind) {
                     VaultActions.Kind.MOVING -> stringResource(R.string.progress_moved, movingNow.done, movingNow.total)
                     VaultActions.Kind.IMPORTING -> stringResource(R.string.progress_imported, movingNow.done, movingNow.total)
                     VaultActions.Kind.EXPORTING -> stringResource(R.string.progress_exported, movingNow.done, movingNow.total)
+                    VaultActions.Kind.TAKING_OUT -> stringResource(R.string.progress_taken_out, movingNow.done, movingNow.total)
                 },
                 progress = movingNow.done.toFloat() / movingNow.total.coerceAtLeast(1),
                 modifier = Modifier
@@ -561,7 +564,7 @@ fun GalleryApp() {
                 val at = ids.indexOf(item.id)
                 if (at >= 0) ids.add(at + 1, copy) else ids.add(copy)
                 editing = null
-                viewer = ViewerRequest(ids, copy, album = open?.album, title = open?.title) {}
+                viewer = ViewerRequest(ids, copy, album = open?.album, title = open?.title, onPage = open?.onPage ?: {})
             })
         }
     }
@@ -571,9 +574,14 @@ fun GalleryApp() {
     AnimatedVisibility(visible = slideshow != null, enter = fadeIn(effects), exit = fadeOut(fastEffects)) {
         val request = shownSlideshow[0] ?: return@AnimatedVisibility
         key(request) {
+            // The end told once the show is gone (composed first, so disposed last): the show puts the window's colour
+            // mode back as it leaves, and the viewer going on to the last slide must set its own after that (review
+            // before v0.1.0: an HDR photo the show ended on stayed in the default mode)
+            val ended = remember { arrayOfNulls<Long>(1) }
+            DisposableEffect(Unit) { onDispose { ended[0]?.let(request.onEnd) } }
             SlideshowScreen(request) { last ->
+                ended[0] = last
                 slideshow = null
-                request.onEnd(last)
             }
         }
     }
@@ -593,6 +601,15 @@ fun GalleryApp() {
     // Out of the vault (SPEC-albums §18.3): the Add to album sheet with No album first; put back in their albums already
     vaultActions?.returned?.let { back ->
         AddToAlbumSheet(back.items, onDismiss = { vaultActions.returnedDone(noAlbum = false) }, onAdded = { vaultActions.returnedDone(noAlbum = false) }, onNoAlbum = { vaultActions.returnedDone(noAlbum = true) })
+    }
+    // The page over the viewer goes with it, whichever way it closed (review before v0.1.0: it came back over the next one)
+    LaunchedEffect(viewer == null) { if (viewer == null) overViewer = null }
+    // Over a page or the editor that covers the viewer, its snackbars show here (review before v0.1.0: Undo of Move to
+    // Trash from an album over the viewer, and the editor's failures, were under them)
+    if (viewer != null && (overViewer != null || editing != null)) {
+        SnackbarHost(snackbars, Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 16.dp)) { data ->
+            Snackbar(data, shape = MaterialTheme.shapes.extraLarge, modifier = Modifier.padding(horizontal = 12.dp))
+        }
     }
     errorShown?.let { ErrorDetailsDialog(it) { errorShown = null } }
     if (offering) {

@@ -176,6 +176,8 @@ class ExifTextTest {
         assertEquals("f/4", ExifText.aperture(4.0, pl))
         assertEquals("1/250 s", ExifText.exposure(0.004, pl))
         assertEquals("2,5 s", ExifText.exposure(2.5, pl))
+        assertEquals("0,8 s", ExifText.exposure(0.8, pl))
+        assertEquals("1/4 s", ExifText.exposure(0.25, pl))
         assertEquals("113 mm", ExifText.focalLength(113.0, pl))
         assertEquals("6,9 mm", ExifText.focalLength(6.9, pl))
         assertEquals("12,5", ExifText.megapixels(4080, 3072, pl))

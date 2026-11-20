@@ -2,6 +2,7 @@ package sh.hnet.gallery.ui.outside
 
 import android.app.KeyguardManager
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -51,6 +52,13 @@ import sh.hnet.gallery.ui.viewer.ViewerScreen
  * inside the app, without a flight (there is no tile), turning with the phone as it does.
  */
 class ViewerActivity : ComponentActivity() {
+
+    // Dark mode switched in place (configChanges has uiMode, so nothing on screen is lost – review before v0.1.0): the
+    // system bars' icons follow it again
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        enableEdgeToEdge()
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)

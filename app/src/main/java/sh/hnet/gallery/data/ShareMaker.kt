@@ -52,8 +52,10 @@ class ShareMaker(private val context: Context) {
     }
 
     suspend fun prepare(items: List<MediaItem>, facts: Map<Long, Fact>, removeLocation: Boolean, canLocate: Boolean): Prepared = withContext(Dispatchers.IO) {
-        // Without access to the location the system cuts it from every read, the receiving app's too: nothing to take out
-        val located = if (canLocate) items.filter { located(it, facts[it.id]) }.mapTo(HashSet()) { it.id } else emptySet()
+        // Without access to the location MediaStore cuts it from every read, the receiving app's too: nothing to take out.
+        // A file from outside isn't MediaStore's: its own bytes go, location and all, so it is asked of the file always
+        // (review before v0.1.0: an attachment with GPS went out with it whenever the app had no access to locations)
+        val located = items.filter { (canLocate || it.outside) && located(it, facts[it.id]) }.mapTo(HashSet()) { it.id }
         val plan = SharePlan.of(items, located, removeLocation)
         val copies = plan.ways.count { it.value != ShareWay.ORIGINAL }
         val session = File(root, System.currentTimeMillis().toString()).apply { mkdirs() }
@@ -66,7 +68,12 @@ class ShareMaker(private val context: Context) {
                 ensureActive()
                 when (plan.ways.getValue(item.id)) {
                     // A file from outside goes as a copy too: its grant was the viewer's, not one to pass on
-                    ShareWay.ORIGINAL -> uris += if (item.outside) FileProvider.getUriForFile(context, "${context.packageName}.files", copy(item, session)) else item.uri()
+                    ShareWay.ORIGINAL -> try {
+                        uris += if (item.outside) FileProvider.getUriForFile(context, "${context.packageName}.files", copy(item, session)) else item.uri()
+                    } catch (e: Exception) {
+                        // A provider that won't be read twice, a full cache: the family's failure, not a crash
+                        failures += e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "")
+                    }
                     ShareWay.STRIPPED, ShareWay.WITH_LOCATION -> {
                         val strip = plan.ways.getValue(item.id) == ShareWay.STRIPPED
                         try {
@@ -109,13 +116,17 @@ class ShareMaker(private val context: Context) {
 
     /** The original, location included, into this share's folder under its own name (a second of the same name numbered). */
     private fun copy(item: MediaItem, session: File): File {
-        var file = File(session, item.name.ifBlank { "item-${item.id}" })
+        // A file from outside names itself through its provider: separators and leading dots out, so the name can't lead
+        // out of the session's folder (review before v0.1.0: "../../files/x" wrote into the app's own files)
+        val name = item.name.replace('/', '_').replace('\\', '_').trimStart('.').ifBlank { "item-${item.id}" }
+        var file = File(session, name)
         var n = 2
         while (file.exists()) {
-            val dot = item.name.lastIndexOf('.')
-            file = File(session, if (dot > 0) item.name.substring(0, dot) + " ($n)" + item.name.substring(dot) else item.name + " ($n)")
+            val dot = name.lastIndexOf('.')
+            file = File(session, if (dot > 0) name.substring(0, dot) + " ($n)" + name.substring(dot) else "$name ($n)")
             n++
         }
+        if (file.canonicalFile.parentFile != session.canonicalFile) error("Bad name")
         val input = resolver.openInputStream(item.originalUri()) ?: error("No stream")
         input.use { from -> file.outputStream().use { to -> from.copyTo(to, 256 * 1024) } }
         return file
