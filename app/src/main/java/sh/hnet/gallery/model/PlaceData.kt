@@ -110,6 +110,13 @@ class PlaceData(buffer: ByteBuffer) {
 
     fun regionCountry(index: Int): Int = data.getShort(regionAt(index)).toInt() and 0xFFFF
 
+    /** A country's bounding box: west, south, east, north in [BORDER_UNIT]s (the map draws only what it sees). */
+    fun countryBox(index: Int): IntArray = box(countryAt(index) + 12)
+
+    fun regionBox(index: Int): IntArray = box(regionAt(index) + 16)
+
+    private fun box(at: Int): IntArray = IntArray(4) { data.getInt(at + it * 4) }
+
     /** A settlement's own region and country (-1 when none), for its page's subtitle. */
     fun town(index: Int): Pair<Int, Int> = settlementRegion(index) to settlementCountry(index)
 

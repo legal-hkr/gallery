@@ -27,6 +27,9 @@ sealed interface Screen : NavKey {
     @Serializable data class PlaceCountry(val country: Int, val version: Int) : Screen
     @Serializable data class PlaceTown(val settlement: Int, val version: Int) : Screen
     @Serializable data object NoLocation : Screen
+
+    /** The map (SPEC §13.3): around every located item, or at a point (Info's small map). */
+    @Serializable data class Map(val lat: Double? = null, val lon: Double? = null) : Screen
     /** A source's album (SPEC-albums §9.10), by [sh.hnet.gallery.model.FolderKey.key]. */
     @Serializable data class Folder(val key: String) : Screen
     /** A user album (SPEC-albums §9.7), by its id. */

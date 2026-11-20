@@ -359,4 +359,7 @@
     <string name="button_map">Map</string>
     <string name="content_description_show_place">Show %1$s</string>
     <string name="desc_no_location_count">Photos and videos: %1$d</string>
+    <!-- Stage S6b -->
+    <string name="label_area_around">%1$s and around</string>
+    <string name="title_map">Map</string>
 </resources>

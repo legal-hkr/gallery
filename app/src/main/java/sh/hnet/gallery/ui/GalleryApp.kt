@@ -92,6 +92,7 @@ import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.rememberConsent
 import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
+import sh.hnet.gallery.ui.map.MapScreen
 import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.pick.PickerScreen
 import sh.hnet.gallery.ui.places.CountryScreen
@@ -340,6 +341,7 @@ fun GalleryApp() {
                             onOpenCountry = { country -> app.places.value?.let { currentStack.add(Screen.PlaceCountry(country, it.version)) } },
                             onOpenTown = { town -> app.places.value?.let { currentStack.add(Screen.PlaceTown(town, it.version)) } },
                             onOpenNoLocation = { currentStack.add(Screen.NoLocation) },
+                            onOpenMap = { currentStack.add(Screen.Map()) },
                         )
                     }
                     // A page of other place data (an app update meanwhile) closes: its index names something else now
@@ -354,6 +356,7 @@ fun GalleryApp() {
                         else AlbumPage(PageKey.Town(key.settlement), onBack = back, onOpen = { viewer = it })
                     }
                     entry<Screen.NoLocation> { AlbumPage(PageKey.NoLocation, onBack = back, onOpen = { viewer = it }) }
+                    entry<Screen.Map> { key -> MapScreen(onBack = back, onOpen = { viewer = it }, lat = key.lat, lon = key.lon) }
                     entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
                     entry<Screen.Settings> {
                         SettingsRootScreen(
@@ -424,7 +427,7 @@ fun GalleryApp() {
         key(request) {
             ViewerHost(request, snackbars, messages, onClose = { viewer = null }, onOpenFolder = { item ->
                 overViewer = if (TimelineFolders.isScreenshots(item.path)) Screen.Collection(CollectionKind.SCREENSHOTS.name) else Screen.Folder(item.folder.key)
-            })
+            }, onOpenMap = { lat, lon -> overViewer = Screen.Map(lat, lon) })
         }
     }
     // An album opened from Info's folder row lies over the viewer; Back returns to the photo (the owner, over SPEC-albums §3.3's "with the sheet open": the row closes the sheet)
@@ -455,6 +458,13 @@ fun GalleryApp() {
                     overViewer = null
                     viewer = request
                 })
+            }
+            // Info's small map opens the map over the viewer; Back returns to the photo (as the folder's album)
+            if (screen is Screen.Map) {
+                MapScreen(onBack = { overViewer = null }, onOpen = { request ->
+                    overViewer = null
+                    viewer = request
+                }, lat = screen.lat, lon = screen.lon)
             }
         }
         }

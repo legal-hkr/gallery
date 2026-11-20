@@ -94,7 +94,7 @@ private const val LANDING_WAIT_MS = 500L
  */
 @SuppressLint("SourceLockedOrientationActivity")
 @Composable
-fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScope: CoroutineScope, onClose: () -> Unit, onOpenFolder: (MediaItem) -> Unit = {}) {
+fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScope: CoroutineScope, onClose: () -> Unit, onOpenFolder: (MediaItem) -> Unit = {}, onOpenMap: ((Double, Double) -> Unit)? = null) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val activity = LocalActivity.current
     val origins = LocalMediaOrigins.current
@@ -201,6 +201,7 @@ fun ViewerHost(request: ViewerRequest, snackbars: SnackbarHostState, messageScop
                 onClose = onClose,
                 onRequestClose = requestClose,
                 onOpenFolder = onOpenFolder,
+                onOpenMap = onOpenMap,
             )
         }
         flight?.let { FlightLayer(it) }

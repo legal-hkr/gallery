@@ -180,6 +180,11 @@ def fetch_tile(cache, lat, lon, size, pause):
     if os.path.exists(path):
         with gzip.open(path, "rt", encoding="utf-8") as f:
             return json.load(f)
+    # A square that timed out once is asked in its quarters at once: asking it again only costs a query and a time-out
+    split_mark = path.replace(".json.gz", ".split")
+    if os.path.exists(split_mark) and size > SMALLEST_TILE:
+        half = size / 2
+        return [row for dlat in (0, half) for dlon in (0, half) for row in fetch_tile(cache, lat + dlat, lon + dlon, half, pause)]
     europe = in_europe(lat, lon, size)
     query = QUERY.format(west=lon, south=lat, east=lon + size, north=lat + size, population=ANY_POPULATION if europe else WITH_POPULATION)
     try:
@@ -200,6 +205,8 @@ def fetch_tile(cache, lat, lon, size, pause):
             return store(path, rows, lat, lon, size)
         half = size / 2
         print(f"  {lat:+.3f} {lon:+.3f} ({size}) timed out, splitting", file=sys.stderr)
+        os.makedirs(os.path.dirname(split_mark), exist_ok=True)
+        open(split_mark, "w").close()
         rows = []
         for dlat in (0, half):
             for dlon in (0, half):

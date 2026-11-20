@@ -102,6 +102,7 @@ import sh.hnet.gallery.ui.components.placeLanguage
 import sh.hnet.gallery.ui.components.settingsRowColors
 import sh.hnet.gallery.ui.grid.formatDate
 import sh.hnet.gallery.ui.grid.formatDuration
+import sh.hnet.gallery.ui.map.SmallMap
 
 /** What the file itself says, read when the sheet opens (SPEC §7.1). */
 private class FileInfo(
@@ -141,6 +142,7 @@ fun InfoSheet(
     onOpenFolder: (() -> Unit)? = null,
     albums: List<Pair<Long, String>> = emptyList(),
     onOpenAlbum: (Long) -> Unit = {},
+    onOpenMap: ((Double, Double) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val resolver = context.contentResolver
@@ -194,6 +196,10 @@ fun InfoSheet(
                     }
                     else -> null
                 })
+                // The small map under the location (SPEC §7.3), with place names on (the map is drawn from their data)
+                row.map?.let { (lat, lon) ->
+                    SmallMap(lat, lon, onOpenMap?.let { open -> { open(lat, lon) } }, Modifier.padding(start = 56.dp, top = 8.dp, bottom = 8.dp))
+                }
             }
             if (albums.isNotEmpty()) AlbumsRow(rows.size, count, albums, onOpenAlbum)
             val lat = info?.latitude
@@ -246,7 +252,7 @@ private const val INFO_WAIT_MS = 300L
 
 /** One row of the sheet: its icon, title and supporting lines; [date] marks the row with the pencil. */
 /** @param open What a tap opens (the folder row: its album, SPEC-albums §7.1); a long press still copies */
-private class Row(@DrawableRes val icon: Int, val title: String, val lines: List<String>, val date: Boolean = false, val open: (() -> Unit)? = null)
+private class Row(@DrawableRes val icon: Int, val title: String, val lines: List<String>, val date: Boolean = false, val open: (() -> Unit)? = null, val map: Pair<Double, Double>? = null)
 
 @Composable
 private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolean, taken: ZonedDateTime, locale: Locale, onOpenFolder: (() -> Unit)?): List<Row> {
@@ -265,7 +271,7 @@ private fun buildRows(item: MediaItem, fact: Fact?, info: FileInfo?, hdr: Boolea
         val coordinates = stringResource(R.string.format_coordinates, ExifText.coordinate(lat, locale), if (lat >= 0) "N" else "S", ExifText.coordinate(lon, locale), if (lon >= 0) "E" else "W")
         // The place in words, the coordinates under it (SPEC §7.1); with place names off or no place, the coordinates alone (§20.5)
         val place = placeData()?.label(fact, placeLanguage(), full = true)
-        rows.add(if (place != null) Row(R.drawable.ic_location_on, place, listOf(coordinates)) else Row(R.drawable.ic_location_on, coordinates, emptyList()))
+        rows.add(if (place != null) Row(R.drawable.ic_location_on, place, listOf(coordinates), map = lat to lon) else Row(R.drawable.ic_location_on, coordinates, emptyList(), map = lat to lon))
     } else if (info != null) {
         val why = when {
             !info.located -> stringResource(R.string.desc_place_unavailable)

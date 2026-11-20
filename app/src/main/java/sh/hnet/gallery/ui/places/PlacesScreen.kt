@@ -55,13 +55,15 @@ import sh.hnet.gallery.ui.components.SettingsNavigationRow
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.placeLanguage
+import sh.hnet.gallery.ui.map.MapCard
 
 /**
  * Places (SPEC §13.1, LOGIKA §17.5): countries by the number of items, each a header to its page and a row of its
- * towns; "No location" last. The map (its button and card) comes with S6b2 and is shown disabled until then (D5).
+ * towns; "No location" last. The map card first opens the map page (S6b2); no map button over it (owner's test of
+ * S6b2: it did what the card does).
  */
 @Composable
-fun PlacesScreen(onBack: () -> Unit, onOpenCountry: (Int) -> Unit, onOpenTown: (Int) -> Unit, onOpenNoLocation: () -> Unit) {
+fun PlacesScreen(onBack: () -> Unit, onOpenCountry: (Int) -> Unit, onOpenTown: (Int) -> Unit, onOpenNoLocation: () -> Unit, onOpenMap: () -> Unit) {
     val app = LocalContext.current.applicationContext as GalleryApplication
     val groups by app.placeGroups.collectAsStateWithLifecycle()
     val data = placeData()
@@ -71,7 +73,6 @@ fun PlacesScreen(onBack: () -> Unit, onOpenCountry: (Int) -> Unit, onOpenTown: (
         TopAppBar(
             navigationIcon = { TooltipIconButton(R.drawable.ic_arrow_back, stringResource(R.string.content_description_back), onBack) },
             title = { Text(stringResource(R.string.label_places), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() }) },
-            actions = { TooltipIconButton(R.drawable.ic_map, stringResource(R.string.button_map), {}, enabled = false) },
         )
         val shown = groups
         when {
@@ -81,6 +82,8 @@ fun PlacesScreen(onBack: () -> Unit, onOpenCountry: (Int) -> Unit, onOpenTown: (
             shown.countries.isEmpty() && shown.noLocation.isEmpty() -> EmptyState(R.drawable.ic_location_off, stringResource(R.string.msg_no_places))
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
                 if (shown.countries.isEmpty()) item { EmptyState(R.drawable.ic_location_off, stringResource(R.string.msg_no_places), Modifier.height(240.dp)) }
+                // The map card first (SPEC §13.1), opening the map page
+                else item(key = "map") { MapCard(onOpenMap, Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp)) }
                 items(shown.countries, key = { "c${it.country}" }) { country ->
                     val name = data.countryName(country.country, language)
                     PlaceHeader(name, country.count, onOpen = { onOpenCountry(country.country) })

@@ -167,6 +167,8 @@ fun ViewerScreen(
     onClose: () -> Unit,
     onRequestClose: (ViewerCloseFrom, Long) -> Boolean,
     onOpenFolder: (MediaItem) -> Unit = {},
+    /** Info's small map (SPEC §7.3): the map page at the item's point; none where no map can open. */
+    onOpenMap: ((Double, Double) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val resources = LocalResources.current
@@ -524,6 +526,11 @@ fun ViewerScreen(
                         onOpenFolder(item)
                     }) else null,
                     albums = if (trash || readOnly) emptyList() else albumsOf(item.id),
+                    // The sheet is a window above the map page too: it closes as the map opens
+                    onOpenMap = if (readOnly || onOpenMap == null) null else ({ lat, lon ->
+                        info = false
+                        onOpenMap(lat, lon)
+                    }),
                     onOpenAlbum = { id ->
                         info = false
                         openAlbum(id)
