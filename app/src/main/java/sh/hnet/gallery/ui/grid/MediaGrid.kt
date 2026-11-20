@@ -147,6 +147,8 @@ fun MediaGrid(
     topCount: Int = 0,
     selection: SelectionState? = null,
     bottomPadding: Dp = 0.dp,
+    /** Day headers always with the year (search results, SPEC §12.4). */
+    yearInDays: Boolean = false,
     /** Picking several (SPEC §17.4): the circles show before anything is chosen, a tap always toggles. */
     alwaysSelecting: Boolean = false,
     /** Picking: items of the types asked for; the others are dimmed and do nothing (SPEC §17.4). */
@@ -401,7 +403,7 @@ fun MediaGrid(
                         } else null
                         val place = placeLines[entry.key]
                         val measured = Modifier.onSizeChanged { if (it.height > 0) { if (place != null) placedPx = it.height else headerPx = it.height } }
-                        if (entry is TimelineEntry.Day) DayHeader(entry.date, today, measured, pick, place) else MonthHeader((entry as TimelineEntry.Month).month, today, measured, pick)
+                        if (entry is TimelineEntry.Day) DayHeader(entry.date, today, measured, pick, place, yearInDays) else MonthHeader((entry as TimelineEntry.Month).month, today, measured, pick)
                     }
                     is TimelineEntry.Tile -> Tile(
                         entry.item,
@@ -493,12 +495,12 @@ private fun MorphTile(item: MediaItem, modifier: Modifier) {
 
 /** A day's header (SPEC §4.3): "Today", "Yesterday", the date with the weekday, the year only when it isn't this one. */
 @Composable
-private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null, place: String? = null) {
+private fun DayHeader(date: LocalDate, today: LocalDate, modifier: Modifier = Modifier, pick: HeaderPick? = null, place: String? = null, withYear: Boolean = false) {
     val locale = LocalConfiguration.current.locales[0]
-    val text = when (date) {
-        today -> stringResource(R.string.label_today)
-        today.minusDays(1) -> stringResource(R.string.label_yesterday)
-        else -> formatDate(stringResource(if (date.year == today.year) R.string.format_day else R.string.format_day_year), date, locale)
+    val text = when {
+        date == today -> stringResource(R.string.label_today)
+        date == today.minusDays(1) -> stringResource(R.string.label_yesterday)
+        else -> formatDate(stringResource(if (date.year == today.year && !withYear) R.string.format_day else R.string.format_day_year), date, locale)
     }
     Header(text, modifier, pick, place)
 }

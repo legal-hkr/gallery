@@ -39,7 +39,6 @@
     <string name="whats_new_updated_snackbar">Zaktualizowano do wersji %1$s</string>
     <string name="label_nav_photos">Zdjęcia</string>
     <string name="label_nav_albums">Albumy</string>
-    <string name="msg_in_development">W budowie.</string>
     <!-- Stage S1 -->
     <string name="button_allow_access">Zezwól na dostęp</string>
     <string name="button_allow_all">Zezwól na wszystkie</string>
@@ -363,4 +362,33 @@
     <!-- Stage S6b -->
     <string name="label_area_around">%1$s i okolice</string>
     <string name="title_map">Mapa</string>
+    <!-- Stage S6c -->
+    <string name="content_description_fill_query">Wstaw do pola wyszukiwania</string>
+    <string name="content_description_remove_part">Usuń %1$s</string>
+    <string name="desc_no_results">Szukaj według daty, miejsca, albumu, nazwy pliku albo rodzaju.</string>
+    <string name="header_kinds">Rodzaje</string>
+    <string name="header_months">Miesiące</string>
+    <string name="header_places">Miejsca</string>
+    <string name="hint_search">Szukaj zdjęć i filmów</string>
+    <string name="kind_favorites">Ulubione</string>
+    <string name="kind_hdr">HDR</string>
+    <string name="kind_motion_photos">Zdjęcia ruchome</string>
+    <string name="kind_raw">RAW</string>
+    <string name="kind_screenshots">Zrzuty ekranu</string>
+    <string name="kind_videos">Filmy</string>
+    <string name="label_results">Wyniki: %1$d</string>
+    <string name="msg_no_results">Brak wyników dla „%1$s”.</string>
+    <string name="suggest_album">Album (elementy: %1$d)</string>
+    <string name="suggest_day">Dzień (elementy: %1$d)</string>
+    <string name="suggest_file_name">Nazwa pliku</string>
+    <string name="suggest_kind">Rodzaj (elementy: %1$d)</string>
+    <string name="suggest_month">Miesiąc (elementy: %1$d)</string>
+    <string name="suggest_place">%1$s (elementy: %2$d)</string>
+    <string name="suggest_year">Rok (elementy: %1$d)</string>
+    <!-- Stage S6c (mine): what a search meaning is -->
+    <string name="label_town">Miejscowość</string>
+    <string name="label_region">Region</string>
+    <string name="label_country">Kraj</string>
+    <string name="label_album">Album</string>
+    <string name="label_date">Data</string>
 </resources>

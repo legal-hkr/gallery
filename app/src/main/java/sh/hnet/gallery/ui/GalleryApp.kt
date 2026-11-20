@@ -97,6 +97,7 @@ import sh.hnet.gallery.ui.photos.PhotosScreen
 import sh.hnet.gallery.ui.pick.PickerScreen
 import sh.hnet.gallery.ui.places.CountryScreen
 import sh.hnet.gallery.ui.places.PlacesScreen
+import sh.hnet.gallery.ui.search.SearchScreen
 import sh.hnet.gallery.ui.settings.AboutScreen
 import sh.hnet.gallery.ui.settings.AppLicenseScreen
 import sh.hnet.gallery.ui.settings.BackupScreen
@@ -357,7 +358,7 @@ fun GalleryApp() {
                     }
                     entry<Screen.NoLocation> { AlbumPage(PageKey.NoLocation, onBack = back, onOpen = { viewer = it }) }
                     entry<Screen.Map> { key -> MapScreen(onBack = back, onOpen = { viewer = it }, lat = key.lat, lon = key.lon) }
-                    entry<Screen.Search> { PlaceholderScreen(stringResource(R.string.label_nav_search)) }
+                    entry<Screen.Search> { SearchScreen(onOpen = { viewer = it }) }
                     entry<Screen.Settings> {
                         SettingsRootScreen(
                             onBack = back,

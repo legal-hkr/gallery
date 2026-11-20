@@ -168,7 +168,7 @@ private fun PlaceHeader(name: String, count: Int, onOpen: (() -> Unit)?) {
  * picture's. 156 dp high, as Search's (SPEC §12.1): at 112 the badge covered half the picture.
  */
 @Composable
-private fun TownRow(towns: List<TownGroup>, data: PlaceData, language: PlaceLanguage, onOpenTown: (Int) -> Unit) {
+internal fun TownRow(towns: List<TownGroup>, data: PlaceData, language: PlaceLanguage, onOpenTown: (Int) -> Unit) {
     if (towns.isEmpty()) return
     val shape = MaterialTheme.shapes.extraLarge
     val state = rememberCarouselState { towns.size }

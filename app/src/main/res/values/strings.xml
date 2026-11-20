@@ -40,7 +40,6 @@
     <string name="whats_new_updated_snackbar">Updated to %1$s</string>
     <string name="label_nav_photos">Photos</string>
     <string name="label_nav_albums">Albums</string>
-    <string name="msg_in_development">In development.</string>
     <!-- Stage S1 -->
     <string name="button_allow_access">Allow access</string>
     <string name="button_allow_all">Allow all</string>
@@ -362,4 +361,33 @@
     <!-- Stage S6b -->
     <string name="label_area_around">%1$s and around</string>
     <string name="title_map">Map</string>
+    <!-- Stage S6c -->
+    <string name="content_description_fill_query">Insert into the search field</string>
+    <string name="content_description_remove_part">Remove %1$s</string>
+    <string name="desc_no_results">Search by date, place, album, file name or type.</string>
+    <string name="header_kinds">Types</string>
+    <string name="header_months">Months</string>
+    <string name="header_places">Places</string>
+    <string name="hint_search">Search photos and videos</string>
+    <string name="kind_favorites">Favorites</string>
+    <string name="kind_hdr">HDR</string>
+    <string name="kind_motion_photos">Motion photos</string>
+    <string name="kind_raw">RAW</string>
+    <string name="kind_screenshots">Screenshots</string>
+    <string name="kind_videos">Videos</string>
+    <string name="label_results">Results: %1$d</string>
+    <string name="msg_no_results">No results for “%1$s”.</string>
+    <string name="suggest_album">Album (items: %1$d)</string>
+    <string name="suggest_day">Day (items: %1$d)</string>
+    <string name="suggest_file_name">File name</string>
+    <string name="suggest_kind">Type (items: %1$d)</string>
+    <string name="suggest_month">Month (items: %1$d)</string>
+    <string name="suggest_place">%1$s (items: %2$d)</string>
+    <string name="suggest_year">Year (items: %1$d)</string>
+    <!-- Stage S6c (mine): what a search meaning is -->
+    <string name="label_town">Town</string>
+    <string name="label_region">Region</string>
+    <string name="label_country">Country</string>
+    <string name="label_album">Album</string>
+    <string name="label_date">Date</string>
 </resources>
