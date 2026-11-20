@@ -1,0 +1,29 @@
+Gallery shows the photos and videos on your phone and is designed to be the only gallery you need. It has no Internet permission: places, the map and search use data built into the app, and nothing about you leaves the phone.
+
+Photos and videos:
+- A timeline by day, in each photo’s own time zone, with the town it was taken in; pinch to change the number of columns
+- Ultra HDR photos and HDR videos (HDR10, HLG, Dolby Vision) shown in HDR
+- Motion photos, GIFs and animated WebP images play; RAW (DNG), HEIC and AVIF files open
+- Zoom to the photo’s full resolution; videos with frame-by-frame stepping, playback speeds and sound only when you want it
+- Info with the date and time (editable), the place with a small map, the camera and lens
+
+Albums:
+- Your own albums, with an item in as many of them as you like
+- Each folder as a source: shown in Photos, only as an album, or hidden
+- Favorites, Videos, Screenshots and Trash
+
+Places and search:
+- Places by country and town, and a world map with clusters – from Wikidata and Natural Earth data built into the app, nothing downloaded
+- Search by date, place, album, type and file name, in English and Polish
+
+Sharing and privacy:
+- Shared files have their location removed by default, with a switch right in the share sheet
+- A vault encrypted on the phone, unlocked with your fingerprint or screen lock, with import from and export to any storage
+
+And also:
+- An editor to crop with ratios, rotate, mirror and straighten, saving as a copy or over the original, keeping Ultra HDR and metadata
+- A slideshow with crossfade or Ken Burns
+- Opens photos and videos from other apps, and picks them for other apps
+- Backup and restore of settings and albums
+- English and Polish, independent of the system language
+- Material 3 Expressive design with your phone’s colors

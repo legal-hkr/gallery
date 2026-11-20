@@ -1,0 +1,29 @@
+Galeria pokazuje zdjęcia i filmy zapisane w telefonie i może być jedyną galerią, jakiej potrzebujesz. Nie ma uprawnienia dostępu do Internetu: miejsca, mapa i wyszukiwanie korzystają z danych wbudowanych w aplikację, a żadne dane nie opuszczają telefonu.
+
+Zdjęcia i filmy:
+- Oś czasu według dni, w strefie czasowej każdego zdjęcia, z miejscowością, w której powstało; zmiana liczby kolumn gestem szczypania
+- Zdjęcia Ultra HDR i filmy HDR (HDR10, HLG, Dolby Vision) wyświetlane w HDR
+- Odtwarzanie zdjęć ruchomych, GIF-ów i animowanych plików WebP; otwieranie plików RAW (DNG), HEIC i AVIF
+- Powiększanie do pełnej rozdzielczości zdjęcia; filmy z przewijaniem klatka po klatce, zmianą prędkości i dźwiękiem włączanym na życzenie
+- Informacje z datą i godziną (z możliwością zmiany), miejscem z małą mapą, aparatem i obiektywem
+
+Albumy:
+- Własne albumy; jedno zdjęcie może należeć do dowolnie wielu z nich
+- Każdy folder jako źródło: pokazywany w Zdjęciach, tylko w albumie albo ukryty
+- Ulubione, Filmy, Zrzuty ekranu i Kosz
+
+Miejsca i wyszukiwanie:
+- Miejsca według krajów i miejscowości oraz mapa świata ze skupiskami zdjęć – z danych Wikidata i Natural Earth wbudowanych w aplikację, bez pobierania czegokolwiek
+- Wyszukiwanie według daty, miejsca, albumu, rodzaju i nazwy pliku, po polsku i po angielsku
+
+Udostępnianie i prywatność:
+- Udostępniane pliki domyślnie bez lokalizacji, z przełącznikiem bezpośrednio w oknie udostępniania
+- Sejf szyfrowany w telefonie, otwierany odciskiem palca albo blokadą ekranu, z importem z dowolnego nośnika i eksportem na dowolny nośnik
+
+A także:
+- Edytor: kadrowanie z proporcjami, obracanie, odbijanie i prostowanie, z zapisem jako kopia albo w miejsce oryginału, z zachowaniem Ultra HDR i metadanych
+- Pokaz slajdów z przenikaniem albo efektem Kena Burnsa
+- Otwieranie zdjęć i filmów z innych aplikacji oraz wybieranie ich dla innych aplikacji
+- Kopia zapasowa ustawień i albumów w wybranym pliku
+- Język polski lub angielski, niezależnie od języka systemu
+- Wygląd Material 3 Expressive w kolorach systemu

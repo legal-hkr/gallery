@@ -1,0 +1,11 @@
+v0.1.0
+
+Pierwsza wersja:
+- Zdjęcia i filmy na osi czasu według dni, z nazwą miejscowości
+- Zdjęcia Ultra HDR i filmy HDR wyświetlane w HDR
+- Własne albumy, foldery jako źródła, Ulubione i Kosz
+- Miejsca i mapa świata z danych wbudowanych w aplikację, bez Internetu
+- Wyszukiwanie według daty, miejsca, albumu, rodzaju i nazwy pliku
+- Udostępnianie domyślnie bez lokalizacji
+- Kadrowanie, obracanie i prostowanie, zapis jako kopia albo w miejsce oryginału
+- Pokaz slajdów i szyfrowany sejf

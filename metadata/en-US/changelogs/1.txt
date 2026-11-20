@@ -1,4 +1,11 @@
 v0.1.0
 
-In development:
-- The app’s frame and the first settings pages
+First version:
+- Photos and videos on a timeline by day, with the town where each was taken
+- Ultra HDR photos and HDR videos shown in HDR
+- Your own albums, folders as sources, Favorites and Trash
+- Places and a world map from data built into the app, with no Internet access
+- Search by date, place, album, type and file name
+- Sharing without location by default
+- Crop, rotate and straighten, saved as a copy or over the original
+- Slideshow and an encrypted vault
