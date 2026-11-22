@@ -73,4 +73,17 @@ class CollectionsTest {
         val order = TrashOrder.of(listOf(item(1, trashed = true, expires = 100), item(2), item(3, trashed = true, expires = 300)))
         assertEquals(listOf(3L, 1L), order.map { it.id })
     }
+
+    @Test
+    fun aTypeAgainstItsNameIsFound() {
+        val types = mapOf("mov" to "video/quicktime", "mp4" to "video/mp4", "jpg" to "image/jpeg")
+        // MediaStore's scanner typed a QuickTime file by its container
+        assertEquals("video/quicktime", FileNames.mistyped("TEST_TR3.mov", "video/mp4", types::get))
+        assertEquals("video/quicktime", FileNames.mistyped("A.MOV", "video/mp4", types::get))
+        // As it should be, unknown, without an extension, or of another kind: left alone
+        assertNull(FileNames.mistyped("a.mp4", "video/mp4", types::get))
+        assertNull(FileNames.mistyped("a.xyz", "video/mp4", types::get))
+        assertNull(FileNames.mistyped("README", "video/mp4", types::get))
+        assertNull(FileNames.mistyped("a.jpg", "video/mp4", types::get))
+    }
 }

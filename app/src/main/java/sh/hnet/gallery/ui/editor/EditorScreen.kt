@@ -214,10 +214,16 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
 
     // Not while saving: leaving cancelled the save's end, so a copy written or an original replaced was reported as a
     // failure (review before v0.1.0); the photo and its tools hold still meanwhile too
-    fun leave() = when {
+    fun leaveNow() = when {
         saving -> {}
         history.present.changed -> leaving = true
         else -> onClose()
+    }
+
+    // A text being typed is ended first: it is a change, so leaving asks (review before v0.1.1: it went without a word)
+    fun leave() {
+        if (!saving) drawChoice.finishTyping()
+        leaveNow()
     }
     BackHandler(onBack = ::leave)
 
@@ -279,15 +285,26 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             IconButton(onClick = {}, interactionSource = compare, enabled = history.present.changed && !saving) {
                 Icon(painterResource(R.drawable.ic_compare), contentDescription = stringResource(R.string.content_description_hold_original))
             }
-            TooltipIconButton(R.drawable.ic_undo, stringResource(R.string.content_description_undo), { step(history.undo()) }, enabled = history.canUndo && !saving)
-            TooltipIconButton(R.drawable.ic_redo, stringResource(R.string.content_description_redo), { step(history.redo()) }, enabled = history.canRedo && !saving)
+            // A text being typed is ended first, so these act on it as on any step (review before v0.1.1: Reset all
+            // during typing was undone when the text came back on top)
+            TooltipIconButton(R.drawable.ic_undo, stringResource(R.string.content_description_undo), {
+                drawChoice.finishTyping()
+                step(history.undo())
+            }, enabled = (history.canUndo || drawChoice.typing) && !saving)
+            TooltipIconButton(R.drawable.ic_redo, stringResource(R.string.content_description_redo), {
+                drawChoice.finishTyping()
+                step(history.redo())
+            }, enabled = history.canRedo && !saving)
             // Everything back at once, without asking; Undo brings it back (SPEC §15.1)
-            TooltipIconButton(R.drawable.ic_restart_alt, stringResource(R.string.content_description_reset_all), { choose(EditState()) }, enabled = history.present.changed && !saving)
+            TooltipIconButton(R.drawable.ic_restart_alt, stringResource(R.string.content_description_reset_all), {
+                drawChoice.finishTyping()
+                choose(EditState())
+            }, enabled = (history.present.changed || drawChoice.typing) && !saving)
             Box {
                 Button(onClick = {
                     drawChoice.finishTyping()
                     menu = true
-                }, enabled = history.present.changed && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
+                }, enabled = (history.present.changed || drawChoice.typing) && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
                     if (saving) {
                         LoadingIndicator(Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
@@ -643,10 +660,10 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                         postTranslate(shown.x0.toFloat(), shown.y0.toFloat())
                     }
                     native.withClip(0f, 0f, size.width, size.height) {
-                        // The adjustments shown in every tab (S10a); the original as it is
-                        adjuster.draw(this, bitmap, m, if (original) Adjustments.NONE else state.adjust, paint, AdjustShader.hdrWeight(bitmap, headroom()))
-                        // Draw's marks are part of the photo: they turn and crop with it (not in the original)
-                        if (!original) MarkupPainter.draw(this, state.marks, upright, m)
+                        // The adjustments shown in every tab (S10a; the original is drawn above, in its own branch)
+                        adjuster.draw(this, bitmap, m, state.adjust, paint, AdjustShader.hdrWeight(bitmap, headroom()))
+                        // Draw's marks are part of the photo: they turn and crop with it
+                        MarkupPainter.draw(this, state.marks, upright, m)
                     }
                 }
             }

@@ -138,6 +138,7 @@
     <string name="desc_place_unavailable">Miejsca wymagają dostępu do lokalizacji zapisanej w zdjęciach.</string>
     <string name="error_cannot_display">Nie można wyświetlić tego pliku. Jest uszkodzony albo zapisany w formacie, którego telefon nie obsługuje.</string>
     <string name="error_save_failed">Nie udało się zapisać pliku (%1$s).</string>
+    <string name="error_change_failed">Nie udało się wprowadzić zmiany.</string>
     <string name="format_coordinates">%1$s° %2$s, %3$s° %4$s</string>
     <string name="format_file_details">%1$s, %2$s (%3$s MP)</string>
     <string name="format_viewer_title">%1$s, %2$s</string>

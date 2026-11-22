@@ -66,13 +66,45 @@ class MediaActions(
         sharing?.cancel()
     }
 
-    /** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal or a failure changes nothing. */
+    /** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal changes nothing, a failure is said. */
     fun apply(change: MediaWriter.Change, then: () -> Unit) {
         when (change) {
             MediaWriter.Change.Done -> then()
             is MediaWriter.Change.Ask -> consent.ask(change.request, then)
-            is MediaWriter.Change.Failed -> {}
+            // Said, with Show and what the system answered (owner's test before v0.1.1: TEST_TR3.mov stayed, without a word)
+            is MediaWriter.Change.Failed -> fail(context.getString(R.string.error_change_failed), change.details)
         }
+    }
+
+    /**
+     * To Trash or back from it, [then] once the items are really there: the system's yes is checked, a file it left is
+     * moved here, and a failure is said instead of "Moved to Trash" (owner's test before v0.1.1).
+     */
+    private suspend fun trashChecked(items: List<MediaItem>, trashed: Boolean, then: () -> Unit) {
+        suspend fun move() {
+            apply(writer.trash(items, trashed)) {
+                messageScope.launch {
+                    val failure = writer.ensureTrashed(items, trashed)
+                    if (failure == null) then() else fail(context.getString(R.string.error_change_failed), failure)
+                }
+            }
+        }
+        // A file MediaStore typed against its name can't go to Trash (Android 17: a QuickTime .mov typed video/mp4 –
+        // owner's test before v0.1.1): its type set right first, with the right to write it (one more question from the
+        // system, none with Media management)
+        val wrong = if (trashed) writer.mistyped(items) else emptyMap()
+        if (wrong.isEmpty()) {
+            move()
+            return
+        }
+        val retype: () -> Unit = {
+            messageScope.launch {
+                val failure = writer.retype(wrong)
+                if (failure == null) move() else fail(context.getString(R.string.error_change_failed), failure)
+            }
+        }
+        val request = writer.writeRequest(wrong.keys.toList())
+        if (request == null) retype() else consent.ask(request, retype)
     }
 
     /** To Trash at once, with Undo (SPEC §5.5); [onDone] when they are there (a selection ends, the viewer knows it moved them). */
@@ -88,9 +120,9 @@ class MediaActions(
             else -> context.getString(R.string.msg_moved_to_trash, items.size)
         }
         messageScope.launch {
-            apply(writer.trash(items, true)) {
+            trashChecked(items, true) {
                 onDone()
-                say(message) { messageScope.launch { apply(writer.trash(items, false)) {} } }
+                say(message) { messageScope.launch { trashChecked(items, false) {} } }
             }
         }
     }
@@ -115,7 +147,7 @@ class MediaActions(
         if (items.isEmpty()) return
         val message = if (items.size == 1) context.getString(R.string.msg_restored_one) else context.getString(R.string.msg_restored, items.size)
         messageScope.launch {
-            apply(writer.trash(items, false)) {
+            trashChecked(items, false) {
                 onDone()
                 say(message, undo = null)
             }

@@ -42,6 +42,20 @@ object TrashDays {
 
 /** A file's new name (SPEC §10.3): the editable part and the kept extension, and what's wrong with a name. */
 object FileNames {
+    /**
+     * The type [name]'s extension calls for when MediaStore's [mime] disagrees with it but is of the same kind (a
+     * QuickTime ".mov" its scanner typed video/mp4 from the container) – else null. [byExtension] looks an extension up
+     * (Android's MimeTypeMap). Such a file can't go to Trash on Android 17 until its type matches its name (owner's
+     * test before v0.1.1).
+     */
+    fun mistyped(name: String, mime: String, byExtension: (String) -> String?): String? {
+        val extension = split(name).second.removePrefix(".").lowercase()
+        if (extension.isEmpty()) return null
+        val wanted = byExtension(extension) ?: return null
+        if (wanted.equals(mime, ignoreCase = true)) return null
+        return wanted.takeIf { it.substringBefore('/') == mime.substringBefore('/') }
+    }
+
     /** Characters a FAT-formatted SD card refuses (and the path separator), so a name works on every storage. */
     const val FORBIDDEN = "/\\:*?\"<>|"
 

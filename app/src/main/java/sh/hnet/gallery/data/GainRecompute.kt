@@ -18,6 +18,8 @@ import sh.hnet.gallery.model.GainParams
  * divided by the adjusted base – the new boosts, and their range as the new map's parameters.
  */
 object GainRecompute {
+    private const val BAND = 64
+
     fun paramsOf(map: Gainmap) = GainParams(
         ratioMin = map.ratioMin.map(Float::toDouble).toDoubleArray(),
         ratioMax = map.ratioMax.map(Float::toDouble).toDoubleArray(),
@@ -35,24 +37,33 @@ object GainRecompute {
     /**
      * [out]'s light averaged over each cell of a [width] × [height] grid – the gain map's –, in linear light: averaging
      * the encoded values first made fine bright detail (sparkles, stars) far too dark, and its boosts wrong (review of
-     * S10b). Row by row, so the full picture is never copied. Three floats per cell.
+     * S10b). Band by band, so the full picture is never copied; its own bytes, in its own colour space – `getPixels`
+     * gives sRGB, converted and clipped, which read as P3 mixed the primaries (review before v0.1.1). Three floats per cell.
      */
     fun linearMean(out: Bitmap, width: Int, height: Int, linear: DoubleArray): FloatArray {
         val sums = DoubleArray(width * height * 3)
         val counts = IntArray(width * height)
-        val row = IntArray(out.width)
-        for (y in 0 until out.height) {
-            out.getPixels(row, 0, out.width, 0, y, out.width, 1)
-            val cy = min(height - 1, y * height / out.height)
-            for (x in 0 until out.width) {
-                val cell = cy * width + min(width - 1, x * width / out.width)
-                val color = row[x]
-                val i = cell * 3
-                sums[i] += linear[(color shr 16) and 0xFF]
-                sums[i + 1] += linear[(color shr 8) and 0xFF]
-                sums[i + 2] += linear[color and 0xFF]
-                counts[cell]++
+        var top = 0
+        while (top < out.height) {
+            val rows = min(BAND, out.height - top)
+            // A band cut out keeps the colour space and the bytes as they are (RGBA)
+            val band = Bitmap.createBitmap(out, 0, top, out.width, rows)
+            val bytes = ByteBuffer.allocate(band.byteCount).also { band.copyPixelsToBuffer(it) }.array()
+            val stride = band.rowBytes
+            band.recycle()
+            for (r in 0 until rows) {
+                val cy = min(height - 1, (top + r) * height / out.height)
+                for (x in 0 until out.width) {
+                    val cell = cy * width + min(width - 1, x * width / out.width)
+                    val b = r * stride + x * 4
+                    val i = cell * 3
+                    sums[i] += linear[bytes[b].toInt() and 0xFF]
+                    sums[i + 1] += linear[bytes[b + 1].toInt() and 0xFF]
+                    sums[i + 2] += linear[bytes[b + 2].toInt() and 0xFF]
+                    counts[cell]++
+                }
             }
+            top += rows
         }
         return FloatArray(sums.size) { i -> (sums[i] / counts[i / 3].coerceAtLeast(1)).toFloat() }
     }

@@ -139,6 +139,7 @@
     <string name="desc_place_unavailable">Places need access to the location saved in photos.</string>
     <string name="error_cannot_display">Can’t display this file. It’s damaged or saved in a format the phone doesn’t support.</string>
     <string name="error_save_failed">Couldn’t save the file (%1$s).</string>
+    <string name="error_change_failed">Couldn’t make the change.</string>
     <string name="format_coordinates">%1$s° %2$s, %3$s° %4$s</string>
     <string name="format_file_details">%1$s, %2$s (%3$s MP)</string>
     <string name="format_viewer_title">%1$s, %2$s</string>

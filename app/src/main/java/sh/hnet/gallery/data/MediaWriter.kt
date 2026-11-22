@@ -5,13 +5,16 @@ import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import android.os.Environment
 import android.os.storage.StorageManager
 import android.provider.MediaStore
+import android.webkit.MimeTypeMap
 import java.io.File
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import sh.hnet.gallery.model.FileNames
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.VaultEntry
 
@@ -55,7 +58,7 @@ class MediaWriter(private val context: Context) {
                 Change.Ask(MediaStore.createDeleteRequest(resolver, items.map { it.uri() }))
             }
         } catch (e: Exception) {
-            Change.Failed(e.javaClass.simpleName)
+            Change.Failed("${e.javaClass.simpleName}: ${e.message.orEmpty()}")
         }
     }
 
@@ -166,6 +169,54 @@ class MediaWriter(private val context: Context) {
         false
     }
 
+    /** Of [items], those MediaStore typed against their names, with the type their names call for ([FileNames.mistyped]). */
+    fun mistyped(items: List<MediaItem>): Map<MediaItem, String> = items.mapNotNull { item ->
+        FileNames.mistyped(item.name, item.mime) { MimeTypeMap.getSingleton().getMimeTypeFromExtension(it) }?.let { item to it }
+    }.toMap()
+
+    /**
+     * Their types in MediaStore set as their names call for – the files themselves untouched –, once the right to write
+     * them is given; what failed, or null.
+     */
+    suspend fun retype(mistyped: Map<MediaItem, String>): String? = withContext(Dispatchers.IO) {
+        mistyped.mapNotNull { (item, mime) ->
+            try {
+                resolver.update(item.uri(), ContentValues().apply { put(MediaStore.MediaColumns.MIME_TYPE, mime) }, null)
+                null
+            } catch (e: Exception) {
+                "${item.name}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+            }
+        }.takeIf { it.isNotEmpty() }?.joinToString("\n")
+    }
+
+    /**
+     * Makes sure [items] went to Trash (or back from it) after the system said yes: it can say yes and leave a file as it
+     * was (owner's test before v0.1.1: a QuickTime file MediaStore had typed video/mp4). Those left are changed here –
+     * the yes granted the right to –, and what still fails is told: its details, or null when all are where they belong.
+     */
+    suspend fun ensureTrashed(items: List<MediaItem>, trashed: Boolean): String? = withContext(Dispatchers.IO) {
+        val left = items.filter { isTrashed(it).let { now -> now != null && now != trashed } }
+        if (left.isEmpty()) return@withContext null
+        val content = ContentValues().apply { put(MediaStore.MediaColumns.IS_TRASHED, if (trashed) 1 else 0) }
+        val failures = left.mapNotNull { item ->
+            try {
+                resolver.update(item.uri(), content, null)
+                if (isTrashed(item) != !trashed) null else "${item.name}: unchanged"
+            } catch (e: Exception) {
+                "${item.name}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+            }
+        }
+        failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
+    }
+
+    /** Whether MediaStore has the item in Trash now (unknown: as asked, so nothing is reported wrongly). */
+    private fun isTrashed(item: MediaItem): Boolean? = try {
+        val args = Bundle().apply { putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE) }
+        resolver.query(item.uri(), arrayOf(MediaStore.MediaColumns.IS_TRASHED), args, null)?.use { if (it.moveToFirst()) it.getInt(0) == 1 else null }
+    } catch (_: Exception) {
+        null
+    }
+
     /** Which of [items] MediaStore still has (after a delete that failed part of the way). */
     suspend fun stillThere(items: List<MediaItem>): Set<Long> = withContext(Dispatchers.IO) {
         items.filterTo(ArrayList()) { item ->
@@ -191,13 +242,13 @@ class MediaWriter(private val context: Context) {
                     for (item in items) resolver.update(item.uri(), content, null)
                     Change.Done
                 } catch (e: Exception) {
-                    Change.Failed(e.javaClass.simpleName)
+                    Change.Failed("${e.javaClass.simpleName}: ${e.message.orEmpty()}")
                 }
             } else {
                 try {
                     Change.Ask(request(items.map { it.uri() }))
                 } catch (e: Exception) {
-                    Change.Failed(e.javaClass.simpleName)
+                    Change.Failed("${e.javaClass.simpleName}: ${e.message.orEmpty()}")
                 }
             }
         }

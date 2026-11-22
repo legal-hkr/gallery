@@ -111,6 +111,9 @@ class DrawChoice {
 
     /** Ends a text being typed, so Save takes it too (set by [DrawArea] while it is shown). */
     var finishTyping: () -> Unit = {}
+
+    /** A text is being typed: a change though not yet a step (Save, Undo and Reset all count it). */
+    var typing by mutableStateOf(false)
 }
 
 /** A text's letters' height for each size dot, as a share of the photo's shorter side. */
@@ -191,6 +194,10 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
     }
     // Back, or leaving Draw (a tab, saving's end), ends the typing too – Enter now breaks the line
     BackHandler(enabled = typing != null) { commitTyping() }
+    LaunchedEffect(typing != null) { choice.typing = typing != null }
+    // Leaving Draw for Adjust or Filters – the same area, without drawing – ends the typing too (review before v0.1.1:
+    // the field and the keyboard stayed over Adjust's sliders)
+    LaunchedEffect(editable) { if (!editable) commitTyping() }
     val commitNow by rememberUpdatedState(::commitTyping)
     DisposableEffect(choice) {
         choice.finishTyping = { commitNow() }
