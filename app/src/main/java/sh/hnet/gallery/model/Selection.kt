@@ -43,18 +43,21 @@ object TrashDays {
 /** A file's new name (SPEC §10.3): the editable part and the kept extension, and what's wrong with a name. */
 object FileNames {
     /**
-     * The type [name]'s extension calls for when MediaStore's [mime] disagrees with it but is of the same kind (a
-     * QuickTime ".mov" its scanner typed video/mp4 from the container) – else null. [byExtension] looks an extension up
-     * (Android's MimeTypeMap). Such a file can't go to Trash on Android 17 until its type matches its name (owner's
-     * test before v0.1.1).
+     * The type [name]'s extension calls for when MediaStore gave it [mime] by its container instead – only the known
+     * case, a QuickTime ".mov" typed video/mp4 (a file whose bytes truly differ from its name, an HEIC named .jpg, keeps
+     * the type its bytes have: review before v0.1.1) –, else null. [byExtension] looks an extension up (Android's
+     * MimeTypeMap). Such a file can't go to Trash or back on Android 17 until its type matches its name (owner's test
+     * before v0.1.1).
      */
     fun mistyped(name: String, mime: String, byExtension: (String) -> String?): String? {
         val extension = split(name).second.removePrefix(".").lowercase()
         if (extension.isEmpty()) return null
-        val wanted = byExtension(extension) ?: return null
-        if (wanted.equals(mime, ignoreCase = true)) return null
-        return wanted.takeIf { it.substringBefore('/') == mime.substringBefore('/') }
+        val wanted = byExtension(extension)?.lowercase() ?: return null
+        return wanted.takeIf { (it to mime.lowercase()) in SNIFFED }
     }
+
+    /** Name's type to the type MediaStore's scanner gives the same file by its container. */
+    private val SNIFFED = setOf("video/quicktime" to "video/mp4")
 
     /** Characters a FAT-formatted SD card refuses (and the path separator), so a name works on every storage. */
     const val FORBIDDEN = "/\\:*?\"<>|"

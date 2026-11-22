@@ -85,5 +85,7 @@ class CollectionsTest {
         assertNull(FileNames.mistyped("a.xyz", "video/mp4", types::get))
         assertNull(FileNames.mistyped("README", "video/mp4", types::get))
         assertNull(FileNames.mistyped("a.jpg", "video/mp4", types::get))
+        // A file truly other than its name (HEIC named .jpg) keeps the type its bytes have
+        assertNull(FileNames.mistyped("b.jpg", "image/heic", (types + ("jpg" to "image/jpeg"))::get))
     }
 }

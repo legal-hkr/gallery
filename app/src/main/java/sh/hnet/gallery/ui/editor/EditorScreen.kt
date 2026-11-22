@@ -287,24 +287,24 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             }
             // A text being typed is ended first, so these act on it as on any step (review before v0.1.1: Reset all
             // during typing was undone when the text came back on top)
+            // Undo with a field open takes back that text: it is ended, and the step it made undone – an empty one made none,
+            // so only the field closes (review before v0.1.1: the step before it was undone)
             TooltipIconButton(R.drawable.ic_undo, stringResource(R.string.content_description_undo), {
-                drawChoice.finishTyping()
-                step(history.undo())
-            }, enabled = (history.canUndo || drawChoice.typing) && !saving)
-            TooltipIconButton(R.drawable.ic_redo, stringResource(R.string.content_description_redo), {
-                drawChoice.finishTyping()
-                step(history.redo())
-            }, enabled = history.canRedo && !saving)
+                if (!drawChoice.open || drawChoice.finishTyping()) step(history.undo())
+            }, enabled = (history.canUndo || drawChoice.open) && !saving)
+            // Not with a field open: ending it would make a step and lose what Redo had (review before v0.1.1)
+            TooltipIconButton(R.drawable.ic_redo, stringResource(R.string.content_description_redo), { step(history.redo()) }, enabled = history.canRedo && !drawChoice.open && !saving)
             // Everything back at once, without asking; Undo brings it back (SPEC §15.1)
             TooltipIconButton(R.drawable.ic_restart_alt, stringResource(R.string.content_description_reset_all), {
                 drawChoice.finishTyping()
                 choose(EditState())
-            }, enabled = (history.present.changed || drawChoice.typing) && !saving)
+            }, enabled = (history.present.changed || drawChoice.pending) && !saving)
             Box {
                 Button(onClick = {
                     drawChoice.finishTyping()
-                    menu = true
-                }, enabled = (history.present.changed || drawChoice.typing) && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
+                    // Only with a change to save: an empty field ended makes none
+                    if (history.present.changed) menu = true
+                }, enabled = (history.present.changed || drawChoice.pending) && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
                     if (saving) {
                         LoadingIndicator(Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))

@@ -2,6 +2,7 @@ package sh.hnet.gallery.data
 
 import android.app.PendingIntent
 import android.content.ContentUris
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -190,31 +191,48 @@ class MediaWriter(private val context: Context) {
     }
 
     /**
-     * Makes sure [items] went to Trash (or back from it) after the system said yes: it can say yes and leave a file as it
-     * was (owner's test before v0.1.1: a QuickTime file MediaStore had typed video/mp4). Those left are changed here –
-     * the yes granted the right to –, and what still fails is told: its details, or null when all are where they belong.
+     * Of [items], those MediaStore doesn't have where they were sent ([trashed] or not) after the system said yes – it can
+     * say yes and leave a file (owner's test before v0.1.1: a QuickTime file typed video/mp4). One query for all, in
+     * chunks (review before v0.1.1: a query per item made a big selection's snackbar wait); an item unknown counts as
+     * done, so nothing is reported wrongly.
      */
-    suspend fun ensureTrashed(items: List<MediaItem>, trashed: Boolean): String? = withContext(Dispatchers.IO) {
-        val left = items.filter { isTrashed(it).let { now -> now != null && now != trashed } }
-        if (left.isEmpty()) return@withContext null
+    suspend fun leftBehind(items: List<MediaItem>, trashed: Boolean): List<MediaItem> = withContext(Dispatchers.IO) {
+        val states = HashMap<Long, Boolean>()
+        for ((volume, onVolume) in items.filter { !it.outside }.groupBy { it.volume }) {
+            for (chunk in onVolume.chunked(500)) {
+                try {
+                    val args = Bundle().apply {
+                        putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE)
+                        putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns._ID} IN (${chunk.joinToString(",") { it.id.toString() }})")
+                    }
+                    resolver.query(MediaStore.Files.getContentUri(volume), arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.IS_TRASHED), args, null)?.use { c ->
+                        while (c.moveToNext()) states[c.getLong(0)] = c.getInt(1) == 1
+                    }
+                } catch (_: Exception) {
+                    // Unknown: as asked
+                }
+            }
+        }
+        items.filter { item -> states[item.id]?.let { it != trashed } ?: false }
+    }
+
+    /**
+     * [items] sent to Trash or back here, once the right to write them is given (a file the system's yes left behind):
+     * what still failed, or null.
+     */
+    suspend fun trashDirectly(items: List<MediaItem>, trashed: Boolean): String? = withContext(Dispatchers.IO) {
         val content = ContentValues().apply { put(MediaStore.MediaColumns.IS_TRASHED, if (trashed) 1 else 0) }
-        val failures = left.mapNotNull { item ->
+        val failures = items.mapNotNull { item ->
             try {
                 resolver.update(item.uri(), content, null)
-                if (isTrashed(item) != !trashed) null else "${item.name}: unchanged"
+                null
             } catch (e: Exception) {
                 "${item.name}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}"
             }
-        }
+        }.toMutableList()
+        val still = leftBehind(items, trashed).filter { left -> failures.none { it.startsWith(left.name + ":") } }
+        still.forEach { failures += "${it.name}: unchanged" }
         failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
-    }
-
-    /** Whether MediaStore has the item in Trash now (unknown: as asked, so nothing is reported wrongly). */
-    private fun isTrashed(item: MediaItem): Boolean? = try {
-        val args = Bundle().apply { putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE) }
-        resolver.query(item.uri(), arrayOf(MediaStore.MediaColumns.IS_TRASHED), args, null)?.use { if (it.moveToFirst()) it.getInt(0) == 1 else null }
-    } catch (_: Exception) {
-        null
     }
 
     /** Which of [items] MediaStore still has (after a delete that failed part of the way). */
@@ -232,6 +250,13 @@ class MediaWriter(private val context: Context) {
     /** The right to write the items' files (the date taken, SPEC §7.2): null when the app may already. */
     fun writeRequest(items: List<MediaItem>): PendingIntent? =
         if (items.all { it.ours }) null else MediaStore.createWriteRequest(resolver, items.map { it.uri() })
+
+    /** [writeRequest] as a change: the request, done when no right is needed, or what failed in making it. */
+    fun writeChange(items: List<MediaItem>): Change = try {
+        writeRequest(items)?.let { Change.Ask(it) } ?: Change.Done
+    } catch (e: Exception) {
+        Change.Failed("${e.javaClass.simpleName}: ${e.message.orEmpty()}")
+    }
 
     private suspend fun change(items: List<MediaItem>, request: (List<Uri>) -> PendingIntent, values: ContentValues.() -> Unit): Change =
         withContext(Dispatchers.IO) {

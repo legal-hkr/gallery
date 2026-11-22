@@ -53,6 +53,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -109,11 +110,17 @@ class DrawChoice {
     var size by mutableStateOf(MarkSize.MEDIUM)
     var color by mutableStateOf(MarkColors.ALL[2])
 
-    /** Ends a text being typed, so Save takes it too (set by [DrawArea] while it is shown). */
-    var finishTyping: () -> Unit = {}
+    /** Ends a text being typed (set by [DrawArea] while it is shown); whether that made a step of the history. */
+    var finishTyping: () -> Boolean = { false }
 
-    /** A text is being typed: a change though not yet a step (Save, Undo and Reset all count it). */
-    var typing by mutableStateOf(false)
+    /** A text field is open. */
+    var open by mutableStateOf(false)
+
+    /**
+     * The open field holds a change – a new text not blank, or an opened one altered: Save and Reset all count it, an
+     * empty field doesn't (review before v0.1.1: an empty field let Replace original write the photo over unedited).
+     */
+    var pending by mutableStateOf(false)
 }
 
 /** A text's letters' height for each size dot, as a share of the photo's shorter side. */
@@ -127,7 +134,7 @@ private fun textHeight(size: MarkSize): Double = when (size) {
  * A text being typed: a new one (no [id]) or one of the marks opened again. [anchor] (upright pixels) is its first line's
  * left end – where the tap was – and stays put while typing; the block's middle follows from it when it ends.
  */
-private class Typing(val id: Long?, val anchor: Pt, val rotation: Double, val flipped: Boolean, val height: Double, val color: Int, initial: String) {
+private class Typing(val id: Long?, val anchor: Pt, val rotation: Double, val flipped: Boolean, val height: Double, val color: Int, val initial: String) {
     val input = TextFieldState(initial)
     val text: String get() = input.text.toString()
 }
@@ -176,9 +183,11 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
     val headroom = rememberScreenHeadroom()
     val reach = with(density) { 16.dp.toPx() }
 
-    fun commitTyping() {
-        val t = typing ?: return
+    fun commitTyping(): Boolean {
+        val t = typing ?: return false
         typing = null
+        choice.open = false
+        choice.pending = false
         val s = now()
         val rest = s.marks.filterNot { it.id == t.id }
         // Only the end trimmed: the start stays where the tap was
@@ -190,20 +199,36 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
             val center = Markup.textCenter(t.anchor, heightPx, aspect, text.count { it == '\n' } + 1, t.rotation, t.flipped)
             rest + TextMark(t.id ?: System.nanoTime(), text, t.color, t.height, Markup.toShare(center, upright), t.rotation, aspect, t.flipped)
         }
-        if (next != s.marks) onCommit(s.copy(marks = next))
+        if (next == s.marks) return false
+        onCommit(s.copy(marks = next))
+        return true
     }
     // Back, or leaving Draw (a tab, saving's end), ends the typing too – Enter now breaks the line
     BackHandler(enabled = typing != null) { commitTyping() }
-    LaunchedEffect(typing != null) { choice.typing = typing != null }
+    // The field's state for the top bar: open, and whether it holds a change
+    LaunchedEffect(typing) {
+        val t = typing
+        choice.open = t != null
+        if (t == null) {
+            choice.pending = false
+            return@LaunchedEffect
+        }
+        snapshotFlow { t.text }.collect { text -> choice.pending = if (t.id == null) text.isNotBlank() else text.trimEnd() != t.initial.trimEnd() }
+    }
     // Leaving Draw for Adjust or Filters – the same area, without drawing – ends the typing too (review before v0.1.1:
     // the field and the keyboard stayed over Adjust's sliders)
-    LaunchedEffect(editable) { if (!editable) commitTyping() }
+    LaunchedEffect(editable) {
+        if (!editable) commitTyping()
+    }
     val commitNow by rememberUpdatedState(::commitTyping)
     DisposableEffect(choice) {
         choice.finishTyping = { commitNow() }
         onDispose {
-            choice.finishTyping = {}
+            choice.finishTyping = { false }
             commitNow()
+            // Gone with the area (Crop's tab): nothing open any more (review before v0.1.1: Save stayed enabled)
+            choice.open = false
+            choice.pending = false
         }
     }
 
