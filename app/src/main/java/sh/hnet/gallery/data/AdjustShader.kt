@@ -140,7 +140,7 @@ class AdjustShader {
             val adjuster = AdjustShader()
             val target = Canvas(out)
             val copy = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC) }
-            val space = out.colorSpace ?: android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB)
+            val space = out.colorSpace ?: ColorSpace.get(ColorSpace.Named.SRGB)
             try {
                 var top = 0
                 while (top < out.height) {

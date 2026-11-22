@@ -23,7 +23,7 @@ class AlbumStore(private val dao: AlbumDao, scope: CoroutineScope) {
     /** A new album with [items] in it (none: an empty album, SPEC-albums §9.9); its id. */
     suspend fun create(name: String, items: List<MediaItem>, now: Long): Long {
         val id = dao.insert(AlbumRow(name = name.trim(), createdAt = now, lastAddedAt = now))
-        if (items.isNotEmpty()) dao.upsertItems(items.map { AlbumItemRow(id, it.id, Fingerprints.of(it), now) })
+        if (items.isNotEmpty()) dao.upsertItems(items.map { AlbumItemRow(id, it.id, Fingerprints.of(it), now, it.volume) })
         return id
     }
 
@@ -32,7 +32,7 @@ class AlbumStore(private val dao: AlbumDao, scope: CoroutineScope) {
         val there = dao.itemsOf(album).mapTo(HashSet()) { it.mediaId }
         val new = items.filter { it.id !in there }
         if (new.isNotEmpty()) {
-            dao.upsertItems(new.map { AlbumItemRow(album, it.id, Fingerprints.of(it), now) })
+            dao.upsertItems(new.map { AlbumItemRow(album, it.id, Fingerprints.of(it), now, it.volume) })
             dao.touched(album, now)
         }
         return new.size to items.size - new.size
@@ -89,7 +89,7 @@ class AlbumStore(private val dao: AlbumDao, scope: CoroutineScope) {
             dao.insert(AlbumRow(name = name.trim(), createdAt = createdAt, lastAddedAt = now, pinnedAt = pinnedAt, sort = sort))
         }
         val byId = items.associateBy { it.id }
-        dao.upsertItems(found.mapNotNull { byId[it] }.map { AlbumItemRow(id, it.id, Fingerprints.of(it), now) })
+        dao.upsertItems(found.mapNotNull { byId[it] }.map { AlbumItemRow(id, it.id, Fingerprints.of(it), now, it.volume) })
         return missing
     }
 
@@ -106,12 +106,18 @@ class AlbumStore(private val dao: AlbumDao, scope: CoroutineScope) {
         val rows = dao.items()
         if (rows.isEmpty()) return
         val present = items.mapTo(HashSet(items.size * 2)) { it.id }
-        val orphans = rows.filter { it.mediaId !in present }.associate { it.mediaId to it.fingerprint }
-        val moves = Fingerprints.relink(orphans, items)
-        if (moves.isEmpty()) return
+        val orphans = rows.filter { it.mediaId !in present }.groupBy { it.mediaId }.mapValues { (_, own) ->
+            Fingerprints.Orphan(own.first().fingerprint, own.first().volume, own.mapTo(HashSet()) { it.albumId })
+        }
+        val members = rows.filter { it.mediaId in present }.groupBy { it.albumId }.mapValues { (_, own) -> own.mapTo(HashSet()) { it.mediaId } }
         val byId = items.associateBy { it.id }
+        // Members from before version 4 learn their volume while their file is there
+        val unknown = rows.filter { it.volume.isEmpty() && it.mediaId in present }
+        if (unknown.isNotEmpty()) dao.upsertItems(unknown.map { it.copy(volume = byId.getValue(it.mediaId).volume) })
+        val moves = Fingerprints.relink(orphans, items, members)
+        if (moves.isEmpty()) return
         val moved = rows.filter { it.mediaId in moves }
         dao.forget(moves.keys.toList())
-        dao.upsertItems(moved.map { row -> val to = moves.getValue(row.mediaId); row.copy(mediaId = to, fingerprint = Fingerprints.of(byId.getValue(to))) })
+        dao.upsertItems(moved.map { row -> val to = moves.getValue(row.mediaId); row.copy(mediaId = to, fingerprint = Fingerprints.of(byId.getValue(to)), volume = byId.getValue(to).volume) })
     }
 }

@@ -100,6 +100,8 @@ internal fun AdjustTools(state: EditState, chosen: Adjust, onChoose: (Adjust) ->
             // The slider's own state, the thumb following the finger as it is (as straightening: written back, it trembled)
             val slider = remember(chosen) { SliderState(state.adjust[chosen].toFloat(), 0, range.first.toFloat()..range.last.toFloat()) }
             var dragging by remember { mutableStateOf(false) }
+            // The last state sent: a tap sends and lets go before `latest` is composed again (as straightening)
+            var sent by remember { mutableStateOf<EditState?>(null) }
             val value = state.adjust[chosen]
             LaunchedEffect(value, chosen) { if (!dragging) slider.value = value.toFloat() }
             val interaction = remember { MutableInteractionSource() }
@@ -109,17 +111,23 @@ internal fun AdjustTools(state: EditState, chosen: Adjust, onChoose: (Adjust) ->
                     dragging = true
                     slider.value = v
                     val next = v.roundToInt()
-                    if (next != latest.adjust[chosen]) onLive(latest.copy(adjust = latest.adjust.with(chosen, next)))
+                    val from = sent ?: latest
+                    if (next != from.adjust[chosen]) {
+                        val state2 = from.copy(adjust = from.adjust.with(chosen, next))
+                        sent = state2
+                        onLive(state2)
+                    }
                 },
                 onValueChangeFinished = {
                     dragging = false
-                    onCommit(latest)
+                    onCommit(sent ?: latest)
+                    sent = null
                 },
                 interactionSource = interaction,
                 // The value in a label over the thumb while it is dragged (SPEC §15.3)
                 thumb = {
                     Label(
-                        label = { PlainTooltip { Text(Adjustments.valueText(chosen, latest.adjust[chosen], locale)) } },
+                        label = { PlainTooltip { Text(Adjustments.valueText(chosen, (sent ?: latest).adjust[chosen], locale)) } },
                         interactionSource = interaction,
                     ) { SliderDefaults.Thumb(interaction) }
                 },

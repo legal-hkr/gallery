@@ -58,6 +58,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.model.Border
 import sh.hnet.gallery.model.MapPoint
@@ -188,7 +190,10 @@ fun WorldMap(
     val countryLine = remember(scheme.outline) { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = scheme.outline.toArgb(); style = Paint.Style.STROKE; strokeWidth = 0f } }
     val regionLine = remember(scheme.outlineVariant) { Paint(Paint.ANTI_ALIAS_FLAG).apply { color = scheme.outlineVariant.toArgb(); style = Paint.Style.STROKE; strokeWidth = 0f } }
     val labels = remember(data, language) { HashMap<Long, TextLayoutResult>() }
-    val anchors = remember(data) { HashMap<Long, Offset>() }
+    // Where names stand, from the borders – made off the main thread once per place data for every map (the card's too),
+    // countries first, then regions; a name waits for its anchor (review before v0.1.0: each region's border was read
+    // in the frame that first showed it, and it hitched)
+    val anchors by produceState(LabelAnchors.known(data), data) { LabelAnchors.make(data) { value = it } }
     // Boxes and the labels' order (largest first) once, not on every frame
     val countryBoxes = remember(data) { Array(data.countryCount) { data.countryBox(it) } }
     val regionBoxes = remember(data) { Array(data.regionCount) { data.regionBox(it) } }
@@ -237,9 +242,9 @@ fun WorldMap(
         }
         // Names where they fit, the largest places first, none over another
         val taken = ArrayList<Rect>()
-        fun label(kind: Int, index: Int, box: IntArray, name: () -> String, border: () -> Border) {
+        fun label(kind: Int, index: Int, box: IntArray, name: () -> String) {
             val wide = (box[2] - box[0]) / 1e4 * perDegree
-            val anchor = anchors.getOrPut(key(kind, index, 0)) { anchorOf(border(), box) }
+            val anchor = anchors[key(kind, index, 0)] ?: return
             val text = labels.getOrPut(key(kind, index, 0)) { if (kind == 0) measurer.measure(name().uppercase(locale), countryStyle) else measurer.measure(name(), regionStyle) }
             if (text.size.width > wide * 0.8) return
             val cx = state.screenX(anchor.x.toDouble())
@@ -250,9 +255,9 @@ fun WorldMap(
             taken.add(rect)
             drawText(text, topLeft = rect.topLeft)
         }
-        for (c in countryOrder) if (view.meets(countryBoxes[c])) label(0, c, countryBoxes[c], { data.countryName(c, language) }) { data.countryBorder(c, 0) }
+        for (c in countryOrder) if (view.meets(countryBoxes[c])) label(0, c, countryBoxes[c]) { data.countryName(c, language) }
         if (perDegree >= REGION_NAMES_FROM) {
-            for (r in regionOrder) if (view.meets(regionBoxes[r])) label(1, r, regionBoxes[r], { data.regionName(r, language) }) { data.regionBorder(r, 2) }
+            for (r in regionOrder) if (view.meets(regionBoxes[r])) label(1, r, regionBoxes[r]) { data.regionName(r, language) }
         }
         // Towns: a dot and the name beside it, smaller ones as the map comes closer, none over another name
         val least = CITY_STEPS.firstOrNull { perDegree < it.first }?.second ?: CITY_LEAST
@@ -497,3 +502,36 @@ private val LEVELS = doubleArrayOf(0.05, 0.01, 0.003)
 private const val REGIONS_FROM = 40.0
 
 private const val REGION_NAMES_FROM = 80.0
+
+/**
+ * The map's name anchors, made once per [PlaceData] and kept for every map after (review after v0.1.1: each map made all
+ * of them again – the Places card at every return into view): countries, then regions, each step handed on as it's done.
+ * Borders read past the data's cache, so the map's own ones stay in it.
+ */
+private object LabelAnchors {
+    private val lock = Mutex()
+    @Volatile private var forData: PlaceData? = null
+    @Volatile private var table: Map<Long, Offset> = emptyMap()
+
+    fun known(data: PlaceData): Map<Long, Offset> = if (forData === data) table else emptyMap()
+
+    suspend fun make(data: PlaceData, step: (Map<Long, Offset>) -> Unit) {
+        lock.withLock {
+            if (forData === data && table.size >= data.countryCount + data.regionCount) {
+                step(table)
+                return
+            }
+            val found = HashMap<Long, Offset>()
+            withContext(Dispatchers.Default) {
+                for (c in 0 until data.countryCount) found[key(0, c, 0)] = anchorOf(data.countryBorderUncached(c, 0), data.countryBox(c))
+            }
+            step(HashMap(found))
+            withContext(Dispatchers.Default) {
+                for (r in 0 until data.regionCount) found[key(1, r, 0)] = anchorOf(data.regionBorderUncached(r, 2), data.regionBox(r))
+            }
+            table = found
+            forData = data
+            step(found)
+        }
+    }
+}

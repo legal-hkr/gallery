@@ -95,6 +95,9 @@ data class AlbumItemRow(
     val mediaId: Long,
     val fingerprint: String,
     val addedAt: Long,
+    /** The volume the file was on (since version 4; "" before): a card taken out keeps its members for its return. */
+    @ColumnInfo(defaultValue = "")
+    val volume: String = "",
 )
 
 @Dao
@@ -176,7 +179,7 @@ interface AlbumDao {
  * The app's database (LOGIKA §2.3, §15.3): facts derived from the files, rebuilt if lost; since version 2
  * also the user's own data – the sources' states and the albums – which the backup carries.
  */
-@Database(entities = [Fact::class, SourceRow::class, AlbumRow::class, AlbumItemRow::class], version = 3, autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3)])
+@Database(entities = [Fact::class, SourceRow::class, AlbumRow::class, AlbumItemRow::class], version = 4, autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)])
 abstract class GalleryDatabase : RoomDatabase() {
     abstract fun factDao(): FactDao
 

@@ -59,8 +59,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.HasDefaultViewModelProviderFactory
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.CreationExtras
+import androidx.lifecycle.viewmodel.MutableCreationExtras
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
@@ -523,7 +530,12 @@ fun GalleryApp() {
         // Tiles of its own: the viewer under it hides the tile of the photo it shows (for the flight back), which here
         // left a gap in the album (owner's test of S4b2)
         val pageOrigins = remember { MediaOrigins() }
-        CompositionLocalProvider(LocalMediaOrigins provides pageOrigins) {
+        // View models of their own, cleared when the page goes: in the activity's store every album opened over the
+        // viewer stayed for the activity's whole life (review before v0.1.0, fixed after v0.1.1)
+        val parent = LocalViewModelStoreOwner.current as? HasDefaultViewModelProviderFactory
+        val models = remember(screen) { OverlayViewModels(parent) }
+        DisposableEffect(models) { onDispose { models.viewModelStore.clear() } }
+        CompositionLocalProvider(LocalMediaOrigins provides pageOrigins, LocalViewModelStoreOwner provides models) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             BackHandler(enabled = overViewer != null) { overViewer = null }
             val page = when (screen) {
@@ -640,4 +652,21 @@ fun GalleryApp() {
     }
     }
     }
+}
+
+/** A page over the viewer's own view models, made as the activity makes them (an AndroidViewModel needs its application). */
+private class OverlayViewModels(private val parent: HasDefaultViewModelProviderFactory?) : ViewModelStoreOwner, HasDefaultViewModelProviderFactory {
+    override val viewModelStore = ViewModelStore()
+
+    override val defaultViewModelProviderFactory: ViewModelProvider.Factory
+        get() = parent?.defaultViewModelProviderFactory ?: ViewModelProvider.NewInstanceFactory()
+
+    // Only the application from the activity's: its store and saved state stay out, so nothing a view model here keeps
+    // lands in the activity's and outlives this store (review after v0.1.1)
+    override val defaultViewModelCreationExtras: CreationExtras
+        get() = MutableCreationExtras().apply {
+            parent?.defaultViewModelCreationExtras?.get(ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY)?.let {
+                set(ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY, it)
+            }
+        }
 }

@@ -279,7 +279,10 @@ fun MapCard(onOpen: () -> Unit, modifier: Modifier = Modifier) {
     val (points, items) = rememberMapItems()
     LaunchedEffect(state.size, points) { state.fit(points) }
     val cellPx = with(density) { 48.dp.toPx() }.toDouble()
-    val clusters = remember(points, state.world) { MapClusters.of(points, cellPx / max(state.world, 1.0)) }
+    // Off the main thread, as the map's own (review before v0.1.0: the card stopped Places' scrolling while it clustered)
+    val clusters by produceState(emptyList<MapCluster>(), points, state.world, cellPx) {
+        value = withContext(Dispatchers.Default) { MapClusters.of(points, cellPx / max(state.world, 1.0)) }
+    }
     val marker = with(density) { CARD_MARKER.toPx() }
     Box(modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(20.dp)).clickable(onClickLabel = stringResource(R.string.button_map), onClick = onOpen)) {
         WorldMap(state, data, language, Modifier.fillMaxSize(), interactive = false)

@@ -1,8 +1,8 @@
 package sh.hnet.gallery.data
 
 import android.app.PendingIntent
-import android.content.ContentUris
 import android.content.ContentResolver
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri

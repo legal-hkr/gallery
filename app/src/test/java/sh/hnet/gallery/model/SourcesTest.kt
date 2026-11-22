@@ -73,14 +73,43 @@ class SourcesTest {
 }
 
 class FingerprintsTest {
-    private fun item(id: Long, name: String, taken: Long = 1000, size: Long = 5) =
-        MediaItem(id, false, "image/jpeg", taken, name, 0, "DCIM/Camera/", "external_primary", size, 1, 1, 0, false, false, 0, false, 1)
+    private fun item(id: Long, name: String, taken: Long = 1000, size: Long = 5, volume: String = "external_primary") =
+        MediaItem(id, false, "image/jpeg", taken, name, 0, "DCIM/Camera/", volume, size, 1, 1, 0, false, false, 0, false, 1)
+
+    private fun orphan(name: String, size: Long = 5, volume: String = "", albums: Set<Long> = setOf(1L)) = Fingerprints.Orphan(Fingerprints.of(item(0, name, size = size)), volume, albums)
 
     @Test
     fun relinksByNameDateAndSize() {
         val items = listOf(item(10, "A.jpg"), item(11, "B.jpg"), item(12, "B.jpg", size = 6))
-        val orphans = mapOf(1L to Fingerprints.of(item(0, "A.jpg")), 2L to Fingerprints.of(item(0, "B.jpg", size = 6)), 3L to Fingerprints.of(item(0, "C.jpg")))
+        val orphans = mapOf(1L to orphan("A.jpg"), 2L to orphan("B.jpg", size = 6), 3L to orphan("C.jpg"))
         assertEquals(mapOf(1L to 10L, 2L to 12L), Fingerprints.relink(orphans, items))
+    }
+
+    @Test
+    fun identicalFilesEachFindTheirOwn() {
+        // Two copies of one photo in an album, both given new ids by a rescan
+        val items = listOf(item(10, "A.jpg"), item(11, "A.jpg"))
+        val moves = Fingerprints.relink(mapOf(1L to orphan("A.jpg"), 2L to orphan("A.jpg")), items)
+        assertEquals(setOf(10L, 11L), moves.values.toSet())
+        // Never one that is in its album already – but one in another album, yes
+        assertEquals(mapOf(1L to 11L), Fingerprints.relink(mapOf(1L to orphan("A.jpg")), items, members = mapOf(1L to setOf(10L))))
+        assertEquals(mapOf(1L to 10L), Fingerprints.relink(mapOf(1L to orphan("A.jpg")), items, members = mapOf(2L to setOf(10L))))
+    }
+
+    @Test
+    fun aCardTakenOutWaitsForItsReturn() {
+        // The card's photo and its copy on the phone; the card out, nothing of it in the index
+        val phone = listOf(item(10, "A.jpg"))
+        assertEquals(emptyMap<Long, Long>(), Fingerprints.relink(mapOf(1L to orphan("A.jpg", volume = "1234-abcd")), phone))
+        // Back in, with a new id: the card's own copy, not the phone's
+        val both = phone + item(20, "A.jpg", volume = "1234-abcd")
+        assertEquals(mapOf(1L to 20L), Fingerprints.relink(mapOf(1L to orphan("A.jpg", volume = "1234-abcd")), both))
+        // In, but its own file not indexed yet (a card being scanned): it waits, the phone's copy isn't taken
+        val scanning = phone + item(21, "B.jpg", volume = "1234-abcd")
+        assertEquals(emptyMap<Long, Long>(), Fingerprints.relink(mapOf(1L to orphan("A.jpg", volume = "1234-abcd")), scanning))
+        // An older row without a volume, matched after the card's: the card's orphan keeps the card's copy
+        val older = mapOf(2L to orphan("A.jpg"), 1L to orphan("A.jpg", volume = "1234-abcd", albums = setOf(2L)))
+        assertEquals(mapOf(1L to 20L, 2L to 10L), Fingerprints.relink(older, both))
     }
 
     @Test

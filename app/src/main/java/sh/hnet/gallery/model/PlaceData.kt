@@ -263,6 +263,15 @@ class PlaceData(buffer: ByteBuffer) {
 
     fun regionBorder(index: Int, level: Int): Border = border(KIND_REGION, index, regionAt(index) + 32 + level * 4, level)
 
+    /**
+     * A border decoded afresh, past the cache and its lock (absolute reads only, so from any thread): for a sweep over
+     * all of them – the map's name anchors – which would otherwise push the map's own borders out of the cache and hold
+     * the lock its paths need (review after v0.1.1).
+     */
+    fun countryBorderUncached(index: Int, level: Int): Border = decodeBorder(bordersAt + data.getInt(countryAt(index) + 28 + level * 4))
+
+    fun regionBorderUncached(index: Int, level: Int): Border = decodeBorder(bordersAt + data.getInt(regionAt(index) + 32 + level * 4))
+
     @Synchronized
     private fun border(kind: Int, index: Int, offsetAt: Int, level: Int = LEVELS - 1): Border {
         val key = (kind.toLong() shl 40) or (level.toLong() shl 32) or index.toLong()

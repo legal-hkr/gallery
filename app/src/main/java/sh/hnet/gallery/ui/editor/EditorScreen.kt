@@ -750,19 +750,28 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
             val haptics = LocalHapticFeedback.current
             val slider = remember { SliderState(state.angle.toFloat(), 0, -EditGeometry.MAX_ANGLE.toFloat()..EditGeometry.MAX_ANGLE.toFloat()) }
             var dragging by remember { mutableStateOf(false) }
+            // The last state sent while the finger is on: a tap sends it and lets go in one go, before `latest` is
+            // composed again – committing `latest` put the old angle back, the thumb staying where tapped (owner, after v0.1.1)
+            var sent by remember { mutableStateOf<EditState?>(null) }
             LaunchedEffect(state.angle) { if (!dragging) slider.value = state.angle.toFloat() }
             Slider(
                 state = slider,
                 onValueChange = { value ->
                     dragging = true
                     slider.value = value
+                    val from = sent ?: latest
                     val angle = EditGeometry.snap(value.toDouble())
-                    if (angle == 0.0 && latest.angle != 0.0) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
-                    if (angle != latest.angle) onLive(EditGeometry.withAngle(latest, angle, turned))
+                    if (angle == 0.0 && from.angle != 0.0) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                    if (angle != from.angle) {
+                        val next = EditGeometry.withAngle(from, angle, turned)
+                        sent = next
+                        onLive(next)
+                    }
                 },
                 onValueChangeFinished = {
                     dragging = false
-                    onCommit(latest)
+                    onCommit(sent ?: latest)
+                    sent = null
                 },
                 track = { SliderDefaults.CenteredTrack(it) },
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp),

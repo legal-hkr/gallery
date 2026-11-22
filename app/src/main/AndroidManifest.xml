@@ -83,6 +83,11 @@
 
         <!-- Picking for other apps (SPEC §17.4, LOGIKA §16.6): GET_CONTENT and PICK for photos and videos. Portrait as
              the app; the long press's viewer turns with the phone as inside the app (D1) -->
+        <!-- The share sheet's location toggle for a share from the outside viewer (not exported: only the app's own sheet) -->
+        <receiver
+            android:name=".ui.share.ShareToggleReceiver"
+            android:exported="false" />
+
         <activity
             android:name=".ui.pick.PickerActivity"
             android:exported="true"

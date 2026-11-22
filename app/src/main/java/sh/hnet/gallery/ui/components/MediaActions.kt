@@ -33,6 +33,9 @@ class MediaActions(
     /** Starts an activity from the shell's activity (the share sheet); set by the shell. */
     var start: (Intent) -> Unit = {}
 
+    /** Shares from an outside viewer, its token: its sheet's location toggle comes back to it ([ShareSheet.chooser]). */
+    var outside: String? = null
+
     /** Shows the family's error details (Show of a failure's snackbar); set by the shell. */
     var showError: (ErrorDetails) -> Unit = {}
 
@@ -52,7 +55,7 @@ class MediaActions(
             when (val prepared = app.sharing.prepare(items, app.facts.facts.value.orEmpty(), remove, app.media.canLocate())) {
                 is ShareMaker.Prepared.Ready -> {
                     onDone()
-                    start(ShareSheet.chooser(context, app.sharing, prepared, items.map { it.id }, remove))
+                    start(ShareSheet.chooser(context, app.sharing, prepared, items.map { it.id }, remove, outside))
                 }
                 is ShareMaker.Prepared.Failed -> messageScope.reportFailure(
                     snackbars, context.getString(R.string.error_prepare_share, prepared.count), prepared.details, context.getString(R.string.button_show), showError,

@@ -103,6 +103,12 @@ class GalleryApplication : Application() {
     /** The share sheet's location action (SPEC §14.2), for the shell to share again; kept for a shell not composed yet. */
     val shareAgain = MutableStateFlow<ShareAgain?>(null)
 
+    /**
+     * The same, for a share from an outside viewer (a task of its own): that viewer shares again, not the main activity –
+     * the one whose token it carries (review after v0.1.1: any viewer, a later one too, took it).
+     */
+    val shareAgainOutside = MutableStateFlow<Pair<String, ShareAgain>?>(null)
+
     /** A folder's album to open (from the outside viewer), as a [sh.hnet.gallery.model.FolderKey.key]. */
     val openFolder = MutableStateFlow<String?>(null)
 

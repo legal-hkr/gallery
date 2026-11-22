@@ -14,6 +14,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -25,7 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
+import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import sh.hnet.gallery.GalleryApplication
@@ -103,12 +107,28 @@ private fun OutsideViewer(intent: Intent?, secure: Boolean, onClose: () -> Unit,
     val scope = rememberCoroutineScope()
     val consent = rememberConsent()
     val actions = remember(consent) { MediaActions(context.applicationContext, MediaWriter(context.applicationContext), consent, snackbars, scope) }
+    val viewerToken = remember { UUID.randomUUID().toString() }
     var errorShown by remember { mutableStateOf<ErrorDetails?>(null) }
     SideEffect {
         actions.start = { context.startActivity(it) }
         actions.showError = { errorShown = it }
+        actions.outside = viewerToken
     }
     var opening by remember { mutableStateOf<Opening?>(null) }
+    // The share sheet's Include / Remove location from here: shared again by this viewer, in its own task – only its own
+    // requests, and its items found among those it read itself too (a fresh camera shot the index doesn't have yet –
+    // review after v0.1.1); a request left when it goes is taken away with it
+    LaunchedEffect(actions) {
+        app.shareAgainOutside.filterNotNull().filter { it.first == viewerToken }.collect { (_, again) ->
+            app.shareAgainOutside.value = null
+            val byId = opening?.items.orEmpty().associateBy { it.id } + app.index.items.value.orEmpty().associateBy { it.id }
+            val items = again.ids.mapNotNull { byId[it] }
+            if (items.isNotEmpty()) actions.share(items, again.removeLocation)
+        }
+    }
+    DisposableEffect(viewerToken) {
+        onDispose { if (app.shareAgainOutside.value?.first == viewerToken) app.shareAgainOutside.value = null }
+    }
     LaunchedEffect(intent) {
         val found = withContext(Dispatchers.IO) { open(app, intent, secure) }
         if (found == null) onClose() else opening = found

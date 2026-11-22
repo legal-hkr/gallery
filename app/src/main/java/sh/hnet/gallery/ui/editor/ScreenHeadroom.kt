@@ -1,6 +1,7 @@
 package sh.hnet.gallery.ui.editor
 
 import android.content.pm.ActivityInfo
+import android.view.Display
 import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -23,7 +24,7 @@ internal fun rememberScreenHeadroom(): () -> Float {
     val ratio = remember(display) { mutableFloatStateOf(if (display?.isHdrSdrRatioAvailable == true) display.hdrSdrRatio else 1f) }
     DisposableEffect(display) {
         if (display == null || !display.isHdrSdrRatioAvailable) return@DisposableEffect onDispose { }
-        val listener = Consumer<android.view.Display> { ratio.floatValue = it.hdrSdrRatio }
+        val listener = Consumer<Display> { ratio.floatValue = it.hdrSdrRatio }
         display.registerHdrSdrRatioChangedListener({ it.run() }, listener)
         onDispose { display.unregisterHdrSdrRatioChangedListener(listener) }
     }
