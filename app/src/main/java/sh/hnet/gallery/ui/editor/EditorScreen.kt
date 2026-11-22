@@ -117,7 +117,6 @@ import sh.hnet.gallery.data.MarkupPainter
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.Adjust
-import sh.hnet.gallery.model.Adjustments
 import sh.hnet.gallery.model.CropRatio
 import sh.hnet.gallery.model.EditGeometry
 import sh.hnet.gallery.model.EditHistory
@@ -775,10 +774,12 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
             val locale = LocalConfiguration.current.locales[0]
             val number = remember(locale) { NumberFormat.getNumberInstance(locale).apply { minimumFractionDigits = 1; maximumFractionDigits = 1 } }
             val measurer = rememberTextMeasurer()
-            val widest = stringResource(R.string.format_degrees, number.format(-EditGeometry.MAX_ANGLE))
+            // The typographic minus, as Adjust's chips have it ("−2,0°", not "-2,0°" – owner, after v0.1.1); no sign at 0
+            fun angleText(angle: Double) = number.format(if (angle == 0.0) 0.0 else angle).replace('-', '\u2212')
+            val widest = stringResource(R.string.format_degrees, angleText(-EditGeometry.MAX_ANGLE))
             val valueWidth = with(LocalDensity.current) { remember(widest, style) { measurer.measure(widest, style).size.width }.toDp() }
             Text(
-                stringResource(R.string.format_degrees, number.format(state.angle)),
+                stringResource(R.string.format_degrees, angleText(state.angle)),
                 style = style,
                 textAlign = TextAlign.End,
                 maxLines = 1,
