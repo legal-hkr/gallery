@@ -538,4 +538,17 @@
     <string name="color_yellow">Żółty</string>
     <string name="color_green">Zielony</string>
     <string name="color_blue">Niebieski</string>
+
+    <!-- Stage S9b -->
+    <string name="label_trim_length">Długość: %1$s</string>
+    <string name="status_saving_video">Zapisywanie filmu… (%1$d%%)</string>
+    <string name="desc_discard_video">Zmiany w tym filmie nie zostały zapisane.</string>
+    <string name="status_saving_video_unknown">Zapisywanie filmu…</string>
+    <string name="desc_replace_format_video">Ten typ można zapisać tylko jako kopię (MP4).</string>
+    <string name="desc_replace_location_video">Aplikacja nie ma dostępu do lokalizacji w filmach, więc zastąpienie usunęłoby ją z oryginału.</string>
+    <string name="title_save_sdr">Zapisać bez HDR?</string>
+    <string name="desc_save_sdr">Ten telefon nie zapisuje filmów w HDR. Przycięty film będzie w SDR, więc jego najjaśniejsze miejsca mogą wyglądać na bardziej przygaszone niż w oryginale.</string>
+    <string name="button_save_sdr">Zapisz w SDR</string>
+    <string name="title_cant_save_video">Nie można zapisać filmu</string>
+    <string name="desc_cant_save_hdr">Ten telefon nie zapisuje filmów w HDR i nie potrafi też przenieść tego filmu do SDR.</string>
 </resources>

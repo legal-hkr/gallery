@@ -66,7 +66,7 @@ import sh.hnet.gallery.ui.grid.formatDuration
  * The video player's controls (SPEC §8.1, §8.5; ComfyChair's playback card): in portrait two rows –
  * the time, the seek slider and the length; then sound, frame back, play, frame forward, speed –; in
  * landscape one row beside the toolbar, the frame steps taking the place of speed and sound while
- * paused. The card takes every touch inside it, so seeking never swipes the page or closes the viewer.
+ * paused. The card takes every drag inside it, so seeking never swipes the page or closes the viewer; taps go to its buttons.
  *
  * @param onInteraction Any use of a control (the chrome's 3 s start again, D9)
  */
@@ -140,9 +140,17 @@ fun PlaybackCard(player: ViewerPlayer, compact: Boolean, onInteraction: () -> Un
             .widthIn(max = 600.dp)
             .pointerInput(Unit) {
                 awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dragged = false
                     do {
                         val event = awaitPointerEvent()
-                        if (!gestureOnSlider[0]) event.changes.forEach { it.consume() }
+                        if (!gestureOnSlider[0]) {
+                            // A tap's jitter left alone: a move consumed here made the button under the finger cancel its
+                            // click (a clickable's check in the final pass), so Pause took several taps (owner's test of
+                            // S9b). From half the touch slop on it is a drag, taken before the swipe down would start
+                            if (!dragged) dragged = event.changes.size > 1 || event.changes.any { (it.position - down.position).getDistance() > viewConfiguration.touchSlop / 2 }
+                            if (dragged) event.changes.forEach { it.consume() }
+                        }
                     } while (event.changes.any { it.pressed })
                     gestureOnSlider[0] = false
                 }

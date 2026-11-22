@@ -90,7 +90,7 @@ class EditingTest {
     fun undoRedo() {
         val a = EditState(quarters = 1)
         val b = EditState(quarters = 2)
-        var h = EditHistory().push(a).push(b)
+        var h = EditHistory(EditState()).push(a).push(b)
         h = h.undo()
         assertEquals(a, h.present)
         assertTrue(h.canRedo)

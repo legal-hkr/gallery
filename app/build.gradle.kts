@@ -87,6 +87,7 @@ dependencies {
     implementation(libs.exifinterface)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui.compose)
+    implementation(libs.media3.transformer)
 
     implementation(libs.room.runtime)
     implementation(libs.sqlite.framework)

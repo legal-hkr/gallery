@@ -1,6 +1,7 @@
 package sh.hnet.gallery.model
 
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.ln
@@ -43,7 +44,7 @@ data class Stroke(override val id: Long, val highlighter: Boolean, val color: In
  * widest line's width over the letters' height (measured with the font when typed). Lines are left-aligned, [LINE]
  * letter heights apart. Typing starts where the tap was: that is the first line's left end ([Markup.textAnchor]).
  */
-data class TextMark(override val id: Long, val text: String, val color: Int, val height: Double, val center: Pt, val rotation: Double, val aspect: Double) : Mark {
+data class TextMark(override val id: Long, val text: String, val color: Int, val height: Double, val center: Pt, val rotation: Double, val aspect: Double, val flipped: Boolean = false) : Mark {
     fun heightPx(upright: PxSize): Double = height * min(upright.width, upright.height)
 
     val lines: Int get() = text.count { it == '\n' } + 1
@@ -108,15 +109,56 @@ object Markup {
      * middle: the block's top left corner half a line in, turned with it. [textCenter] is the way back; the anchor stays
      * put while the text is typed, the middle moves with what is typed.
      */
-    fun textAnchor(center: Pt, heightPx: Double, aspect: Double, lines: Int, rotation: Double): Pt {
+    fun textAnchor(center: Pt, heightPx: Double, aspect: Double, lines: Int, rotation: Double, flipped: Boolean = false): Pt {
         val line = heightPx * TextMark.LINE
-        return turn(center, -heightPx * aspect / 2, -line * lines / 2 + line / 2, rotation)
+        val side = if (flipped) 1 else -1
+        return turn(center, side * heightPx * aspect / 2, -line * lines / 2 + line / 2, rotation)
     }
 
-    fun textCenter(anchor: Pt, heightPx: Double, aspect: Double, lines: Int, rotation: Double): Pt {
+    fun textCenter(anchor: Pt, heightPx: Double, aspect: Double, lines: Int, rotation: Double, flipped: Boolean = false): Pt {
         val line = heightPx * TextMark.LINE
-        return turn(anchor, heightPx * aspect / 2, line * lines / 2 - line / 2, rotation)
+        val side = if (flipped) -1 else 1
+        return turn(anchor, side * heightPx * aspect / 2, line * lines / 2 - line / 2, rotation)
     }
+
+    /**
+     * The turn and mirror a text needs, in the upright photo, to stand level and readable on a screen the photo is
+     * shown on through [map] (upright → screen): the map's own turn – quarter turns, straightening – undone, and its
+     * mirror too (review of S9a: a text written on a turned or mirrored photo came out turned or backwards). Degrees.
+     */
+    fun levelOn(map: Affine): Pair<Double, Boolean> {
+        val back = map.inverse()
+        var a = back.sx
+        var c = back.ky
+        val flipped = back.sx * back.sy - back.kx * back.ky < 0
+        // The mirror taken out first: the rest is a turn
+        if (flipped) {
+            a = -a
+            c = -c
+        }
+        return Math.toDegrees(atan2(c, a)) to flipped
+    }
+
+    /**
+     * Where a text in the upright photo stands on screen through [map]: its turn there in degrees, read without a
+     * mirror the text and the map don't cancel (a text mirrored with the photo after it was written is typed unmirrored).
+     */
+    fun screenTurn(map: Affine, rotation: Double, flipped: Boolean): Double {
+        val r = Math.toRadians(rotation)
+        val f = if (flipped) -1.0 else 1.0
+        // The map's linear part times the text's turn times its mirror: the local x axis on screen
+        var x = map.sx * cos(r) * f + map.kx * sin(r) * f
+        var y = map.ky * cos(r) * f + map.sy * sin(r) * f
+        val det = (map.sx * map.sy - map.kx * map.ky) * f
+        if (det < 0) {
+            x = -x
+            y = -y
+        }
+        return Math.toDegrees(atan2(y, x))
+    }
+
+    /** How a turn of the fingers on screen turns a text in the upright photo: the other way under a mirrored map. */
+    fun turnBy(map: Affine, degrees: Double): Double = if (map.sx * map.sy - map.kx * map.ky < 0) -degrees else degrees
 
     /** [p] moved by ([dx], [dy]) of a frame turned [rotation] degrees. */
     private fun turn(p: Pt, dx: Double, dy: Double, rotation: Double): Pt {

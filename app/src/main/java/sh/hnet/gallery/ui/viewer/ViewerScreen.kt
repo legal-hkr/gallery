@@ -346,10 +346,22 @@ fun ViewerScreen(
         onDispose { if (keepOn) view.keepScreenOn = false }
     }
     val hdr = if (video) playback.item == currentId && playback.hdr != null else hdrOf[currentId] == true
-    // A video plays when its page settles and pauses when it is left (SPEC §8.2)
-    LaunchedEffect(currentId, video) {
+    // A video plays when its page settles and pauses when it is left (SPEC §8.2) – once per arrival: the effect runs
+    // again when the list of media passes through a change (the item missing for a moment, its row touched), and each run
+    // played the video again; a video written over (its size changed – not its row's generation, which a favorite raises
+    // too) plays anew
+    val arrived = remember { arrayOfNulls<Pair<Long, Long>>(1) }
+    LaunchedEffect(currentId, video, item?.size) {
         val shown = item ?: return@LaunchedEffect
-        if (video) player.show(shown) else playback.item?.let { player.pauseFor(it) }
+        if (!video) {
+            arrived[0] = null
+            playback.item?.let { player.pauseFor(it) }
+            return@LaunchedEffect
+        }
+        val key = shown.id to shown.size
+        if (arrived[0] == key) return@LaunchedEffect
+        arrived[0] = key
+        player.show(shown)
     }
     // An HDR video's SDR toggle only where the phone's decoder tone-maps it (D11)
     var toneMaps by remember(currentId) { mutableStateOf(false) }
@@ -357,13 +369,15 @@ fun ViewerScreen(
         val shown = item
         toneMaps = shown != null && video && hdr && ViewerPlayer.decoderToneMaps(context.contentResolver, shown)
     }
-    // A long video stopped on its last frame: the chrome comes back and stays until it plays again (the owner, 19 Nov 2026)
-    LaunchedEffect(playback.ended, video) {
-        if (video && playback.ended) chrome = true
+    // A long video stopped on its last frame: the chrome comes back and stays until it plays again (the owner, 19 Nov 2026);
+    // a video that can't be played keeps it all the time (the problem card has no tap to bring it back)
+    val broken = video && playback.item == currentId && playback.error
+    LaunchedEffect(playback.ended, video, broken) {
+        if (video && playback.ended || broken) chrome = true
     }
     // The chrome hides 4 s after the last touch while a video plays; paused, it stays (D9)
     LaunchedEffect(chrome, video, playback.playing, touched) {
-        if (chrome && video && playback.playing) {
+        if (chrome && video && playback.playing && !broken) {
             delay(Playback.CHROME_HIDE_MS)
             chrome = false
         }
@@ -517,7 +531,13 @@ fun ViewerScreen(
                         },
                         onSetAs = { open(context, item, Intent.ACTION_ATTACH_DATA) },
                         onEditElsewhere = { open(context, item, Intent.ACTION_EDIT) },
-                        onEdit = onEdit?.let { edit -> { unlock { edit(item) } } },
+                        // The video pauses under the editor, which plays it with its own player
+                        onEdit = onEdit?.let { edit ->
+                            {
+                                playback.item?.let { player.pauseFor(it) }
+                                unlock { edit(item) }
+                            }
+                        },
                         onOpenWith = { open(context, item, Intent.ACTION_VIEW) },
                         // Slideshow from here (SPEC §16): this opening's pages from this one; on its end the viewer goes on
                         // at the item the show stopped at
@@ -710,9 +730,8 @@ private fun Toolbar(
     var more by remember { mutableStateOf(false) }
     HorizontalFloatingToolbar(expanded = true) {
         ShareButton(onShare)
-        // Edit (S7): photos only – videos' trimming comes with S9, and no button that does nothing goes into a release
-        // (the owner, 20 Nov 2026)
-        if (item.mime !in NOT_EDITABLE && !item.video) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), { onEdit?.invoke() }, enabled = onEdit != null)
+        // Edit: photos (S7) and videos – trimming (S9b)
+        if (item.mime !in NOT_EDITABLE) TooltipIconButton(R.drawable.ic_edit, stringResource(R.string.action_edit), { onEdit?.invoke() }, enabled = onEdit != null)
         TooltipIconButton(
             if (item.favorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite,
             stringResource(if (item.favorite) R.string.action_unfavorite else R.string.action_favorite),

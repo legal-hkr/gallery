@@ -1,7 +1,5 @@
 package sh.hnet.gallery.data
 
-import android.content.ContentUris
-import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -59,8 +57,8 @@ class EditSaver(private val context: Context) {
     }
 
     /**
-     * A copy beside the original (SPEC §15.6): the name + [suffix] (+ a number when taken), written while pending and
-     * shown once whole; its date and place from the EXIF carried over. The new item's id, or null.
+     * A copy beside the original (SPEC §15.6): the name + [suffix] (+ a number when taken), through [insertBeside]; its
+     * date and place from the EXIF carried over. The new item's id, or null.
      */
     suspend fun saveCopy(item: MediaItem, state: EditState, suffix: String, taken: Collection<String>, located: Boolean): Long? = withContext(Dispatchers.IO) {
         val output = outputOf(item)
@@ -68,32 +66,7 @@ class EditSaver(private val context: Context) {
         try {
             val (base, _) = FileNames.split(item.name)
             val name = editedName(base + output.extension, suffix, taken)
-            val values = ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                put(MediaStore.MediaColumns.MIME_TYPE, output.mime)
-                put(MediaStore.MediaColumns.RELATIVE_PATH, item.path)
-                put(MediaStore.MediaColumns.IS_PENDING, 1)
-                put(MediaStore.MediaColumns.DATE_TAKEN, item.taken)
-            }
-            // Beside the original where MediaStore takes a photo (DCIM, Pictures); elsewhere – Download, another app's
-            // Android/media folder – in Pictures (review before v0.1.0: every such copy failed)
-            val target = try {
-                resolver.insert(MediaStore.Images.Media.getContentUri(item.volume), values)
-            } catch (_: Exception) {
-                null
-            } ?: resolver.insert(
-                MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-                values.apply { put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/") },
-            ) ?: return@withContext null
-            try {
-                resolver.openOutputStream(target)?.use { to -> file.inputStream().use { it.copyTo(to, 256 * 1024) } } ?: error("No stream")
-                resolver.update(target, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null)
-                ContentUris.parseId(target)
-            } catch (e: Exception) {
-                // Half a copy is no file: it goes
-                try { resolver.delete(target, null) } catch (_: Exception) { }
-                throw e
-            }
+            resolver.insertBeside(item, file, name, output.mime, MediaStore.Images.Media::getContentUri, Environment.DIRECTORY_PICTURES)
         } finally {
             file.delete()
         }
@@ -106,7 +79,7 @@ class EditSaver(private val context: Context) {
     suspend fun replace(item: MediaItem, state: EditState, located: Boolean) = withContext(Dispatchers.IO) {
         val file = render(item, state, outputOf(item), located)
         try {
-            resolver.openOutputStream(item.uri(), "wt")?.use { to -> file.inputStream().use { it.copyTo(to, 256 * 1024) } } ?: error("No stream")
+            resolver.writeOver(item, file)
         } finally {
             file.delete()
         }
@@ -226,7 +199,7 @@ class EditSaver(private val context: Context) {
             val map = gain
             val parameters = gainTemplate
             if (map != null && parameters != null) {
-                val neutral = Markup.neutralGain(parameters.ratioMin[0], parameters.ratioMax[0], parameters.gamma[0])
+                val neutral = FloatArray(3) { c -> Markup.neutralGain(parameters.ratioMin[c], parameters.ratioMax[c], parameters.gamma[c]) }
                 val onMap = Matrix(marksMap).apply { postScale(gainScale.toFloat(), gainScale.toFloat()) }
                 MarkupPainter.drawNeutral(Canvas(map), state.marks, upright, onMap, neutral, MarkupPainter.alphaOnly(map))
             }

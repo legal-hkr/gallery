@@ -11,6 +11,7 @@ import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import androidx.core.graphics.withMatrix
 import androidx.core.graphics.withRotation
+import androidx.core.graphics.withScale
 import kotlin.math.roundToInt
 import sh.hnet.gallery.model.Mark
 import sh.hnet.gallery.model.MarkColors
@@ -46,19 +47,20 @@ object MarkupPainter {
     }
 
     /**
-     * The marks into an Ultra HDR photo's gain map at [neutral] – "no boost" (D36): ink is plain ink, not lit with the
-     * sky around it. An RGB map takes the grey of that value (the highlighter part-way); a one-channel map ([alphaOnly])
-     * takes it as its value – the highlighter through two passes: the map's own value down to 60 %, then 40 % of the
-     * neutral one added.
+     * The marks into an Ultra HDR photo's gain map at [neutral] – "no boost" (D36), one value per channel: ink is plain
+     * ink, not lit with the sky around it. An RGB map takes each channel's own value (they can differ – review of S9b;
+     * the highlighter part-way); a one-channel map ([alphaOnly]) takes the first as its value – the highlighter through
+     * two passes: the map's own value down to 60 %, then 40 % of the neutral one added.
      */
-    fun drawNeutral(canvas: Canvas, marks: List<Mark>, upright: PxSize, map: Matrix, neutral: Float, alphaOnly: Boolean) {
-        val value = (neutral.coerceIn(0f, 1f) * 255).roundToInt()
+    fun drawNeutral(canvas: Canvas, marks: List<Mark>, upright: PxSize, map: Matrix, neutral: FloatArray, alphaOnly: Boolean) {
+        fun byte(c: Int) = (neutral[c.coerceAtMost(neutral.lastIndex)].coerceIn(0f, 1f) * 255).roundToInt()
+        val value = byte(0)
         val part = MarkColors.HIGHLIGHTER_ALPHA
         for (mark in marks) canvas.withMatrix(map) {
             val highlighter = mark is Stroke && mark.highlighter
             fun paint(base: Paint): List<Paint> = when {
                 !alphaOnly -> listOf(base.apply {
-                    color = Color.rgb(value, value, value)
+                    color = Color.rgb(byte(0), byte(1), byte(2))
                     if (highlighter) alpha = (part * 255).roundToInt()
                 })
                 !highlighter -> listOf(base.apply {
@@ -126,12 +128,15 @@ object MarkupPainter {
         val line = h * TextMark.LINE
         val left = center.x - h * text.aspect / 2
         val top = center.y - line * text.lines / 2
-        // Turned about the block's middle; each line left-aligned, its letters' middle half a line into its own
+        // Turned about the block's middle (and mirrored there when written on a mirrored photo, so it read right); each
+        // line left-aligned, its letters' middle half a line into its own
         canvas.withRotation(text.rotation.toFloat(), center.x.toFloat(), center.y.toFloat()) {
-            val metrics = paint.fontMetrics
-            text.text.split('\n').forEachIndexed { i, row ->
-                val middle = top + line / 2 + i * line
-                drawText(row, left.toFloat(), (middle - (metrics.ascent + metrics.descent) / 2).toFloat(), paint)
+            withScale(if (text.flipped) -1f else 1f, 1f, center.x.toFloat(), center.y.toFloat()) {
+                val metrics = paint.fontMetrics
+                text.text.split('\n').forEachIndexed { i, row ->
+                    val middle = top + line / 2 + i * line
+                    drawText(row, left.toFloat(), (middle - (metrics.ascent + metrics.descent) / 2).toFloat(), paint)
+                }
             }
         }
     }

@@ -537,4 +537,17 @@
     <string name="color_yellow">Yellow</string>
     <string name="color_green">Green</string>
     <string name="color_blue">Blue</string>
+
+    <!-- Stage S9b -->
+    <string name="label_trim_length">Length: %1$s</string>
+    <string name="status_saving_video">Saving the video… (%1$d%%)</string>
+    <string name="desc_discard_video">Changes to this video haven’t been saved.</string>
+    <string name="status_saving_video_unknown">Saving the video…</string>
+    <string name="desc_replace_format_video">This type is saved as a copy only (MP4).</string>
+    <string name="desc_replace_location_video">Gallery can’t read the location in videos, so replacing would remove it from the original.</string>
+    <string name="title_save_sdr">Save without HDR?</string>
+    <string name="desc_save_sdr">This phone can’t save videos in HDR. The trimmed video will be in SDR, so its brightest parts may look duller than in the original.</string>
+    <string name="button_save_sdr">Save in SDR</string>
+    <string name="title_cant_save_video">Can’t save the video</string>
+    <string name="desc_cant_save_hdr">This phone can’t save HDR video, and it can’t turn this one into SDR either.</string>
 </resources>

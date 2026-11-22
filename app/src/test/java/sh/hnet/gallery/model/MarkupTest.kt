@@ -90,4 +90,34 @@ class MarkupTest {
         assertEquals(expected.x, actual.x, 1e-6)
         assertEquals(expected.y, actual.y, 1e-6)
     }
+
+    @Test
+    fun aNewTextStandsLevelOnATurnedOrMirroredPhoto() {
+        // The photo shown turned 90° clockwise (x, y) → (−y, x): the text turned back by 90°, not mirrored
+        val turned = Affine(0.0, -1.0, 0.0, 1.0, 0.0, 0.0)
+        val (r1, f1) = Markup.levelOn(turned)
+        assertEquals(-90.0, r1, 1e-9)
+        assertFalse(f1)
+        assertEquals(0.0, Markup.screenTurn(turned, r1, f1), 1e-9)
+        // Mirrored: the text mirrored too, so it reads right; the fingers' turn goes the other way
+        val mirrored = Affine(-2.0, 0.0, 0.0, 0.0, 2.0, 0.0)
+        val (r2, f2) = Markup.levelOn(mirrored)
+        assertTrue(f2)
+        assertEquals(0.0, Markup.screenTurn(mirrored, r2, f2), 1e-9)
+        assertEquals(-15.0, Markup.turnBy(mirrored, 15.0), 1e-9)
+        assertEquals(15.0, Markup.turnBy(turned, 15.0), 1e-9)
+        // A plain view leaves the text as it is
+        val (r3, f3) = Markup.levelOn(Affine(3.0, 0.0, 5.0, 0.0, 3.0, 7.0))
+        assertEquals(0.0, r3, 1e-9)
+        assertFalse(f3)
+    }
+
+    @Test
+    fun aMirroredTextStartsAtItsOtherEnd() {
+        // Mirrored in the photo, its first line's start lies right of the middle there (left on the mirrored screen)
+        assertPt(Pt(1150.0, 940.0), Markup.textAnchor(Pt(1000.0, 1000.0), 100.0, 3.0, 2, 0.0, flipped = true))
+        val anchor = Pt(300.0, 400.0)
+        val center = Markup.textCenter(anchor, 80.0, 5.0, 3, 37.0, flipped = true)
+        assertPt(anchor, Markup.textAnchor(center, 80.0, 5.0, 3, 37.0, flipped = true))
+    }
 }

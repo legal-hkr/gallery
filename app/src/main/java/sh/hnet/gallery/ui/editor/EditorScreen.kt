@@ -156,7 +156,7 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER }
     }
 
-    var history by remember { mutableStateOf(EditHistory()) }
+    var history by remember { mutableStateOf(EditHistory(EditState())) }
     // A drag or the slider under way: shown, made a step of the history when it ends
     var live by remember { mutableStateOf<EditState?>(null) }
     val state = live ?: history.present
@@ -350,7 +350,17 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
  * without the right to the photos' location – replacing would take the location out of the original.
  */
 @Composable
-private fun SaveMenu(open: Boolean, motion: Boolean, canReplace: Boolean, located: Boolean, onDismiss: () -> Unit, onCopy: () -> Unit, onReplace: () -> Unit) {
+internal fun SaveMenu(
+    open: Boolean,
+    motion: Boolean,
+    canReplace: Boolean,
+    located: Boolean,
+    onDismiss: () -> Unit,
+    onCopy: () -> Unit,
+    onReplace: () -> Unit,
+    formatNote: Int = R.string.desc_replace_format,
+    locationNote: Int = R.string.desc_replace_location,
+) {
     val groups = if (motion) 2 else 1
     DropdownMenuPopup(expanded = open, onDismissRequest = onDismiss) {
         DropdownMenuGroup(shapes = MenuDefaults.groupShape(0, groups)) {
@@ -371,8 +381,8 @@ private fun SaveMenu(open: Boolean, motion: Boolean, canReplace: Boolean, locate
                     Text(
                         stringResource(
                             when {
-                                !canReplace -> R.string.desc_replace_format
-                                !located -> R.string.desc_replace_location
+                                !canReplace -> formatNote
+                                !located -> locationNote
                                 else -> R.string.desc_replace_original
                             },
                         ),
@@ -741,7 +751,7 @@ private fun CropTools(state: EditState, turned: PxSize, onLive: (EditState) -> U
 }
 
 /** Every touch taken before the content sees it while [held] (the editor while saving). */
-private fun Modifier.holdWhile(held: Boolean): Modifier = if (!held) this else pointerInput(Unit) {
+internal fun Modifier.holdWhile(held: Boolean): Modifier = if (!held) this else pointerInput(Unit) {
     awaitPointerEventScope {
         while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
     }

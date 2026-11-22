@@ -100,6 +100,7 @@ import sh.hnet.gallery.ui.components.StatusCard
 import sh.hnet.gallery.ui.components.placeData
 import sh.hnet.gallery.ui.components.rememberConsent
 import sh.hnet.gallery.ui.editor.EditorScreen
+import sh.hnet.gallery.ui.editor.VideoEditorScreen
 import sh.hnet.gallery.ui.grid.LocalHideNavigationBar
 import sh.hnet.gallery.ui.map.MapScreen
 import sh.hnet.gallery.ui.photos.PhotosScreen
@@ -558,15 +559,18 @@ fun GalleryApp() {
     ) {
         val item = shownEditing[0] ?: return@AnimatedVisibility
         key(item.id) {
-            EditorScreen(item, onClose = { editing = null }, onCopySaved = { copy ->
-                // The viewer goes on to the copy, right after the photo it was made from
+            val copySaved: (Long) -> Unit = { copy ->
+                // The viewer goes on to the copy, right after the item it was made from
                 val open = viewer
                 val ids = open?.ids.orEmpty().toMutableList()
                 val at = ids.indexOf(item.id)
                 if (at >= 0) ids.add(at + 1, copy) else ids.add(copy)
                 editing = null
                 viewer = ViewerRequest(ids, copy, album = open?.album, title = open?.title, onPage = open?.onPage ?: {})
-            })
+            }
+            // A video is trimmed in its own editor (S9b)
+            if (item.video) VideoEditorScreen(item, onClose = { editing = null }, onCopySaved = copySaved)
+            else EditorScreen(item, onClose = { editing = null }, onCopySaved = copySaved)
         }
     }
     // The slideshow fades in and out over whatever started it; the request kept for its way out

@@ -29,7 +29,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -122,7 +121,7 @@ private fun textHeight(size: MarkSize): Double = when (size) {
  * A text being typed: a new one (no [id]) or one of the marks opened again. [anchor] (upright pixels) is its first line's
  * left end – where the tap was – and stays put while typing; the block's middle follows from it when it ends.
  */
-private class Typing(val id: Long?, val anchor: Pt, val rotation: Double, val height: Double, val color: Int, initial: String) {
+private class Typing(val id: Long?, val anchor: Pt, val rotation: Double, val flipped: Boolean, val height: Double, val color: Int, initial: String) {
     val input = TextFieldState(initial)
     val text: String get() = input.text.toString()
 }
@@ -139,8 +138,14 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
     val margin = with(density) { 24.dp.toPx() }
     val turned = EditGeometry.turned(upright, state)
     // The view: the crop fitted, then the user's own zoom for precision (two fingers), reset when the crop changes
-    var zoom by remember(state.crop, state.quarters, state.flipped, state.angle) { mutableFloatStateOf(1f) }
-    var pan by remember(state.crop, state.quarters, state.flipped, state.angle) { mutableStateOf(Offset.Zero) }
+    // One state for the gesture to write to: remembered by the crop, a new one after Undo went unseen by the gesture still
+    // writing to the old one, and two fingers stopped zooming (review of S9a)
+    var zoom by remember { mutableFloatStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    LaunchedEffect(state.crop, state.quarters, state.flipped, state.angle) {
+        zoom = 1f
+        pan = Offset.Zero
+    }
     val base = if (area.width == 0) null else viewOf(state.crop, turned, area, margin)
     // Upright preview pixels → screen
     fun mapOf(s: EditState): Affine? {
@@ -174,8 +179,8 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
         val next = if (text.isBlank()) rest else {
             val aspect = MarkupPainter.aspectOf(text)
             val heightPx = t.height * min(upright.width, upright.height)
-            val center = Markup.textCenter(t.anchor, heightPx, aspect, text.count { it == '\n' } + 1, t.rotation)
-            rest + TextMark(t.id ?: System.nanoTime(), text, t.color, t.height, Markup.toShare(center, upright), t.rotation, aspect)
+            val center = Markup.textCenter(t.anchor, heightPx, aspect, text.count { it == '\n' } + 1, t.rotation, t.flipped)
+            rest + TextMark(t.id ?: System.nanoTime(), text, t.color, t.height, Markup.toShare(center, upright), t.rotation, aspect, t.flipped)
         }
         if (next != s.marks) onCommit(s.copy(marks = next))
     }
@@ -230,7 +235,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                             val next = current.copy(
                                 center = moved2,
                                 height = (current.height * event.calculateZoom()).coerceIn(0.01, 0.5),
-                                rotation = current.rotation + event.calculateRotation(),
+                                rotation = current.rotation + Markup.turnBy(m, event.calculateRotation().toDouble()),
                             )
                             last = last.copy(marks = last.marks.map { if (it.id == next.id) next else it })
                             onLive(last)
@@ -248,15 +253,20 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                     val change = event.changes.firstOrNull { it.id == down.id } ?: break
                     if (!change.pressed) break
                     val position = change.position
+                    // Pen and eraser start past the touch slop: a second finger before it makes a pinch, not a stray mark
+                    // (review of S9a); the stroke still starts where the finger came down
+                    val started = mode == 1 || (position - down.position).getDistance() > viewConfiguration.touchSlop
                     when (tool) {
-                        MarkTool.PEN, MarkTool.HIGHLIGHTER -> {
+                        MarkTool.PEN, MarkTool.HIGHLIGHTER -> if (started) {
                             mode = 1
                             if (growing.isEmpty()) growing.add(Markup.toShare(toUpright(down.position), upright))
                             growing.add(Markup.toShare(toUpright(position), upright))
                         }
-                        MarkTool.ERASER -> {
+                        MarkTool.ERASER -> if (started) {
+                            val first = mode != 1
                             mode = 1
-                            val left = Markup.erase(last.marks, toUpright(position), reachPx, upright)
+                            var left = Markup.erase(last.marks, toUpright(position), reachPx, upright)
+                            if (first) left = Markup.erase(left, toUpright(down.position), reachPx, upright)
                             if (left.size != last.marks.size) {
                                 last = last.copy(marks = left)
                                 onLive(last)
@@ -285,12 +295,19 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                     // A dot: a tap with the pen
                     mode == 0 && (tool == MarkTool.PEN || tool == MarkTool.HIGHLIGHTER) ->
                         onCommit(start.copy(marks = start.marks + Stroke(System.nanoTime(), tool == MarkTool.HIGHLIGHTER, choice.color, choice.size, listOf(Markup.toShare(toUpright(down.position), upright)))))
-                    // A tap with Text: the text under it opened again, or a new one there
+                    // A tap with the eraser takes the mark under it (review of S9a: only a moving finger erased)
+                    mode == 0 && tool == MarkTool.ERASER -> {
+                        val left = Markup.erase(start.marks, toUpright(down.position), reachPx, upright)
+                        if (left.size != start.marks.size) onCommit(start.copy(marks = left))
+                    }
+                    // A tap with Text: the text under it opened again, or a new one there – level and readable on screen
+                    // whatever the photo's turn and mirror (review of S9a)
                     mode == 0 && tool == MarkTool.TEXT -> typing = if (startText != null) {
-                        val anchor = Markup.textAnchor(Markup.toPx(startText.center, upright), startText.heightPx(upright), startText.aspect, startText.lines, startText.rotation)
-                        Typing(startText.id, anchor, startText.rotation, startText.height, startText.color, startText.text)
+                        val anchor = Markup.textAnchor(Markup.toPx(startText.center, upright), startText.heightPx(upright), startText.aspect, startText.lines, startText.rotation, startText.flipped)
+                        Typing(startText.id, anchor, startText.rotation, startText.flipped, startText.height, startText.color, startText.text)
                     } else {
-                        Typing(null, toUpright(down.position), 0.0, textHeight(choice.size), choice.color, "")
+                        val (rotation, flipped) = Markup.levelOn(m)
+                        Typing(null, toUpright(down.position), rotation, flipped, textHeight(choice.size), choice.color, "")
                     }
                     last != start -> onCommit(last)
                 }
@@ -365,7 +382,7 @@ private fun TextField(typing: Typing, map: Affine, upright: PxSize) {
             modifier = Modifier
                 .focusRequester(focus)
                 .widthIn(min = 2.dp)
-                .anchoredAt(linePx / 2, typing.rotation.toFloat()),
+                .anchoredAt(linePx / 2, Markup.screenTurn(map, typing.rotation, typing.flipped).toFloat()),
         )
     }
 }

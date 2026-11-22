@@ -2,9 +2,6 @@ package sh.hnet.gallery.ui.viewer
 
 import android.content.ContentResolver
 import android.content.Context
-import android.media.MediaCodec
-import android.media.MediaCodecList
-import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.Handler
 import androidx.annotation.OptIn
@@ -24,12 +21,10 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.video.MediaCodecVideoRenderer
 import androidx.media3.exoplayer.video.VideoRendererEventListener
-import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
+import sh.hnet.gallery.data.ToneMapping
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
@@ -74,11 +69,14 @@ class ViewerPlayer(context: Context) {
             volume = 0f
             playWhenReady = false
             addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _state.value = _state.value.copy(playing = isPlaying)
+                // Playing as wanted, not as running: a video buffering for a moment isn't "paused" – Pause read it so and
+                // played it again, so pausing took several taps (owner's test of S9b, on the emulator's software decoder)
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    _state.value = _state.value.copy(playing = wanted())
                 }
 
                 override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState != Player.STATE_ENDED) _state.value = _state.value.copy(playing = wanted())
                     if (playbackState == Player.STATE_READY) {
                         val length = duration.takeIf { it != C.TIME_UNSET && it > 0 }
                         // Short videos loop (SPEC §8.2); longer ones stop on their last frame
@@ -104,12 +102,29 @@ class ViewerPlayer(context: Context) {
             })
         }
 
+    // Not after an error: the player goes idle still wanting to play, and the viewer hid its chrome over the problem card
+    // as if the video played (owner's test of S9b)
+    private fun wanted(): Boolean = player.playWhenReady && player.playbackState != Player.STATE_ENDED && player.playerError == null
+
     // Where each video was left in this opening, to go on from there (owner's decision D10)
     private val positions = HashMap<Long, Long>()
 
-    /** The video now on screen: loaded and played from where it was left in this opening (from the start the first time). */
+    // The loaded video's file, by its size: written over (the editor's Replace), it is loaded again. Not by the row's
+    // generation – a favorite or a new name raise it too, and the video started over (review of S9b)
+    private var loadedSize = 0L
+
+    /**
+     * The video now on screen: loaded and played from where it was left in this opening (from the start the first
+     * time). A video changed since it was loaded – trimmed over its original – is loaded again from the start (owner's
+     * test of S9b: the old one's player failed on the new file and the page showed the problem card).
+     */
     fun show(item: MediaItem) {
         val current = _state.value.item
+        if (current == item.id && loadedSize != item.size) {
+            positions.remove(item.id)
+            _state.value = _state.value.copy(item = null)
+            return show(item)
+        }
         if (current == item.id) {
             // Back on the same video: the page's toggle starts at HDR again, so the decoder does too (review before v0.1.0)
             if (sdrRequested) setSdr(false)
@@ -120,6 +135,7 @@ class ViewerPlayer(context: Context) {
         sdrRequested = false
         player.setPlaybackParameters(PlaybackParameters(1f))
         player.setSeekParameters(SeekParameters.DEFAULT)
+        loadedSize = item.size
         player.setMediaItem(PlayerItem.fromUri(item.uri()), positions[item.id] ?: 0L)
         player.prepare()
         player.play()
@@ -137,12 +153,12 @@ class ViewerPlayer(context: Context) {
         if (_state.value.ended) {
             player.seekTo(0)
             player.play()
-        } else if (player.isPlaying) player.pause() else player.play()
+        } else if (player.playWhenReady) player.pause() else player.play()
     }
 
     /** One frame back or forward, paused only (SPEC §8.2). */
     fun step(forward: Boolean) {
-        if (player.isPlaying) return
+        if (wanted()) return
         player.setSeekParameters(SeekParameters.EXACT)
         val frame = Playback.frameMs(_state.value.frameRate)
         val target = (player.currentPosition + if (forward) frame else -frame).coerceIn(0L, _state.value.durationMs ?: Long.MAX_VALUE)
@@ -184,7 +200,7 @@ class ViewerPlayer(context: Context) {
         if (sdrRequested == sdr) return
         sdrRequested = sdr
         val position = player.currentPosition
-        val playing = player.isPlaying
+        val playing = wanted()
         player.currentMediaItem?.let { player.setMediaItem(it, position) }
         player.prepare()
         if (playing) player.play()
@@ -201,42 +217,8 @@ class ViewerPlayer(context: Context) {
     }
 
     companion object {
-        // Whether a decoder tone-maps a kind of video, by its type and profile: asked once per process
-        private val toneMapping = ConcurrentHashMap<String, Boolean>()
-
-        /**
-         * Whether the phone's decoder can turn this HDR video into SDR itself (owner's decision D11): a
-         * test decoder set up with the request, without a surface, says so in its input format – the
-         * requested transfer when it does, 0 when it doesn't.
-         */
-        suspend fun decoderToneMaps(resolver: ContentResolver, item: MediaItem): Boolean = withContext(Dispatchers.IO) {
-            try {
-                val extractor = MediaExtractor()
-                try {
-                    resolver.openFileDescriptor(item.uri(), "r")?.use { extractor.setDataSource(it.fileDescriptor) } ?: return@withContext false
-                    val format = (0 until extractor.trackCount).map { extractor.getTrackFormat(it) }.firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
-                        ?: return@withContext false
-                    val mime = format.getString(MediaFormat.KEY_MIME) ?: return@withContext false
-                    val key = mime + "/" + (if (format.containsKey(MediaFormat.KEY_PROFILE)) format.getInteger(MediaFormat.KEY_PROFILE) else -1)
-                    toneMapping[key]?.let { return@withContext it }
-                    val name = MediaCodecList(MediaCodecList.REGULAR_CODECS).findDecoderForFormat(format) ?: return@withContext false.also { toneMapping[key] = false }
-                    val codec = MediaCodec.createByCodecName(name)
-                    val supported = try {
-                        format.setInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST, MediaFormat.COLOR_TRANSFER_SDR_VIDEO)
-                        codec.configure(format, null, null, 0)
-                        codec.inputFormat.getInteger(MediaFormat.KEY_COLOR_TRANSFER_REQUEST, 0) == MediaFormat.COLOR_TRANSFER_SDR_VIDEO
-                    } finally {
-                        codec.release()
-                    }
-                    toneMapping[key] = supported
-                    supported
-                } finally {
-                    extractor.release()
-                }
-            } catch (_: Exception) {
-                false
-            }
-        }
+        /** Whether the phone's decoder can turn this HDR video into SDR itself (owner's decision D11): [ToneMapping]. */
+        suspend fun decoderToneMaps(resolver: ContentResolver, item: MediaItem): Boolean = ToneMapping.byDecoder(resolver, item)
     }
 }
 

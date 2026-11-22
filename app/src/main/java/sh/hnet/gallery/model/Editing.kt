@@ -355,18 +355,20 @@ object EditGeometry {
     fun snap(angle: Double): Double = if (abs(angle) < 0.75) 0.0 else angle
 }
 
-/** Undo and redo within an editing session (SPEC §15.1): the states before and after, and the present one. */
-class EditHistory(val present: EditState = EditState(), private val back: List<EditState> = emptyList(), private val forward: List<EditState> = emptyList()) {
+/** Undo and redo within an editing session (SPEC §15.1): the states before and after, and the present one – a photo's edit or a video's trim. */
+class History<T>(val present: T, private val back: List<T> = emptyList(), private val forward: List<T> = emptyList()) {
     val canUndo: Boolean get() = back.isNotEmpty()
     val canRedo: Boolean get() = forward.isNotEmpty()
 
     /** A new state: the present one goes back, what was ahead is gone. */
-    fun push(state: EditState): EditHistory = if (state == present) this else EditHistory(state, back + present, emptyList())
+    fun push(state: T): History<T> = if (state == present) this else History(state, back + present, emptyList())
 
-    fun undo(): EditHistory = if (back.isEmpty()) this else EditHistory(back.last(), back.dropLast(1), listOf(present) + forward)
+    fun undo(): History<T> = if (back.isEmpty()) this else History(back.last(), back.dropLast(1), listOf(present) + forward)
 
-    fun redo(): EditHistory = if (forward.isEmpty()) this else EditHistory(forward.first(), back + present, forward.drop(1))
+    fun redo(): History<T> = if (forward.isEmpty()) this else History(forward.first(), back + present, forward.drop(1))
 }
+
+typealias EditHistory = History<EditState>
 
 /** The name of an edited copy (SPEC §15.6): the name, the suffix, a number when taken – "a-edytowane (2).jpg". */
 fun editedName(name: String, suffix: String, taken: Collection<String>): String {
