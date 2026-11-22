@@ -195,11 +195,11 @@ fun InfoSheet(
                         { Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null) }
                     }
                     else -> null
+                }, below = row.map?.let { (lat, lon) ->
+                    // The small map under the location (SPEC §7.3), with place names on (the map is drawn from their data) –
+                    // inside the location's row, on its background (owner, screenshot 2 of v0.1.1: it stood between the rows)
+                    { SmallMap(lat, lon, onOpenMap?.let { open -> { open(lat, lon) } }, Modifier.padding(top = 8.dp, bottom = 4.dp)) }
                 })
-                // The small map under the location (SPEC §7.3), with place names on (the map is drawn from their data)
-                row.map?.let { (lat, lon) ->
-                    SmallMap(lat, lon, onOpenMap?.let { open -> { open(lat, lon) } }, Modifier.padding(start = 56.dp, top = 8.dp, bottom = 8.dp))
-                }
             }
             if (albums.isNotEmpty()) AlbumsRow(rows.size, count, albums, onOpenAlbum)
             val lat = info?.latitude
@@ -324,7 +324,7 @@ private fun utcOffset(seconds: Int): String {
 /** A segmented row with its icon box; the title and each line scroll sideways when wide, and a long press copies the value. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun InfoRow(index: Int, count: Int, row: Row, trailing: (@Composable () -> Unit)?) {
+private fun InfoRow(index: Int, count: Int, row: Row, trailing: (@Composable () -> Unit)?, below: (@Composable () -> Unit)? = null) {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val copy: (String) -> Unit = { text -> scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(null, text))) } }
@@ -335,10 +335,11 @@ private fun InfoRow(index: Int, count: Int, row: Row, trailing: (@Composable () 
         enabled = true,
         leadingContent = { RowIcon(row.icon) },
         trailingContent = trailing?.let { { it() } },
-        supportingContent = if (row.lines.isEmpty()) null else {
+        supportingContent = if (row.lines.isEmpty() && below == null) null else {
             {
                 Column {
                     row.lines.forEach { line -> Value(line, Modifier.combinedClickable(onLongClick = { copy(line) }, onClick = row.open ?: {})) }
+                    below?.invoke()
                 }
             }
         },
