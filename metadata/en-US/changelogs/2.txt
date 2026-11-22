@@ -1,0 +1,11 @@
+v0.1.1
+
+New in the editor:
+- Adjust: exposure, contrast, highlights, shadows, saturation, warmth and sharpness
+- Six filters that can be fine-tuned in Adjust
+- Draw: pen, highlighter, text and eraser
+- Frame-accurate video trimming that keeps HDR, the date and the location
+- Ultra HDR photos stay in HDR after every edit
+
+Fixes:
+- The viewer’s playback buttons no longer miss taps

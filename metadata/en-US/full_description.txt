@@ -21,7 +21,7 @@ Sharing and privacy:
 - A vault encrypted on the phone, unlocked with your fingerprint or screen lock, with import from and export to any storage
 
 And also:
-- An editor to crop with ratios, rotate, mirror and straighten, saving as a copy or over the original, keeping Ultra HDR and metadata
+- An editor to crop, rotate and straighten, adjust light and color or apply one of six filters, draw and write on photos, and trim videos frame-accurately; edits are saved as a copy or over the original, keeping Ultra HDR, HDR video and metadata
 - A slideshow with crossfade or Ken Burns
 - Opens photos and videos from other apps, and picks them for other apps
 - Backup and restore of settings and albums

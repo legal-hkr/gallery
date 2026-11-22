@@ -1,0 +1,11 @@
+v0.1.1
+
+Nowości w edytorze:
+- Dostosuj: ekspozycja, kontrast, światła, cienie, nasycenie, ciepło i ostrość
+- Sześć filtrów, które można dopracować w „Dostosuj”
+- Rysuj: pióro, zakreślacz, tekst i gumka
+- Przycinanie filmów co do klatki, z zachowaniem HDR, daty i lokalizacji
+- Zdjęcia Ultra HDR pozostają w HDR po każdej edycji
+
+Poprawki:
+- Przyciski odtwarzania w przeglądarce reagują już na każde dotknięcie

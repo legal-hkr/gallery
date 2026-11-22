@@ -2,7 +2,7 @@
 
 A private gallery for Android: photos and videos by day, HDR, albums, places and an encrypted vault, with no Internet access.
 
-**Current version**: v0.1.0
+**Current version**: v0.1.1
 
 Source code and releases: [git.hnet.sh/hkr/gallery](https://git.hnet.sh/hkr/gallery)
 
@@ -44,7 +44,7 @@ Gallery shows the photos and videos on your phone and is designed to be the only
 
 ### And also
 
-- **Editor**: Crop with aspect ratios, rotate, mirror and straighten (one or two fingers move and zoom the photo under the frame), saved as a copy or over the original, keeping Ultra HDR and metadata
+- **Editor**: Crop with aspect ratios, rotate, mirror and straighten; adjust exposure, contrast, highlights, shadows, saturation, warmth and sharpness, or start from one of six filters; draw and write on photos; trim videos frame-accurately. Edits are saved as a copy or over the original, keeping Ultra HDR, HDR video and metadata
 - **Slideshow**: Crossfade or Ken Burns, with videos played for up to 15 s
 - **Other apps**: Opens photos and videos from other apps, and lets other apps pick photos and videos from Gallery
 - **Backup and restore** of settings and albums to a file you choose

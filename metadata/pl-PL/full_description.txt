@@ -21,7 +21,7 @@ Udostępnianie i prywatność:
 - Sejf szyfrowany w telefonie, otwierany odciskiem palca albo blokadą ekranu, z importem z dowolnego nośnika i eksportem na dowolny nośnik
 
 A także:
-- Edytor: kadrowanie z proporcjami, obracanie, odbijanie i prostowanie, z zapisem jako kopia albo w miejsce oryginału, z zachowaniem Ultra HDR i metadanych
+- Edytor: kadrowanie, obracanie i prostowanie, korekta światła i koloru albo jeden z sześciu filtrów, rysowanie i pisanie po zdjęciach, przycinanie filmów co do klatki; zapis jako kopia albo w miejsce oryginału, z zachowaniem Ultra HDR, HDR w filmach i metadanych
 - Pokaz slajdów z przenikaniem albo efektem Kena Burnsa
 - Otwieranie zdjęć i filmów z innych aplikacji oraz wybieranie ich dla innych aplikacji
 - Kopia zapasowa ustawień i albumów w wybranym pliku
