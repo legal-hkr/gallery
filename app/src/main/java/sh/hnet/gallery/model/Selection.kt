@@ -56,8 +56,11 @@ object FileNames {
         return wanted.takeIf { (it to mime.lowercase()) in SNIFFED }
     }
 
-    /** Name's type to the type MediaStore's scanner gives the same file by its container. */
-    private val SNIFFED = setOf("video/quicktime" to "video/mp4")
+    /**
+     * Name's type to the type MediaStore's scanner gives the same file by its container: QuickTime seen on Android 17;
+     * MPEG-4's other names (.m4v, .3gp) by the same rule, not seen yet – retyped to what their names say, harmless.
+     */
+    private val SNIFFED = setOf("video/quicktime" to "video/mp4", "video/x-m4v" to "video/mp4", "video/3gpp" to "video/mp4")
 
     /** Characters a FAT-formatted SD card refuses (and the path separator), so a name works on every storage. */
     const val FORBIDDEN = "/\\:*?\"<>|"

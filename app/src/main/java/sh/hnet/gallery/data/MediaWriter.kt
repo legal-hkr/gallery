@@ -182,8 +182,8 @@ class MediaWriter(private val context: Context) {
     suspend fun retype(mistyped: Map<MediaItem, String>): String? = withContext(Dispatchers.IO) {
         mistyped.mapNotNull { (item, mime) ->
             try {
-                resolver.update(item.uri(), ContentValues().apply { put(MediaStore.MediaColumns.MIME_TYPE, mime) }, null)
-                null
+                // No row changed is a failure too (review before v0.1.1)
+                if (resolver.update(item.uri(), ContentValues().apply { put(MediaStore.MediaColumns.MIME_TYPE, mime) }, null) > 0) null else "${item.name}: unchanged"
             } catch (e: Exception) {
                 "${item.name}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}"
             }
@@ -222,16 +222,18 @@ class MediaWriter(private val context: Context) {
      */
     suspend fun trashDirectly(items: List<MediaItem>, trashed: Boolean): String? = withContext(Dispatchers.IO) {
         val content = ContentValues().apply { put(MediaStore.MediaColumns.IS_TRASHED, if (trashed) 1 else 0) }
+        // By id, not by name: two files of one name in two folders are told apart (review before v0.1.1)
+        val threw = HashSet<Long>()
         val failures = items.mapNotNull { item ->
             try {
                 resolver.update(item.uri(), content, null)
                 null
             } catch (e: Exception) {
+                threw += item.id
                 "${item.name}: ${e.javaClass.simpleName}: ${e.message.orEmpty()}"
             }
         }.toMutableList()
-        val still = leftBehind(items, trashed).filter { left -> failures.none { it.startsWith(left.name + ":") } }
-        still.forEach { failures += "${it.name}: unchanged" }
+        leftBehind(items, trashed).filter { it.id !in threw }.forEach { failures += "${it.name}: unchanged" }
         failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
     }
 

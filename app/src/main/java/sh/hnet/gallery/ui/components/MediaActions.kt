@@ -66,11 +66,11 @@ class MediaActions(
         sharing?.cancel()
     }
 
-    /** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal changes nothing, a failure is said. */
-    fun apply(change: MediaWriter.Change, then: () -> Unit) {
+    /** Runs [then] once the change is done: at once, or after the system's dialog was accepted; a refusal runs [otherwise], a failure is said. */
+    fun apply(change: MediaWriter.Change, otherwise: () -> Unit = {}, then: () -> Unit) {
         when (change) {
             MediaWriter.Change.Done -> then()
-            is MediaWriter.Change.Ask -> consent.ask(change.request, then)
+            is MediaWriter.Change.Ask -> consent.ask(change.request, then, otherwise)
             // Said, with Show and what the system answered (owner's test before v0.1.1: TEST_TR3.mov stayed, without a word)
             is MediaWriter.Change.Failed -> fail(context.getString(R.string.error_change_failed), change.details)
         }
@@ -80,20 +80,21 @@ class MediaActions(
      * To Trash or back from it, [then] once the items are really there: the system's yes is checked, a file it left is
      * moved here, and a failure is said instead of "Moved to Trash" (owner's test before v0.1.1).
      */
-    private suspend fun trashChecked(items: List<MediaItem>, trashed: Boolean, then: () -> Unit) {
+    private suspend fun trashChecked(items: List<MediaItem>, trashed: Boolean, then: (List<MediaItem>) -> Unit) {
         val failed: (String) -> Unit = { details -> fail(context.getString(R.string.error_change_failed), details) }
-        suspend fun move() {
-            apply(writer.trash(items, trashed)) {
+        suspend fun move(moving: List<MediaItem>) {
+            apply(writer.trash(moving, trashed)) {
                 messageScope.launch {
                     // The system's yes checked: what it left is moved here, with the right to write it asked first – its
                     // yes to Trash gives none (owner's test before v0.1.1: RecoverableSecurityException)
-                    val left = writer.leftBehind(items, trashed)
+                    val left = writer.leftBehind(moving, trashed)
                     if (left.isEmpty()) {
-                        then()
+                        then(moving)
                         return@launch
                     }
-                    apply(writer.writeChange(left)) {
-                        messageScope.launch { writer.trashDirectly(left, trashed)?.let(failed) ?: then() }
+                    // A refusal said too: the others went, these stayed (review before v0.1.1: nothing was shown)
+                    apply(writer.writeChange(left), otherwise = { failed(left.joinToString("\n") { "${it.name}: not moved" }) }) {
+                        messageScope.launch { writer.trashDirectly(left, trashed)?.let(failed) ?: then(moving) }
                     }
                 }
             }
@@ -103,13 +104,17 @@ class MediaActions(
         // question from the system, none with Media management)
         val wrong = writer.mistyped(items)
         if (wrong.isEmpty()) {
-            move()
+            move(items)
             return
         }
         apply(writer.writeChange(wrong.keys.toList())) {
-            messageScope.launch { writer.retype(wrong)?.let(failed) ?: move() }
+            messageScope.launch {
+                // Handed on with their types as they are now, so Undo doesn't find them wrong again (review before v0.1.1)
+                writer.retype(wrong)?.let(failed) ?: move(items.map { item -> wrong[item]?.let { item.copy(mime = it) } ?: item })
+            }
         }
     }
+
 
     /** To Trash at once, with Undo (SPEC §5.5); [onDone] when they are there (a selection ends, the viewer knows it moved them). */
     fun trash(items: List<MediaItem>, onDone: () -> Unit = {}) {
@@ -124,9 +129,9 @@ class MediaActions(
             else -> context.getString(R.string.msg_moved_to_trash, items.size)
         }
         messageScope.launch {
-            trashChecked(items, true) {
+            trashChecked(items, true) { moved ->
                 onDone()
-                say(message) { messageScope.launch { trashChecked(items, false) {} } }
+                say(message) { messageScope.launch { trashChecked(moved, false) {} } }
             }
         }
     }

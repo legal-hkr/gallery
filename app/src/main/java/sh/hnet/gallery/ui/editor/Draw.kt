@@ -192,6 +192,9 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
         val rest = s.marks.filterNot { it.id == t.id }
         // Only the end trimmed: the start stays where the tap was
         val text = t.text.trimEnd()
+        // An opened text closed as it was: no step – rebuilt, it moved to the top and its middle was worked out again, a
+        // step nobody saw that took Redo's away (review before v0.1.1)
+        if (t.id != null && text == t.initial.trimEnd()) return false
         // Emptied: the text goes (a new one was never there)
         val next = if (text.isBlank()) rest else {
             val aspect = MarkupPainter.aspectOf(text)

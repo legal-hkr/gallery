@@ -844,7 +844,13 @@ private fun rename(context: Context, item: MediaItem, name: String, writer: Medi
         }
         Unit
     }
-    val request = writer.writeRequest(listOf(item))
+    // A request that can't be made (the file just gone) is said, not a crash (review before v0.1.1)
+    val request = try {
+        writer.writeRequest(listOf(item))
+    } catch (_: Exception) {
+        actions.say(context.getString(R.string.error_save_failed, item.name), undo = null)
+        return
+    }
     if (request == null) write() else consent.ask(request, write)
 }
 
@@ -878,7 +884,16 @@ private fun changeDate(context: Context, item: MediaItem, date: LocalDate, time:
             }
         }
     }
-    val request = writer.writeRequest(listOf(item))
+    // A request that can't be made (the file just gone) is said, not a crash (review before v0.1.1)
+    val request = try {
+        writer.writeRequest(listOf(item))
+    } catch (_: Exception) {
+        messageScope.launch {
+            snackbars.currentSnackbarData?.dismiss()
+            snackbars.showSnackbar(failed, duration = SnackbarDuration.Short)
+        }
+        return
+    }
     if (request == null) write() else consent.ask(request, write)
 }
 
