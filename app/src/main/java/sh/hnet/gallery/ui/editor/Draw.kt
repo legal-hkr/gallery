@@ -11,6 +11,7 @@ import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateRotation
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -85,7 +86,9 @@ import androidx.core.graphics.withClip
 import kotlin.math.min
 import kotlin.math.roundToInt
 import sh.hnet.gallery.R
+import sh.hnet.gallery.data.AdjustShader
 import sh.hnet.gallery.data.MarkupPainter
+import sh.hnet.gallery.model.Adjustments
 import sh.hnet.gallery.model.Affine
 import sh.hnet.gallery.model.Crop
 import sh.hnet.gallery.model.EditGeometry
@@ -132,7 +135,7 @@ private class Typing(val id: Long?, val anchor: Pt, val rotation: Double, val fl
  * and turn the text they start on (D33). A tap with Text writes a new text there, or opens the one under it again.
  */
 @Composable
-internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, original: Boolean, choice: DrawChoice, now: () -> EditState, onLive: (EditState) -> Unit, onCommit: (EditState) -> Unit) {
+internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, original: Boolean, choice: DrawChoice, now: () -> EditState, onLive: (EditState) -> Unit, onCommit: (EditState) -> Unit, editable: Boolean = true) {
     val density = LocalDensity.current
     var area by remember { mutableStateOf(IntSize.Zero) }
     val margin = with(density) { 24.dp.toPx() }
@@ -166,6 +169,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
     val growing = remember { mutableStateListOf<Pt>() }
     var typing by remember { mutableStateOf<Typing?>(null) }
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
+    val adjuster = remember { AdjustShader() }
     val reach = with(density) { 16.dp.toPx() }
 
     fun commitTyping() {
@@ -197,7 +201,14 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
 
     Box(
         // Clipped to its place: zoomed, the photo covered the top bar and its Save (owner's test of S9a)
-        Modifier.fillMaxSize().clipToBounds().onSizeChanged { area = it }.pointerInput(upright) {
+        Modifier.fillMaxSize().clipToBounds().onSizeChanged { area = it }.then(if (!editable) Modifier.pointerInput(Unit) {
+            // Adjust and Filters (owner's test of S10a): the view alone – two fingers zoom and move it as in Draw, and one
+            // moves it, as nothing is drawn there
+            detectTransformGestures { _, move, change, _ ->
+                zoom = (zoom * change).coerceIn(1f, 8f)
+                pan += move
+            }
+        } else Modifier.pointerInput(upright) {
             awaitEachGesture {
                 val down = awaitFirstDown()
                 val start = now()
@@ -312,7 +323,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                     last != start -> onCommit(last)
                 }
             }
-        },
+        }),
     ) {
         androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
             val m = map ?: return@Canvas
@@ -330,7 +341,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                 val native = canvas.nativeCanvas
                 native.withClip(frame[0], frame[1], frame[2], frame[3]) {
                     val matrix = Matrix().apply { setValues(m.values()) }
-                    drawBitmap(bitmap, matrix, paint)
+                    adjuster.draw(this, bitmap, matrix, if (original) Adjustments.NONE else state.adjust, paint)
                     if (!original) {
                         val editing = typing?.id
                         MarkupPainter.draw(this, state.marks.filter { it.id != editing }, upright, matrix)

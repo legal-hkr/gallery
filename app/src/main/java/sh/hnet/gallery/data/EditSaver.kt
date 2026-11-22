@@ -192,6 +192,9 @@ class EditSaver(private val context: Context) {
                 gainTemplate = template
             }
         }
+        // Adjust's adjustments and the filter (S10a), on the GPU in tiles; before the marks, which they leave as they are (D40).
+        // The gain map goes over as it is until S10b
+        AdjustShader.applyInPlace(out, state.adjust)
         // Draw's marks on the result (S9a), through the map from the upright photo; in the gain map they give no boost (D36)
         if (state.marks.isNotEmpty()) {
             val marksMap = EditGeometry.matrix(upright, Orientation.NORMAL, state).toMatrix()

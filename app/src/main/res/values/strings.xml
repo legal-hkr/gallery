@@ -550,4 +550,22 @@
     <string name="button_save_sdr">Save in SDR</string>
     <string name="title_cant_save_video">Can’t save the video</string>
     <string name="desc_cant_save_hdr">This phone can’t save HDR video, and it can’t turn this one into SDR either.</string>
+
+    <!-- Stage S10a -->
+    <string name="tab_adjust">Adjust</string>
+    <string name="tab_filters">Filters</string>
+    <string name="adj_exposure">Exposure</string>
+    <string name="adj_contrast">Contrast</string>
+    <string name="adj_highlights">Highlights</string>
+    <string name="adj_shadows">Shadows</string>
+    <string name="adj_saturation">Saturation</string>
+    <string name="adj_warmth">Warmth</string>
+    <string name="adj_sharpness">Sharpness</string>
+    <string name="format_adjust_chip">%1$s %2$s</string>
+    <string name="filter_none">None</string>
+    <string name="filter_warm">Warm</string>
+    <string name="filter_cool">Cool</string>
+    <string name="filter_black_white">Black and white</string>
+    <string name="filter_faded">Faded</string>
+    <string name="filter_vivid">Vivid</string>
 </resources>

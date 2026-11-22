@@ -93,9 +93,13 @@ data class EditState(
     val wanted: Crop? = null,
     /** Draw's marks (S9a), in the upright photo's shares: turns and crops carry them, Undo takes them as any step. */
     val marks: List<Mark> = emptyList(),
+    /** Adjust's seven values (S10a), set by a filter too. */
+    val adjust: Adjustments = Adjustments.NONE,
+    /** The filter last chosen – marked while its values are tuned; the values alone are the change (LOGIKA §21.4). */
+    val filter: Filter = Filter.NONE,
 ) {
     /** Anything to save: the crop as set is bookkeeping, and a ratio alone that left the crop as it was changes nothing. */
-    val changed: Boolean get() = copy(wanted = null, ratio = CropRatio.FREE, portrait = false) != EditState()
+    val changed: Boolean get() = copy(wanted = null, ratio = CropRatio.FREE, portrait = false, filter = Filter.NONE) != EditState()
 
     /** The crop the angle is fitted from. */
     val base: Crop get() = wanted ?: crop

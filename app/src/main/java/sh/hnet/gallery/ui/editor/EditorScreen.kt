@@ -111,10 +111,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
+import sh.hnet.gallery.data.AdjustShader
 import sh.hnet.gallery.data.EditSaver
 import sh.hnet.gallery.data.MarkupPainter
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.uri
+import sh.hnet.gallery.model.Adjust
+import sh.hnet.gallery.model.Adjustments
 import sh.hnet.gallery.model.CropRatio
 import sh.hnet.gallery.model.EditGeometry
 import sh.hnet.gallery.model.EditHistory
@@ -164,8 +167,9 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
     var replacing by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
-    // Crop or Draw (S9a; Adjust and Filters come with S10 – no tab that does nothing), and Draw's tool, size and ink
+    // The tools' tab – Crop, Adjust, Filters, Draw (SPEC §15.1) –, Adjust's chosen adjustment, Draw's tool, size and ink
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var adjusting by rememberSaveable { mutableStateOf(Adjust.EXPOSURE) }
     val drawChoice = remember { DrawChoice() }
     val compare = remember { MutableInteractionSource() }
     val comparing by compare.collectIsPressedAsState()
@@ -303,19 +307,31 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             if (image != null && upright != null) {
                 // Compare in Draw keeps its view and zoom and leaves the marks out (owner's test of S9a: switching to the
                 // crop's view to show the original lost the zoom one wants to look closer with)
+                // Adjust and Filters show the photo as Draw does – cropped, no frame –, with its view's zoom but not its drawing
                 if (tab == 0) CropArea(image, upright, state, comparing, cropMoves, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
-                else DrawArea(image, upright, state, comparing, drawChoice, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
+                else DrawArea(image, upright, state, comparing, drawChoice, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit, editable = tab == 3)
             }
         }
         Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).holdWhile(saving)) {
             if (upright != null) {
-                if (tab == 0) CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
-                else DrawTools(drawChoice)
+                when (tab) {
+                    0 -> CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
+                    1 -> AdjustTools(state, adjusting, onChoose = { adjusting = it }, onLive = { live = it }, onCommit = ::commit)
+                    2 -> preview?.let { FilterTools(it, state, onCommit = ::commit) }
+                    else -> DrawTools(drawChoice)
+                }
             }
-            // The tools' tabs (SPEC §15.1): Crop and Draw; Adjust and Filters join with S10
+            // The tools' tabs (SPEC §15.1)
             PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.navigationBarsPadding()) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.tab_crop)) }, icon = { Icon(painterResource(R.drawable.ic_crop), contentDescription = null) })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.tab_draw)) }, icon = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) })
+                val tabs = listOf(
+                    R.string.tab_crop to R.drawable.ic_crop,
+                    R.string.tab_adjust to R.drawable.ic_tune,
+                    R.string.tab_filters to R.drawable.ic_photo_filter,
+                    R.string.tab_draw to R.drawable.ic_draw,
+                )
+                tabs.forEachIndexed { index, (label, icon) ->
+                    Tab(selected = tab == index, onClick = { tab = index }, text = { Text(stringResource(label), maxLines = 1) }, icon = { Icon(painterResource(icon), contentDescription = null) })
+                }
             }
         }
     }
@@ -424,6 +440,7 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
     val turned = EditGeometry.turned(upright, state)
     val scope = rememberCoroutineScope()
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
+    val adjuster = remember { AdjustShader() }
     val reach = with(density) { 24.dp.toPx() }
 
     // A crop moved by a choice (a ratio, a reset, undo) goes there from where it was drawn, on the motion scheme's effects
@@ -622,9 +639,10 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                         postTranslate(shown.x0.toFloat(), shown.y0.toFloat())
                     }
                     native.withClip(0f, 0f, size.width, size.height) {
-                        drawBitmap(bitmap, m, paint)
-                        // Draw's marks are part of the photo: they turn and crop with it
-                        MarkupPainter.draw(this, state.marks, upright, m)
+                        // The adjustments shown in every tab (S10a); the original as it is
+                        adjuster.draw(this, bitmap, m, if (original) Adjustments.NONE else state.adjust, paint)
+                        // Draw's marks are part of the photo: they turn and crop with it (not in the original)
+                        if (!original) MarkupPainter.draw(this, state.marks, upright, m)
                     }
                 }
             }
