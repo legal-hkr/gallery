@@ -170,6 +170,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
     var typing by remember { mutableStateOf<Typing?>(null) }
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
     val adjuster = remember { AdjustShader() }
+    val headroom = rememberScreenHeadroom()
     val reach = with(density) { 16.dp.toPx() }
 
     fun commitTyping() {
@@ -341,7 +342,7 @@ internal fun DrawArea(image: ImageBitmap, upright: PxSize, state: EditState, ori
                 val native = canvas.nativeCanvas
                 native.withClip(frame[0], frame[1], frame[2], frame[3]) {
                     val matrix = Matrix().apply { setValues(m.values()) }
-                    adjuster.draw(this, bitmap, matrix, if (original) Adjustments.NONE else state.adjust, paint)
+                    adjuster.draw(this, bitmap, matrix, if (original) Adjustments.NONE else state.adjust, paint, AdjustShader.hdrWeight(bitmap, headroom()))
                     if (!original) {
                         val editing = typing?.id
                         MarkupPainter.draw(this, state.marks.filter { it.id != editing }, upright, matrix)

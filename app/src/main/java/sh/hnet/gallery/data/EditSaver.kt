@@ -29,6 +29,7 @@ import sh.hnet.gallery.model.Affine
 import sh.hnet.gallery.model.EditGeometry
 import sh.hnet.gallery.model.EditState
 import sh.hnet.gallery.model.FileNames
+import sh.hnet.gallery.model.GainParams
 import sh.hnet.gallery.model.Markup
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Orientation
@@ -193,8 +194,17 @@ class EditSaver(private val context: Context) {
             }
         }
         // Adjust's adjustments and the filter (S10a), on the GPU in tiles; before the marks, which they leave as they are (D40).
-        // The gain map goes over as it is until S10b
+        // An Ultra HDR photo's gain map made again for the adjusted base (S10b): the base at the map's size before and after
+        val gainNow = gain
+        val templateNow = gainTemplate
+        val linear = GainRecompute.linearTable(space)
+        val before = if (gainNow != null && templateNow != null && !state.adjust.neutral) GainRecompute.linearMean(out, gainNow.width, gainNow.height, linear) else null
         AdjustShader.applyInPlace(out, state.adjust)
+        var newParams: GainParams? = null
+        if (before != null && gainNow != null && templateNow != null) {
+            val after = GainRecompute.linearMean(out, gainNow.width, gainNow.height, linear)
+            newParams = GainRecompute.apply(gainNow, before, after, templateNow, state.adjust, space)
+        }
         // Draw's marks on the result (S9a), through the map from the upright photo; in the gain map they give no boost (D36)
         if (state.marks.isNotEmpty()) {
             val marksMap = EditGeometry.matrix(upright, Orientation.NORMAL, state).toMatrix()
@@ -202,14 +212,21 @@ class EditSaver(private val context: Context) {
             val map = gain
             val parameters = gainTemplate
             if (map != null && parameters != null) {
-                val neutral = FloatArray(3) { c -> Markup.neutralGain(parameters.ratioMin[c], parameters.ratioMax[c], parameters.gamma[c]) }
+                // From the map's parameters as they are now – made again when adjusted
+                val p = newParams ?: GainRecompute.paramsOf(parameters)
+                val neutral = FloatArray(3) { c -> Markup.neutralGain(p.ratioMin[c].toFloat(), p.ratioMax[c].toFloat(), p.gamma[c].toFloat()) }
                 val onMap = Matrix(marksMap).apply { postScale(gainScale.toFloat(), gainScale.toFloat()) }
                 MarkupPainter.drawNeutral(Canvas(map), state.marks, upright, onMap, neutral, MarkupPainter.alphaOnly(map))
             }
         }
         val finished = gain
         val template = gainTemplate
-        if (finished != null && template != null) out.gainmap = copyOf(template, finished)
+        if (finished != null && template != null) out.gainmap = copyOf(template, finished).apply {
+            newParams?.let { p ->
+                setRatioMin(p.ratioMin[0].toFloat(), p.ratioMin[1].toFloat(), p.ratioMin[2].toFloat())
+                setRatioMax(p.ratioMax[0].toFloat(), p.ratioMax[1].toFloat(), p.ratioMax[2].toFloat())
+            }
+        }
         return out
     }
 

@@ -111,8 +111,11 @@ object Tone {
         return KNEE + (1 - KNEE) * x / (1 + x)
     }
 
-    /** [c] (linear) with [a]'s adjustments; a new array. */
-    fun apply(c: DoubleArray, a: Adjustments): DoubleArray {
+    /**
+     * [c] (linear) with [a]'s adjustments; a new array. [white] is the brightest the result may reach: 1 for the SDR
+     * picture, an Ultra HDR photo's headroom for its HDR one (S10b) – the knee bends towards it, not towards SDR's white.
+     */
+    fun apply(c: DoubleArray, a: Adjustments, white: Double = 1.0): DoubleArray {
         val m0 = max(c[0], max(c[1], c[2]))
         val lin = c.copyOf()
         // Exposure: light times 2^EV, as an aperture
@@ -136,9 +139,9 @@ object Tone {
         for (i in 0..2) lin[i] = l2 + (lin[i] - l2) * s
         // The knee, only for what was brightened: a pixel as bright as before stays as it was
         val m = max(lin[0], max(lin[1], lin[2]))
-        if (m > m0 && m > KNEE) {
-            val from = m0.coerceIn(0.0, 1.0)
-            val target = from + knee(m) - knee(from)
+        if (m > m0 && m > KNEE * white) {
+            val from = (m0 / white).coerceIn(0.0, 1.0)
+            val target = white * (from + knee(m / white) - knee(from))
             for (i in 0..2) lin[i] *= target / m
         }
         // Not clamped: a wide-gamut colour is below 0 in sRGB's primaries, and stays so

@@ -178,6 +178,9 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         value = withContext(Dispatchers.IO) {
             runCatching {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, item.uri())) { decoder, info, _ ->
+                    // In memory, not on the GPU: the HDR preview reads its gain map's kind (one channel or three) from its
+                    // config, which a hardware bitmap hides (review of S10b)
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                     val longer = maxOf(info.size.width, info.size.height)
                     if (longer > PREVIEW) {
                         val s = PREVIEW.toFloat() / longer
@@ -441,6 +444,7 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
     val scope = rememberCoroutineScope()
     val paint = remember { Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG) }
     val adjuster = remember { AdjustShader() }
+    val headroom = rememberScreenHeadroom()
     val reach = with(density) { 24.dp.toPx() }
 
     // A crop moved by a choice (a ratio, a reset, undo) goes there from where it was drawn, on the motion scheme's effects
@@ -640,7 +644,7 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                     }
                     native.withClip(0f, 0f, size.width, size.height) {
                         // The adjustments shown in every tab (S10a); the original as it is
-                        adjuster.draw(this, bitmap, m, if (original) Adjustments.NONE else state.adjust, paint)
+                        adjuster.draw(this, bitmap, m, if (original) Adjustments.NONE else state.adjust, paint, AdjustShader.hdrWeight(bitmap, headroom()))
                         // Draw's marks are part of the photo: they turn and crop with it (not in the original)
                         if (!original) MarkupPainter.draw(this, state.marks, upright, m)
                     }
