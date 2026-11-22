@@ -45,11 +45,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuDefaults
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,6 +65,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
@@ -109,6 +112,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.data.EditSaver
+import sh.hnet.gallery.data.MarkupPainter
 import sh.hnet.gallery.data.MediaWriter
 import sh.hnet.gallery.data.uri
 import sh.hnet.gallery.model.CropRatio
@@ -160,6 +164,9 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
     var replacing by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    // Crop or Draw (S9a; Adjust and Filters come with S10 – no tab that does nothing), and Draw's tool, size and ink
+    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val drawChoice = remember { DrawChoice() }
     val compare = remember { MutableInteractionSource() }
     val comparing by compare.collectIsPressedAsState()
 
@@ -270,7 +277,10 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             // Everything back at once, without asking; Undo brings it back (SPEC §15.1)
             TooltipIconButton(R.drawable.ic_restart_alt, stringResource(R.string.content_description_reset_all), { choose(EditState()) }, enabled = history.present.changed && !saving)
             Box {
-                Button(onClick = { menu = true }, enabled = history.present.changed && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
+                Button(onClick = {
+                    drawChoice.finishTyping()
+                    menu = true
+                }, enabled = history.present.changed && !saving && preview != null, modifier = Modifier.padding(horizontal = 8.dp).height(40.dp)) {
                     if (saving) {
                         LoadingIndicator(Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
@@ -290,13 +300,23 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
         }
         Box(Modifier.weight(1f).fillMaxWidth().holdWhile(saving)) {
             val image = preview
-            if (image != null && upright != null) CropArea(image, upright, state, comparing, cropMoves, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
+            if (image != null && upright != null) {
+                // Compare in Draw keeps its view and zoom and leaves the marks out (owner's test of S9a: switching to the
+                // crop's view to show the original lost the zoom one wants to look closer with)
+                if (tab == 0) CropArea(image, upright, state, comparing, cropMoves, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
+                else DrawArea(image, upright, state, comparing, drawChoice, now = { live ?: history.present }, onLive = { live = it }, onCommit = ::commit)
+            }
         }
         Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceContainer).holdWhile(saving)) {
-            if (upright != null) CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
-            // No tabs while Crop is the only tool (the owner, 20 Nov 2026: no buttons that do nothing in a release);
-            // Adjust, Filters and Draw bring them back with S9–S10
-            Spacer(Modifier.navigationBarsPadding())
+            if (upright != null) {
+                if (tab == 0) CropTools(state, EditGeometry.turned(upright, state), onLive = { live = it }, onCommit = ::commit, onChoose = ::choose)
+                else DrawTools(drawChoice)
+            }
+            // The tools' tabs (SPEC §15.1): Crop and Draw; Adjust and Filters join with S10
+            PrimaryTabRow(selectedTabIndex = tab, containerColor = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.navigationBarsPadding()) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.tab_crop)) }, icon = { Icon(painterResource(R.drawable.ic_crop), contentDescription = null) })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.tab_draw)) }, icon = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) })
+            }
         }
     }
     }
@@ -591,7 +611,11 @@ private fun CropArea(image: ImageBitmap, upright: PxSize, state: EditState, orig
                         postScale(shown.scale.toFloat(), shown.scale.toFloat())
                         postTranslate(shown.x0.toFloat(), shown.y0.toFloat())
                     }
-                    native.withClip(0f, 0f, size.width, size.height) { drawBitmap(bitmap, m, paint) }
+                    native.withClip(0f, 0f, size.width, size.height) {
+                        drawBitmap(bitmap, m, paint)
+                        // Draw's marks are part of the photo: they turn and crop with it
+                        MarkupPainter.draw(this, state.marks, upright, m)
+                    }
                 }
             }
             if (original) return@Canvas
@@ -727,10 +751,10 @@ private fun Modifier.holdWhile(held: Boolean): Modifier = if (!held) this else p
 private class HeldView(val crop: sh.hnet.gallery.model.Crop, val quarters: Int, val flipped: Boolean)
 
 /** How the crop area shows the turned photo: its shares to the area's pixels ([x0] + share × size × [scale]). */
-private class CropView(val scale: Double, val x0: Double, val y0: Double)
+internal class CropView(val scale: Double, val x0: Double, val y0: Double)
 
 /** The view fitting [crop] to the area less its margin, the crop in the middle. */
-private fun viewOf(crop: sh.hnet.gallery.model.Crop, turned: PxSize, area: IntSize, margin: Float): CropView {
+internal fun viewOf(crop: sh.hnet.gallery.model.Crop, turned: PxSize, area: IntSize, margin: Float): CropView {
     val w = max(crop.width * turned.width, 1e-6)
     val h = max(crop.height * turned.height, 1e-6)
     val scale = min((area.width - 2 * margin) / w, (area.height - 2 * margin) / h)

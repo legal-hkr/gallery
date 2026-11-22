@@ -91,6 +91,8 @@ data class EditState(
      * test of S7: shrunk step by step from the last, it never grew again). Null: the crop itself.
      */
     val wanted: Crop? = null,
+    /** Draw's marks (S9a), in the upright photo's shares: turns and crops carry them, Undo takes them as any step. */
+    val marks: List<Mark> = emptyList(),
 ) {
     /** Anything to save: the crop as set is bookkeeping, and a ratio alone that left the crop as it was changes nothing. */
     val changed: Boolean get() = copy(wanted = null, ratio = CropRatio.FREE, portrait = false) != EditState()

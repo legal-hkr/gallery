@@ -520,4 +520,21 @@
     <string name="progress_taken_out">Done: %1$d of %2$d</string>
     <string name="error_take_out_some">Some items couldn’t be taken out of the vault (%1$d).</string>
     <string name="progress_exported">Exported: %1$d of %2$d</string>
+
+    <!-- Stage S9a -->
+    <string name="tab_crop">Crop</string>
+    <string name="tab_draw">Draw</string>
+    <string name="tool_pen">Pen</string>
+    <string name="tool_highlighter">Highlighter</string>
+    <string name="tool_text">Text</string>
+    <string name="tool_eraser">Eraser</string>
+    <string name="content_description_size_small">Thin</string>
+    <string name="content_description_size_medium">Medium</string>
+    <string name="content_description_size_large">Thick</string>
+    <string name="color_black">Black</string>
+    <string name="color_white">White</string>
+    <string name="color_red">Red</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_green">Green</string>
+    <string name="color_blue">Blue</string>
 </resources>

@@ -31,6 +31,7 @@ import sh.hnet.gallery.model.Affine
 import sh.hnet.gallery.model.EditGeometry
 import sh.hnet.gallery.model.EditState
 import sh.hnet.gallery.model.FileNames
+import sh.hnet.gallery.model.Markup
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Orientation
 import sh.hnet.gallery.model.Pt
@@ -216,6 +217,18 @@ class EditSaver(private val context: Context) {
                     drawBitmap(contents, 0f, 0f, paint)
                 }
                 gainTemplate = template
+            }
+        }
+        // Draw's marks on the result (S9a), through the map from the upright photo; in the gain map they give no boost (D36)
+        if (state.marks.isNotEmpty()) {
+            val marksMap = EditGeometry.matrix(upright, Orientation.NORMAL, state).toMatrix()
+            MarkupPainter.draw(Canvas(out), state.marks, upright, marksMap)
+            val map = gain
+            val parameters = gainTemplate
+            if (map != null && parameters != null) {
+                val neutral = Markup.neutralGain(parameters.ratioMin[0], parameters.ratioMax[0], parameters.gamma[0])
+                val onMap = Matrix(marksMap).apply { postScale(gainScale.toFloat(), gainScale.toFloat()) }
+                MarkupPainter.drawNeutral(Canvas(map), state.marks, upright, onMap, neutral, MarkupPainter.alphaOnly(map))
             }
         }
         val finished = gain

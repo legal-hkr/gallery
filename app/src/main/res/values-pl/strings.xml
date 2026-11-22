@@ -521,4 +521,21 @@
     <string name="progress_taken_out">Wyjęto: %1$d z %2$d</string>
     <string name="error_take_out_some">Nie udało się wyjąć z sejfu niektórych elementów (%1$d).</string>
     <string name="progress_exported">Wyeksportowano: %1$d z %2$d</string>
+
+    <!-- Stage S9a -->
+    <string name="tab_crop">Kadruj</string>
+    <string name="tab_draw">Rysuj</string>
+    <string name="tool_pen">Pióro</string>
+    <string name="tool_highlighter">Zakreślacz</string>
+    <string name="tool_text">Tekst</string>
+    <string name="tool_eraser">Gumka</string>
+    <string name="content_description_size_small">Cienki</string>
+    <string name="content_description_size_medium">Średni</string>
+    <string name="content_description_size_large">Gruby</string>
+    <string name="color_black">Czarny</string>
+    <string name="color_white">Biały</string>
+    <string name="color_red">Czerwony</string>
+    <string name="color_yellow">Żółty</string>
+    <string name="color_green">Zielony</string>
+    <string name="color_blue">Niebieski</string>
 </resources>
