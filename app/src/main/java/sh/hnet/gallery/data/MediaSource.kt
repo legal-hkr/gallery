@@ -80,26 +80,44 @@ class MediaSource(private val context: Context) {
     /**
      * Photos (not videos, not trashed) taken within any of [windows] (epoch milliseconds), on every volume: the On this
      * day widget's ask (S11), a few days a year rather than the whole index – the app closed, nothing else is read (D4).
+     * "Taken" as the app has it ([Columns.item]): the date taken, else the file's last change, else when MediaStore
+     * learned of it – photos without EXIF dates (copied, downloaded) were missed (review since v0.1.0).
      */
     fun photosTakenIn(windows: List<LongRange>): List<MediaItem> {
         if (windows.isEmpty()) return emptyList()
+        val taken = MediaStore.MediaColumns.DATE_TAKEN
+        val modified = MediaStore.MediaColumns.DATE_MODIFIED
+        val added = MediaStore.MediaColumns.DATE_ADDED
+        fun within(column: String) = windows.joinToString(" OR ", "(", ")") { "$column BETWEEN ? AND ?" }
         val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE} AND (" +
-            windows.joinToString(" OR ") { "${MediaStore.MediaColumns.DATE_TAKEN} BETWEEN ? AND ?" } + ")"
+            "($taken > 0 AND ${within(taken)})" +
+            " OR (($taken IS NULL OR $taken <= 0) AND $modified > 0 AND ${within(modified)})" +
+            " OR (($taken IS NULL OR $taken <= 0) AND ($modified IS NULL OR $modified <= 0) AND ${within(added)}))"
+        // The file's times are in seconds
+        val millis = windows.flatMap { listOf(it.first.toString(), it.last.toString()) }
+        val seconds = windows.flatMap { listOf(Math.floorDiv(it.first, 1000L).toString(), Math.floorDiv(it.last, 1000L).toString()) }
         val args = Bundle().apply {
             putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
-            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, windows.flatMap { listOf(it.first.toString(), it.last.toString()) }.toTypedArray())
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, (millis + seconds + seconds).toTypedArray())
         }
         return query(args)
     }
 
-    /** The newest [limit] photos (not trashed): the widget's last fallback, any photo of the timeline. */
+    /**
+     * The newest [limit] photos (not trashed) by when they were taken as the app has it: the widget's last fallback, any
+     * photo of the timeline. Those with a date taken and those without (by the file's time) asked apart, then merged.
+     */
     fun newestPhotos(limit: Int): List<MediaItem> {
-        val args = Bundle().apply {
-            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}")
-            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${MediaStore.MediaColumns.DATE_TAKEN} DESC")
+        val taken = MediaStore.MediaColumns.DATE_TAKEN
+        val image = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}"
+        fun ask(selection: String, order: String) = query(Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, order)
             putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
-        }
-        return query(args)
+        })
+        val dated = ask("$image AND $taken > 0", "$taken DESC")
+        val undated = ask("$image AND ($taken IS NULL OR $taken <= 0)", "${MediaStore.MediaColumns.DATE_MODIFIED} DESC, ${MediaStore.MediaColumns.DATE_ADDED} DESC")
+        return (dated + undated).sortedWith(MediaItem.NEWEST_FIRST).take(limit)
     }
 
     /**

@@ -100,28 +100,34 @@ class VideoTrimmer(private val context: Context) {
      *
      * @param sdrMode Saved in SDR this way ([Facts.sdrMode]: an HDR video on a phone without an HDR encoder, after the question – D35); null keeps it as it is
      * @param onProgress Done so far, 0–1, or null while it can't be told
+     * @param onWritten The copy's id once it is written (null when the write failed) – told even when the caller was
+     *   cancelled meanwhile, as `withContext` then drops the result (review since v0.1.0)
      */
-    suspend fun saveCopy(item: MediaItem, trim: Trim, sdrMode: Int?, suffix: String, taken: Collection<String>, located: Boolean, onProgress: (Float?) -> Unit): Long? {
+    suspend fun saveCopy(item: MediaItem, trim: Trim, sdrMode: Int?, suffix: String, taken: Collection<String>, located: Boolean, onProgress: (Float?) -> Unit, onWritten: (Long?) -> Unit = {}): Long? {
         val file = export(item, trim, sdrMode, located, onProgress)
         // Once made, the copy is written whole: a cancel now would leave it saved but reported as not (review of S9b)
         return withContext(Dispatchers.IO + NonCancellable) {
             try {
                 val (base, _) = FileNames.split(item.name)
                 val name = editedName("$base.mp4", suffix, taken)
-                resolver.insertBeside(item, file, name, MimeTypes.VIDEO_MP4, MediaStore.Video.Media::getContentUri, Environment.DIRECTORY_MOVIES)
+                resolver.insertBeside(item, file, name, MimeTypes.VIDEO_MP4, MediaStore.Video.Media::getContentUri, Environment.DIRECTORY_MOVIES).also(onWritten)
             } finally {
                 file.delete()
             }
         }
     }
 
-    /** The original replaced, after the system's consent the caller asked for: the result made whole first, then written over it. */
-    suspend fun replace(item: MediaItem, trim: Trim, sdrMode: Int?, located: Boolean, onProgress: (Float?) -> Unit) {
+    /**
+     * The original replaced, after the system's consent the caller asked for: the result made whole first, then written
+     * over it; [onWritten] once it is, even when the caller was cancelled meanwhile.
+     */
+    suspend fun replace(item: MediaItem, trim: Trim, sdrMode: Int?, located: Boolean, onProgress: (Float?) -> Unit, onWritten: () -> Unit = {}) {
         val file = export(item, trim, sdrMode, located, onProgress)
         // Written over whole: a cancel during it would leave the original replaced but reported as untouched
         withContext(Dispatchers.IO + NonCancellable) {
             try {
                 resolver.writeOver(item, file)
+                onWritten()
             } finally {
                 file.delete()
             }

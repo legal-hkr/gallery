@@ -276,11 +276,14 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
         saving = true
         progress = null
         job = scope.launch {
+            // What was written, known even when a cancel came during the write (its result is dropped then)
+            var copy: Long? = null
+            var replaced = false
             try {
                 if (!replace) {
                     val suffix = resources.getString(R.string.file_suffix_edited)
                     val taken = MediaWriter(context).namesBeside(item, app.index.items.value.orEmpty()) + item.name
-                    val id = trimmer.saveCopy(item, t, sdrMode, suffix, taken, located) { progress = it }
+                    val id = trimmer.saveCopy(item, t, sdrMode, suffix, taken, located, onProgress = { progress = it }, onWritten = { copy = it })
                     if (id == null) {
                         failed()
                         return@launch
@@ -293,14 +296,23 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
                         onCopySaved(id)
                     }
                 } else {
-                    trimmer.replace(item, t, sdrMode, located) { progress = it }
+                    trimmer.replace(item, t, sdrMode, located, onProgress = { progress = it }, onWritten = { replaced = true })
                     saving = false
                     actions.say(resources.getString(R.string.msg_original_replaced), undo = null)
                     onClose()
                 }
             } catch (e: CancellationException) {
-                // Cancelled on the card: nothing was written, the editing goes on
                 saving = false
+                // Cancelled while the result was being written: it is saved, and said so (review since v0.1.0)
+                copy?.let { id ->
+                    actions.say(resources.getString(R.string.msg_copy_saved), undo = null)
+                    onCopySaved(id)
+                }
+                if (replaced) {
+                    actions.say(resources.getString(R.string.msg_original_replaced), undo = null)
+                    onClose()
+                }
+                // Else cancelled on the card: nothing was written, the editing goes on
                 throw e
             } catch (e: Exception) {
                 failed(e)
@@ -314,8 +326,8 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
     var replaceSdr by remember { mutableStateOf(false) }
 
     fun proceedReplace(sdr: Boolean) {
-        val request = MediaWriter(context).writeRequest(listOf(item))
-        if (request == null) save(replace = true, sdr) else consent.ask(request) { save(replace = true, sdr) }
+        // A request that can't be made (the video just gone) is said, not a crash (review since v0.1.0)
+        actions.apply(MediaWriter(context).writeChange(listOf(item))) { save(replace = true, sdr) }
     }
 
     fun proceed(replace: Boolean, sdr: Boolean) {

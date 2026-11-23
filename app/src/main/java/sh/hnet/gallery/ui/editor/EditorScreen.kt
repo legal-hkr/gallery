@@ -264,8 +264,8 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
                 onClose()
             }
         }
-        val request = MediaWriter(context).writeRequest(listOf(item))
-        if (request == null) write() else consent.ask(request, write)
+        // A request that can't be made (the photo just gone) is said, not a crash (review since v0.1.0)
+        actions.apply(MediaWriter(context).writeChange(listOf(item)), then = write)
     }
 
     // A surface of its own: an overlay over the whole app, outside what gives the shell's content its colour (owner's

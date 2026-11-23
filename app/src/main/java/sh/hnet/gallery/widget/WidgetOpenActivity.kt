@@ -17,7 +17,9 @@ class WidgetOpenActivity : Activity() {
         super.onCreate(savedInstanceState)
         val ids = intent.getLongArrayExtra(EXTRA_IDS)?.toList()
         val start = intent.getLongExtra(EXTRA_START, -1)
-        if (!ids.isNullOrEmpty() && start in ids) (application as GalleryApplication).openPhotos.value = ids to start
+        if (!ids.isNullOrEmpty() && start in ids) {
+            (application as GalleryApplication).openPhotos.value = GalleryApplication.WidgetPhotos(ids, start, intent.getStringExtra(EXTRA_ALBUM))
+        }
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
         finish()
     }
@@ -25,8 +27,11 @@ class WidgetOpenActivity : Activity() {
     companion object {
         private const val EXTRA_IDS = "sh.hnet.gallery.widget.IDS"
         private const val EXTRA_START = "sh.hnet.gallery.widget.START"
+        private const val EXTRA_ALBUM = "sh.hnet.gallery.widget.ALBUM"
 
-        fun intent(context: Context, ids: List<Long>, start: Long): Intent =
-            Intent(context, WidgetOpenActivity::class.java).putExtra(EXTRA_IDS, ids.toLongArray()).putExtra(EXTRA_START, start).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        /** @param album A Frame's album key, for the viewer's title; null for On this day */
+        fun intent(context: Context, ids: List<Long>, start: Long, album: String? = null): Intent =
+            Intent(context, WidgetOpenActivity::class.java).putExtra(EXTRA_IDS, ids.toLongArray()).putExtra(EXTRA_START, start).putExtra(EXTRA_ALBUM, album)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }

@@ -160,14 +160,18 @@ class AdjustShader {
                         node.endRecording()
                         renderer.setContentRoot(node)
                         val done = CountDownLatch(1)
-                        var succeeded = false
+                        var rendered: HardwareBufferRenderer.RenderResult? = null
+                        // The callback runs on the render thread: it only hands the result over, the fence is waited
+                        // for here (review since v0.1.0: waiting there stalled the app's drawing for the whole save)
                         renderer.obtainRenderRequest().setColorSpace(space).draw({ it.run() }) { result ->
-                            // Drawn and finished, or the save fails: a tile left as it was would go into the photo
-                            // unnoticed – the previous tile's pixels (review before v0.1.1)
-                            succeeded = result.status == HardwareBufferRenderer.RenderResult.SUCCESS && result.fence.await(Duration.ofSeconds(10))
+                            rendered = result
                             done.countDown()
                         }
-                        if (!done.await(15, TimeUnit.SECONDS) || !succeeded) error("A tile wasn't adjusted")
+                        // Drawn and finished, or the save fails: a tile left as it was would go into the photo
+                        // unnoticed – the previous tile's pixels (review before v0.1.1)
+                        val result = if (done.await(15, TimeUnit.SECONDS)) rendered else null
+                        val succeeded = result != null && result.status == HardwareBufferRenderer.RenderResult.SUCCESS && result.fence.use { it.await(Duration.ofSeconds(10)) }
+                        if (!succeeded) error("A tile wasn't adjusted")
                         val drawn = Bitmap.wrapHardwareBuffer(buffer, space) ?: error("No tile")
                         val soft = drawn.copy(if (f16) Bitmap.Config.RGBA_F16 else Bitmap.Config.ARGB_8888, false)
                         drawn.recycle()

@@ -81,8 +81,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Picking for other apps (SPEC §17.4, LOGIKA §16.6): GET_CONTENT and PICK for photos and videos. Portrait as
-             the app; the long press's viewer turns with the phone as inside the app (D1) -->
         <!-- On this day (S11, SPEC §21.2). Exported as the system requires: the launcher's widget service sends its updates (as Contacts'). -->
         <receiver
             android:name=".widget.OnThisDayWidget"
@@ -155,6 +153,8 @@
             android:name=".ui.share.ShareToggleReceiver"
             android:exported="false" />
 
+        <!-- Picking for other apps (SPEC §17.4, LOGIKA §16.6): GET_CONTENT and PICK for photos and videos. Portrait as
+             the app; the long press's viewer turns with the phone as inside the app (D1) -->
         <activity
             android:name=".ui.pick.PickerActivity"
             android:exported="true"

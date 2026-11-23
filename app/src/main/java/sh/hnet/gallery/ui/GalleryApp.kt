@@ -54,6 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -77,6 +78,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -145,6 +147,7 @@ import sh.hnet.gallery.ui.viewer.MediaOrigins
 import sh.hnet.gallery.ui.viewer.ViewerHost
 import sh.hnet.gallery.ui.viewer.ViewerRequest
 import sh.hnet.gallery.ui.welcome.WizardScreen
+import sh.hnet.gallery.widget.Frames
 
 /**
  * The app's shell (as Music's, SPEC §3): one back stack per navigation bar destination, snackbars.
@@ -169,6 +172,21 @@ fun GalleryApp() {
     val onThisDayTitle = stringResource(R.string.title_on_this_day)
     val appContext = LocalContext.current.applicationContext
     val app = appContext as GalleryApplication
+    val titles = LocalResources.current
+    /** A Frame's album by its key ([sh.hnet.gallery.widget.Frames]) as the Albums tab names it; the widget's name when it's gone. */
+    fun frameTitle(album: String): String = when {
+        album == Frames.FAVORITES -> titles.getString(R.string.label_favorites)
+        album == Frames.VIDEOS -> titles.getString(R.string.label_videos)
+        album.startsWith("u:") -> album.removePrefix("u:").toLongOrNull()?.let { id -> app.albums.albums.value?.firstOrNull { it.id == id }?.name }
+        album.startsWith("s:") -> FolderKey.of(album.removePrefix("s:"))?.let { folder ->
+            when {
+                folder.path.equals("DCIM/Camera/", ignoreCase = true) -> titles.getString(R.string.label_camera)
+                folder.path.equals("Download/", ignoreCase = true) -> titles.getString(R.string.label_downloads)
+                else -> folder.name
+            }
+        }
+        else -> null
+    } ?: titles.getString(R.string.widget_frame_name)
     // Access may have been given or taken in the system meanwhile, and a partial selection changed (SPEC §19.4)
     LifecycleResumeEffect(Unit) {
         app.index.recheck()
@@ -224,13 +242,20 @@ fun GalleryApp() {
     }
     // A widget's photos (S11): the viewer over them, whatever was open
     LaunchedEffect(Unit) {
-        app.openPhotos.filterNotNull().collect { (ids, start) ->
+        app.openPhotos.filterNotNull().collect { (ids, start, album) ->
             app.openPhotos.value = null
             // Once the index has the photo: on a cold start the viewer found no pages yet and closed at once, saying the
-            // photo was deleted elsewhere (review of S11)
-            withTimeoutOrNull(10_000) { app.index.items.first { items -> items?.any { it.id == start } == true } } ?: return@collect
+            // photo was deleted elsewhere (review of S11). The whole list, not the first screenful, may be needed – a
+            // widget's photo is often years old (review since v0.1.0: ten seconds of a large library's first read ran out)
+            val found = withTimeoutOrNull(60_000) {
+                combine(app.index.items, app.index.complete) { items, complete -> items?.any { it.id == start } == true || complete != null }.first { it }
+                app.index.items.value?.any { it.id == start } == true
+            }
+            if (found != true) return@collect
             overViewer = null
-            viewer = ViewerRequest(ids, start, title = onThisDayTitle) {}
+            // A Frame's viewer named after its album (review since v0.1.0: it said "On this day")
+            val title = album?.let { frameTitle(it) } ?: onThisDayTitle
+            viewer = ViewerRequest(ids, start, title = title) {}
         }
     }
     // A folder's album asked for by the outside viewer: on the Albums tab, over its root

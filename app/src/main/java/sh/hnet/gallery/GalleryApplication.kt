@@ -114,8 +114,11 @@ class GalleryApplication : Application() {
     /** A folder's album to open (from the outside viewer), as a [sh.hnet.gallery.model.FolderKey.key]. */
     val openFolder = MutableStateFlow<String?>(null)
 
-    /** Photos to open in the viewer (a widget's tap, S11): their ids and the one to start at. */
-    val openPhotos = MutableStateFlow<Pair<List<Long>, Long>?>(null)
+    /** Photos to open in the viewer (a widget's tap, S11). */
+    val openPhotos = MutableStateFlow<WidgetPhotos?>(null)
+
+    /** A widget's photos: their ids, the one to start at, and a Frame's album (its key) – null for On this day. */
+    data class WidgetPhotos(val ids: List<Long>, val start: Long, val album: String?)
 
     /** Some items' offsets from their facts (the widgets' few photos), without loading every fact. */
     suspend fun offsetsOf(ids: List<Long>): Map<Long, Int?> =

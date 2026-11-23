@@ -199,7 +199,7 @@ object Widgets {
                         manager.updateAppWidget(id, RemoteViews(app.packageName, R.layout.widget_on_this_day).apply {
                             if (picture != null) setImageViewBitmap(R.id.photo, picture) else setImageViewResource(R.id.photo, R.drawable.widget_placeholder)
                             setViewVisibility(R.id.label, View.GONE)
-                            setOnClickPendingIntent(R.id.photo, openFrame(app, id, around, shown.id))
+                            setOnClickPendingIntent(R.id.photo, openFrame(app, id, frame.album, around, shown.id))
                         })
                         at(next.nextAt)
                     }
@@ -344,8 +344,8 @@ object Widgets {
     }
 
     /** The viewer over a Frame's album, at its photo; the address its own per widget and photo. */
-    private fun openFrame(context: Context, id: Int, ids: List<Long>, start: Long): PendingIntent {
-        val intent = WidgetOpenActivity.intent(context, ids, start)
+    private fun openFrame(context: Context, id: Int, album: String, ids: List<Long>, start: Long): PendingIntent {
+        val intent = WidgetOpenActivity.intent(context, ids, start, album)
             .setData(Uri.Builder().scheme("gallery-widget").authority("frame").appendPath(id.toString()).appendPath(start.toString()).build())
         return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
@@ -482,6 +482,8 @@ class WidgetJob : JobService() {
         private fun scheduleChanges(context: Context) {
             val job = JobInfo.Builder(CHANGES, ComponentName(context, WidgetJob::class.java))
                 .addTriggerContentUri(JobInfo.TriggerContentUri(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
+                // A Frame shows videos too (review since v0.1.0)
+                .addTriggerContentUri(JobInfo.TriggerContentUri(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, JobInfo.TriggerContentUri.FLAG_NOTIFY_FOR_DESCENDANTS))
                 // A copy of many photos writes many rows: wait for it to settle, but not longer than ten seconds
                 .setTriggerContentUpdateDelay(2_000)
                 .setTriggerContentMaxDelay(10_000)

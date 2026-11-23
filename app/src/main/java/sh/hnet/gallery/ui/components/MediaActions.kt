@@ -85,6 +85,14 @@ class MediaActions(
      */
     private suspend fun trashChecked(items: List<MediaItem>, trashed: Boolean, then: (List<MediaItem>) -> Unit) {
         val failed: (String) -> Unit = { details -> fail(context.getString(R.string.error_change_failed), details) }
+        // Some stayed: those that went still get [then] – their Undo, the selection's end – and the rest is said
+        // (review since v0.1.0: nothing of the moved ones was told, the viewer took them for deleted elsewhere)
+        suspend fun partly(moving: List<MediaItem>, details: String) {
+            val stayed = writer.leftBehind(moving, trashed).mapTo(HashSet()) { it.id }
+            val went = moving.filter { it.id !in stayed }
+            if (went.isNotEmpty()) then(went)
+            failed(details)
+        }
         suspend fun move(moving: List<MediaItem>) {
             apply(writer.trash(moving, trashed)) {
                 messageScope.launch {
@@ -96,8 +104,11 @@ class MediaActions(
                         return@launch
                     }
                     // A refusal said too: the others went, these stayed (review before v0.1.1: nothing was shown)
-                    apply(writer.writeChange(left), otherwise = { failed(left.joinToString("\n") { "${it.name}: not moved" }) }) {
-                        messageScope.launch { writer.trashDirectly(left, trashed)?.let(failed) ?: then(moving) }
+                    apply(writer.writeChange(left), otherwise = { messageScope.launch { partly(moving, left.joinToString("\n") { "${it.name}: not moved" }) } }) {
+                        messageScope.launch {
+                            val error = writer.trashDirectly(left, trashed)
+                            if (error == null) then(moving) else partly(moving, error)
+                        }
                     }
                 }
             }
@@ -124,15 +135,16 @@ class MediaActions(
         if (items.isEmpty()) return
         // Any of them in a user album: the message says they left every album too (SPEC-albums §5.5)
         val members = (context.applicationContext as GalleryApplication).albums.members.value.orEmpty().mapTo(HashSet()) { it.mediaId }
-        val inAlbums = items.any { it.id in members }
-        val message = when {
-            items.size == 1 && inAlbums -> context.getString(R.string.msg_moved_to_trash_one_albums)
-            items.size == 1 -> context.getString(R.string.msg_moved_to_trash_one)
-            inAlbums -> context.getString(R.string.msg_moved_to_trash_albums, items.size)
-            else -> context.getString(R.string.msg_moved_to_trash, items.size)
-        }
         messageScope.launch {
             trashChecked(items, true) { moved ->
+                // What went, counted (some may have stayed)
+                val inAlbums = moved.any { it.id in members }
+                val message = when {
+                    moved.size == 1 && inAlbums -> context.getString(R.string.msg_moved_to_trash_one_albums)
+                    moved.size == 1 -> context.getString(R.string.msg_moved_to_trash_one)
+                    inAlbums -> context.getString(R.string.msg_moved_to_trash_albums, moved.size)
+                    else -> context.getString(R.string.msg_moved_to_trash, moved.size)
+                }
                 onDone()
                 say(message) { messageScope.launch { trashChecked(moved, false) {} } }
             }
