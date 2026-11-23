@@ -52,6 +52,10 @@ interface FactDao {
     @Query("SELECT * FROM fact")
     suspend fun all(): List<Fact>
 
+    /** Some items' facts (the widget's few photos, without the whole table). */
+    @Query("SELECT * FROM fact WHERE id IN (:ids)")
+    suspend fun of(ids: List<Long>): List<Fact>
+
     @Upsert
     suspend fun upsert(facts: List<Fact>)
 

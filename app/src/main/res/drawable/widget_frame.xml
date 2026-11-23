@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A photo widget's outline (SPEC §21): the launcher's widget rounding, clipping the photo; the surface container shows only until it is drawn. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_surface_container" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

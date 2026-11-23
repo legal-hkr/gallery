@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,7 @@ import sh.hnet.gallery.model.PlaceData
 import sh.hnet.gallery.model.PlaceGroups
 import sh.hnet.gallery.ui.components.Thumbnails
 import sh.hnet.gallery.ui.viewer.TileCache
+import sh.hnet.gallery.widget.Widgets
 
 class GalleryApplication : Application() {
     /** Work that outlives a screen; lives as long as the process. */
@@ -112,6 +114,13 @@ class GalleryApplication : Application() {
     /** A folder's album to open (from the outside viewer), as a [sh.hnet.gallery.model.FolderKey.key]. */
     val openFolder = MutableStateFlow<String?>(null)
 
+    /** Photos to open in the viewer (a widget's tap, S11): their ids and the one to start at. */
+    val openPhotos = MutableStateFlow<Pair<List<Long>, Long>?>(null)
+
+    /** Some items' offsets from their facts (the widgets' few photos), without loading every fact. */
+    suspend fun offsetsOf(ids: List<Long>): Map<Long, Int?> =
+        if (ids.isEmpty()) emptyMap() else ids.chunked(500).flatMap { database.factDao().of(it) }.associate { it.id to it.offsetMinutes }
+
     /** Shares without location (SPEC §14, LOGIKA §16). */
     val sharing: ShareMaker by lazy { ShareMaker(this) }
 
@@ -138,10 +147,24 @@ class GalleryApplication : Application() {
         registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) = vault.lock()
         }, IntentFilter(Intent.ACTION_SCREEN_OFF), Context.RECEIVER_NOT_EXPORTED)
-        // Every new list of items is checked for files not read yet
-        appScope.launch { index.complete.filterNotNull().collect { facts.update(it) } }
         // The copies made for shares of earlier starts go (SPEC §14.1)
         appScope.launch(Dispatchers.IO) { sharing.clearOld() }
+        // A widget placed before an update of the app, or access given or taken while it was closed (as Contacts')
+        Widgets.update(this)
+    }
+
+    private val libraryStarted = AtomicBoolean(false)
+
+    /**
+     * The index and what follows it – facts read from new files, album members relinked, new folders classified –,
+     * started by the app's screens (each activity's `onCreate`), never by a widget's job or receiver waking the process:
+     * with the app closed nothing is read (D4; review of S11: every widget redraw read the whole index and started the
+     * facts). Once per process.
+     */
+    fun startLibrary() {
+        if (!libraryStarted.compareAndSet(false, true)) return
+        // Every new list of items is checked for files not read yet
+        appScope.launch { index.complete.filterNotNull().collect { facts.update(it) } }
         // Album members whose ids a rescan changed are found again by fingerprint (SPEC-albums §9.12)
         appScope.launch { index.complete.filterNotNull().collect { albums.relink(it) } }
         // Every folder the index shows has a state: new ones are classified once (SPEC-albums §22.2)

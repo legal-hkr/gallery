@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.net.Uri
 import android.os.Build
 import android.service.chooser.ChooserAction
 import java.util.UUID
@@ -54,7 +55,10 @@ object ShareSheet {
             .putExtra(EXTRA_TOKEN, token)
         val pending = if (outside != null) {
             // To the app's own receiver (not exported: no process token needed); that outside viewer shares anew itself
+            // Its own pending intent per viewer (the address with its token): sharing the same items from a second viewer
+            // rewrote the first one's, whose toggle then went to the second (review of S11)
             val again = Intent(context, ShareToggleReceiver::class.java)
+                .setData(Uri.Builder().scheme("gallery-share").authority("viewer").appendPath(outside).build())
                 .putExtra(EXTRA_IDS, ids.toLongArray())
                 .putExtra(EXTRA_REMOVE, !removeLocation)
                 .putExtra(EXTRA_VIEWER, outside)

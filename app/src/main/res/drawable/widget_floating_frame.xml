@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The outline of a widget without a background of its own, as Contacts', Calendar's, News's and Music's: nothing to see, but a shape the launcher takes for the widget's own. A widget that names its background and clips to it is left alone, where otherwise the launcher cuts the whole widget to the system's rounded corners – and with them the pieces' shadows. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <corners android:radius="@android:dimen/system_app_widget_background_radius" />
+</shape>

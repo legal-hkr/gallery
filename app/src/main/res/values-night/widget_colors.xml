@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget colors (SPEC §21): the system's dynamic color roles, dark here and light in values, as Contacts' and Calendar's. The launcher resolves them in its own theme, so a change of theme needs no redraw. -->
+    <color name="widget_surface_container">@android:color/system_surface_container_dark</color>
+    <color name="widget_on_surface">@android:color/system_on_surface_dark</color>
+    <color name="widget_on_surface_variant">@android:color/system_on_surface_variant_dark</color>
+</resources>

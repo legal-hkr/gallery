@@ -11,6 +11,7 @@ import sh.hnet.gallery.about.WhatsNew
 import sh.hnet.gallery.ui.GalleryApp
 import sh.hnet.gallery.ui.share.ShareSheet
 import sh.hnet.gallery.ui.theme.GalleryTheme
+import sh.hnet.gallery.widget.Widgets
 
 /** How long the vault stays open while its own system picker is over the app. */
 private const val PICKING_GRACE_MS = 5 * 60_000L
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        (application as GalleryApplication).startLibrary()
         if (savedInstanceState == null) WhatsNew.recordStart(this)
         setContent {
             GalleryTheme {
@@ -51,6 +53,8 @@ class MainActivity : ComponentActivity() {
         // Over the vault's own system picker, a grace of five minutes at least: leaving for it isn't leaving the app, but
         // leaving the app from it must not leave the vault open for good (review before v0.1.0)
         if (!isChangingConfigurations) app.vault.lockAfter(if (app.vault.picking) maxOf(app.vault.lockDelayMs, PICKING_GRACE_MS) else app.vault.lockDelayMs)
+        // Whatever changed meanwhile that the media don't tell of – the language, the sources In Photos –: the widgets anew
+        if (!isChangingConfigurations) Widgets.update(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -81,6 +85,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val ACTION_OPEN_FOLDER = "sh.hnet.gallery.OPEN_FOLDER"
+
         private const val EXTRA_FOLDER = "sh.hnet.gallery.FOLDER"
 
         /** The app at a folder's album, from the outside viewer. */

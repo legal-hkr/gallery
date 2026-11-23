@@ -61,6 +61,7 @@ class PickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        (application as GalleryApplication).startLibrary()
         val request = PickRequest.of(intent?.type ?: intent?.resolveType(this), intent?.getStringArrayExtra(Intent.EXTRA_MIME_TYPES), intent?.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) == true)
         setContent {
             GalleryTheme {

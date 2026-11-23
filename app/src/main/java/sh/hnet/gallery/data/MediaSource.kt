@@ -78,6 +78,43 @@ class MediaSource(private val context: Context) {
     }
 
     /**
+     * Photos (not videos, not trashed) taken within any of [windows] (epoch milliseconds), on every volume: the On this
+     * day widget's ask (S11), a few days a year rather than the whole index – the app closed, nothing else is read (D4).
+     */
+    fun photosTakenIn(windows: List<LongRange>): List<MediaItem> {
+        if (windows.isEmpty()) return emptyList()
+        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE} AND (" +
+            windows.joinToString(" OR ") { "${MediaStore.MediaColumns.DATE_TAKEN} BETWEEN ? AND ?" } + ")"
+        val args = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection)
+            putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, windows.flatMap { listOf(it.first.toString(), it.last.toString()) }.toTypedArray())
+        }
+        return query(args)
+    }
+
+    /** The newest [limit] photos (not trashed): the widget's last fallback, any photo of the timeline. */
+    fun newestPhotos(limit: Int): List<MediaItem> {
+        val args = Bundle().apply {
+            putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}")
+            putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "${MediaStore.MediaColumns.DATE_TAKEN} DESC")
+            putInt(ContentResolver.QUERY_ARG_LIMIT, limit)
+        }
+        return query(args)
+    }
+
+    private fun query(args: Bundle): List<MediaItem> = try {
+        val own = context.packageName
+        resolver.query(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL), PROJECTION, args, null)?.use { cursor ->
+            val list = ArrayList<MediaItem>(cursor.count)
+            val c = Columns(cursor)
+            while (cursor.moveToNext()) list.add(c.item(cursor, own))
+            list
+        }.orEmpty()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /**
      * The MediaStore item an address from another app names (SPEC §17.1, §17.3), tried in turn: `content://media/…`
      * itself; a document – Downloads' `msf:<MediaStore id>` or `raw:<path>`, Files' and the media's own through
      * [MediaStore.getMediaUri]; a path in the address (a `file://` one, Files by Google's); last, the one item of the

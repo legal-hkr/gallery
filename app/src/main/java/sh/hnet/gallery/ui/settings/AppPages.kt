@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -54,18 +55,26 @@ private fun setLanguage(context: Context, tag: String) {
         if (tag.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(tag)
 }
 
-/** Language (as ComfyChair): one choice among the translations; the system recreates the activity in it. */
+/**
+ * Language (as ComfyChair): one choice among the translations. The activity isn't recreated by a change of language
+ * (configChanges, so the editor stays open), so the choice is held here, set by the tap and read again at each change
+ * of configuration (owner, after v0.1.1: the list kept the old language marked – remembered once, as it was entered).
+ */
 @Composable
 fun LanguageScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val current = remember { currentLanguageTag(context) }
+    val configuration = LocalConfiguration.current
+    var current by remember(configuration) { mutableStateOf(currentLanguageTag(context)) }
     SettingsPage(title = stringResource(R.string.title_settings_language), onBack = onBack) {
         Column(Modifier.selectableGroup()) {
             SettingsGroup {
                 appLanguages.forEach { language ->
                     row { shapes ->
                         SettingsRadioRow(shapes, stringResource(language.name), selected = language.tag == current, onSelect = {
-                            if (language.tag != current) setLanguage(context, language.tag)
+                            if (language.tag != current) {
+                                setLanguage(context, language.tag)
+                                current = language.tag
+                            }
                         })
                     }
                 }

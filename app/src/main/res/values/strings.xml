@@ -569,4 +569,14 @@
     <string name="filter_black_white">Black and white</string>
     <string name="filter_faded">Faded</string>
     <string name="filter_vivid">Vivid</string>
+
+    <!-- Stage S11 -->
+    <plurals name="label_years_ago">
+        <item quantity="one">%d year ago</item>
+        <item quantity="other">%d years ago</item>
+    </plurals>
+    <string name="title_on_this_day">On this day</string>
+    <string name="widget_on_this_day_desc">A photo taken on this day in an earlier year.</string>
+    <string name="label_around_this_day">Around this day, %1$s</string>
+    <string name="widget_no_access">Gallery has no access to photos.</string>
 </resources>

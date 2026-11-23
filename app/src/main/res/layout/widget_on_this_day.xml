@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- On this day (SPEC §21.2, board 22a): the photo fills the widget, centre-cropped and clipped to the launcher's rounding, no card of its own; at bottom start the pill with how long ago (or "Around this day, …", or the photo's date). As the family's widgets: no background of its own, the photo a piece with its shadow (owner, S11). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:ignore="SpUsage,ContentDescription,UseAppTint,UseCompoundDrawables"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_floating_frame"
+    android:clipChildren="false"
+    android:clipToOutline="true">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="2dp"
+        android:background="@drawable/widget_frame"
+        android:clipToOutline="true"
+        android:elevation="2dp">
+
+        <ImageView
+            android:id="@+id/photo"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop" />
+
+        <TextView
+            android:id="@+id/label"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="12dp"
+            android:background="@drawable/widget_pill"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:includeFontPadding="false"
+            android:maxLines="1"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text=""
+            android:textColor="@color/widget_on_surface"
+            android:textSize="14dp" />
+    </FrameLayout>
+</FrameLayout>

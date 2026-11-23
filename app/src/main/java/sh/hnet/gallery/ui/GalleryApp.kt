@@ -78,7 +78,9 @@ import androidx.navigation3.ui.NavDisplay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import sh.hnet.gallery.GalleryApplication
 import sh.hnet.gallery.R
 import sh.hnet.gallery.about.WhatsNew
@@ -164,6 +166,7 @@ fun GalleryApp() {
     // After an update, once: "Updated to x.y.z" with What's new (as ComfyChair)
     val updatedTo = stringResource(R.string.whats_new_updated_snackbar)
     val whatsNew = stringResource(R.string.whats_new_title)
+    val onThisDayTitle = stringResource(R.string.title_on_this_day)
     val appContext = LocalContext.current.applicationContext
     val app = appContext as GalleryApplication
     // Access may have been given or taken in the system meanwhile, and a partial selection changed (SPEC §19.4)
@@ -218,6 +221,17 @@ fun GalleryApp() {
     SideEffect {
         actions.start = { intent -> activity?.startActivity(intent) }
         actions.showError = { errorShown = it }
+    }
+    // A widget's photos (S11): the viewer over them, whatever was open
+    LaunchedEffect(Unit) {
+        app.openPhotos.filterNotNull().collect { (ids, start) ->
+            app.openPhotos.value = null
+            // Once the index has the photo: on a cold start the viewer found no pages yet and closed at once, saying the
+            // photo was deleted elsewhere (review of S11)
+            withTimeoutOrNull(10_000) { app.index.items.first { items -> items?.any { it.id == start } == true } } ?: return@collect
+            overViewer = null
+            viewer = ViewerRequest(ids, start, title = onThisDayTitle) {}
+        }
     }
     // A folder's album asked for by the outside viewer: on the Albums tab, over its root
     LaunchedEffect(Unit) {

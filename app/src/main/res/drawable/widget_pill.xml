@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- On this day's label (SPEC §21.2): the one thing with a container, as text over a photo can't be read without one – surface container, 32 dp high, corners 16. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_surface_container" />
+    <corners android:radius="16dp" />
+</shape>

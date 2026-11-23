@@ -67,6 +67,7 @@ class ViewerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        (application as GalleryApplication).startLibrary()
         // The camera on a locked phone (SPEC §17.3): over the lock screen, its own shots only
         if (intent?.action == ACTION_REVIEW_SECURE) setShowWhenLocked(true)
         val opened = intent

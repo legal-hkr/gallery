@@ -570,4 +570,16 @@
     <string name="filter_black_white">Czarno-biały</string>
     <string name="filter_faded">Wyblakły</string>
     <string name="filter_vivid">Żywy</string>
+
+    <!-- Stage S11 -->
+    <plurals name="label_years_ago">
+        <item quantity="one">%d rok temu</item>
+        <item quantity="few">%d lata temu</item>
+        <item quantity="many">%d lat temu</item>
+        <item quantity="other">%d roku temu</item>
+    </plurals>
+    <string name="title_on_this_day">Tego dnia</string>
+    <string name="widget_on_this_day_desc">Zdjęcie zrobione tego dnia w jednym z poprzednich lat.</string>
+    <string name="label_around_this_day">Około tego dnia, %1$s</string>
+    <string name="widget_no_access">Galeria nie ma dostępu do zdjęć.</string>
 </resources>
