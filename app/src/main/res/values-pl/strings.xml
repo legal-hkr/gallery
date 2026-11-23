@@ -582,4 +582,15 @@
     <string name="widget_on_this_day_desc">Zdjęcie zrobione tego dnia w jednym z poprzednich lat.</string>
     <string name="label_around_this_day">Około tego dnia, %1$s</string>
     <string name="widget_no_access">Galeria nie ma dostępu do zdjęć.</string>
+    <string name="widget_frame_name">Ramka</string>
+    <string name="widget_frame_desc">Zdjęcie z albumu, zmieniane co jakiś czas.</string>
+    <string name="widget_album_empty">Album jest pusty.</string>
+    <string name="widget_album_deleted">Album został usunięty. Dotknij, aby wybrać inny.</string>
+    <string name="widget_frame_setup">Dotknij, aby wybrać album.</string>
+    <string name="header_album">Album</string>
+    <string name="header_change_photo">Zmieniaj zdjęcie</string>
+    <string name="interval_hourly">Co godzinę</string>
+    <string name="interval_6_hours">Co 6 godzin</string>
+    <string name="interval_daily">Codziennie</string>
+    <string name="button_add">Dodaj</string>
 </resources>

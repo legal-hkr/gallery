@@ -96,6 +96,34 @@
                 android:resource="@xml/widget_on_this_day" />
         </receiver>
 
+        <!-- Frame (S11, SPEC §21.1). Exported as the system requires: the launcher's widget service sends its updates. -->
+        <receiver
+            android:name=".widget.FrameWidget"
+            android:exported="true"
+            android:label="@string/widget_frame_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_frame_info" />
+        </receiver>
+
+        <!-- Frame's configuration, opened by the launcher through the system when it is placed or edited, and by its
+             "Album deleted" state. A task of its own, out of Recents: it isn't the app (as Contacts'). -->
+        <activity
+            android:name=".widget.FrameConfigActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Gallery"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <!-- A widget's tap: hands its photos to the app and opens it (not exported: only the app's widgets reach it) -->
         <activity
             android:name=".widget.WidgetOpenActivity"

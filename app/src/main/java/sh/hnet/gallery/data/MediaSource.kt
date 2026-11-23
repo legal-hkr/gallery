@@ -102,16 +102,50 @@ class MediaSource(private val context: Context) {
         return query(args)
     }
 
-    private fun query(args: Bundle): List<MediaItem> = try {
+    /**
+     * These items (not trashed) that still exist: a user album's members, for the Frame widget (S11). Null when the ask
+     * failed – not an empty album (review of S11).
+     */
+    fun existing(ids: Collection<Long>): List<MediaItem>? {
+        val found = ArrayList<MediaItem>()
+        for (chunk in ids.chunked(500)) {
+            val args = Bundle().apply {
+                putString(ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns._ID} IN (${chunk.joinToString(",")})")
+            }
+            found += queryOrNull(args) ?: return null
+        }
+        return found
+    }
+
+    /** Favorites or videos (not trashed), for the Frame widget's collections (S11); null when the ask failed. */
+    fun collection(favorites: Boolean): List<MediaItem>? {
+        val selection = if (favorites) {
+            "${MediaStore.MediaColumns.IS_FAVORITE} = 1 AND ${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})"
+        } else {
+            "${MediaStore.Files.FileColumns.MEDIA_TYPE} = ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO}"
+        }
+        return queryOrNull(Bundle().apply { putString(ContentResolver.QUERY_ARG_SQL_SELECTION, selection) })
+    }
+
+    /** A folder's items (not trashed) on its volume, for a Frame; null when the ask failed (a card taken out). */
+    fun folderOrNull(volume: String, path: String): List<MediaItem>? = try {
+        items(volume = volume, path = path).filter { !it.trashed }
+    } catch (_: Exception) {
+        null
+    }
+
+    private fun query(args: Bundle): List<MediaItem> = queryOrNull(args).orEmpty()
+
+    private fun queryOrNull(args: Bundle): List<MediaItem>? = try {
         val own = context.packageName
         resolver.query(MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL), PROJECTION, args, null)?.use { cursor ->
             val list = ArrayList<MediaItem>(cursor.count)
             val c = Columns(cursor)
             while (cursor.moveToNext()) list.add(c.item(cursor, own))
             list
-        }.orEmpty()
+        }
     } catch (_: Exception) {
-        emptyList()
+        null
     }
 
     /**

@@ -14,6 +14,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.graphics.Rect
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.math.max
 import kotlin.math.roundToInt
+import kotlin.random.Random
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -47,6 +49,7 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.data.Access
 import sh.hnet.gallery.data.SourceStore
 import sh.hnet.gallery.data.uri
+import sh.hnet.gallery.model.FrameQueue
 import sh.hnet.gallery.model.Library
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.OnThisDay
@@ -54,7 +57,7 @@ import sh.hnet.gallery.model.TimelineFolders
 import sh.hnet.gallery.model.WidgetPick
 
 /**
- * The app's widgets (S11, SPEC §21, LOGIKA §22): On this day so far. Drawn with plain remote views, the system's colour
+ * The app's widgets (S11, SPEC §21, LOGIKA §22): On this day and Frame. Drawn with plain remote views, the system's colour
  * roles resolved by the launcher (as the family's widgets). Their data is asked of the media directly – today's day in
  * earlier years, a few days around it –, never the whole index: with the app closed nothing else is read (D4).
  */
@@ -96,23 +99,46 @@ object Widgets {
     suspend fun updateAndWait(context: Context) = suspendCancellableCoroutine { continuation -> update(context) { continuation.resume(Unit) } }
 
     /** Whether any of the app's widgets is on a home screen. */
-    fun placed(context: Context): Boolean =
-        AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, OnThisDayWidget::class.java)).isNotEmpty()
+    fun placed(context: Context): Boolean {
+        val manager = AppWidgetManager.getInstance(context)
+        return PROVIDERS.any { manager.getAppWidgetIds(ComponentName(context, it)).isNotEmpty() }
+    }
+
+    private val PROVIDERS = listOf(OnThisDayWidget::class.java, FrameWidget::class.java)
 
     private suspend fun draw(app: GalleryApplication) {
         val manager = AppWidgetManager.getInstance(app)
-        val ids = manager.getAppWidgetIds(ComponentName(app, OnThisDayWidget::class.java))
-        if (ids.isEmpty()) {
+        val days = manager.getAppWidgetIds(ComponentName(app, OnThisDayWidget::class.java))
+        val frames = manager.getAppWidgetIds(ComponentName(app, FrameWidget::class.java))
+        if (days.isEmpty() && frames.isEmpty()) {
             WidgetJob.cancelAll(app)
             return
         }
         val access = app.media.access() != Access.NONE
         if (!access) {
-            for (id in ids) manager.updateAppWidget(id, state(app, R.drawable.ic_no_photography, R.string.widget_no_access, openApp(app)))
+            for (id in days + frames) manager.updateAppWidget(id, state(app, R.drawable.ic_no_photography, R.string.widget_no_access, openApp(app)))
             WidgetJob.cancelAll(app)
             return
         }
         WidgetJob.ensure(app)
+        // Each kind on its own: a failure of one never keeps the other from being drawn, nor the Frames' next change
+        // from being set (review of S11)
+        try {
+            if (days.isNotEmpty()) drawDays(app, manager, days)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+        var next: Long? = null
+        try {
+            if (frames.isNotEmpty()) next = drawFrames(app, manager, frames)
+        } finally {
+            WidgetJob.scheduleFrames(app, next ?: if (frames.isNotEmpty()) System.currentTimeMillis() + RETRY else null)
+        }
+    }
+
+    /** On this day's widgets. */
+    private suspend fun drawDays(app: GalleryApplication, manager: AppWidgetManager, ids: IntArray) {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         // Without the sources' states the timeline can't be told: the widgets stay as they are, rather than show a
@@ -129,6 +155,100 @@ object Widgets {
         for (id in ids) {
             val pick = WidgetPick.of(near, recent, today, zone, { offsets[it] }, screenshot, WidgetPick.seed(today, id))
             manager.updateAppWidget(id, onThisDay(app, manager.getAppWidgetOptions(id), pick, today))
+        }
+    }
+
+    /**
+     * The Frames (S11, SPEC §21.1): each one's photo, changed when its time is up or when it left the album; a state when
+     * the album is empty or gone (a tap chooses another). The earliest next change among them, for the job, or null.
+     */
+    private suspend fun drawFrames(app: GalleryApplication, manager: AppWidgetManager, ids: IntArray): Long? {
+        var earliest: Long? = null
+        fun at(time: Long) {
+            earliest = minOf(earliest ?: time, time)
+        }
+        val now = System.currentTimeMillis()
+        for (id in ids) {
+            try {
+                // Without its choice (placed and its configuration left, or the app's data cleared): a tap chooses
+                val frame = Frames.get(app, id)
+                if (frame == null) {
+                    manager.updateAppWidget(id, state(app, R.drawable.ic_photo_library, R.string.widget_frame_setup, configure(app, id)))
+                    continue
+                }
+                // The sources' states not read in time, or the media's ask failed (a card taken out): as it is, tried
+                // again in a few minutes, rather than "empty" or a hidden folder's photo
+                val content = withContext(Dispatchers.IO) { Frames.content(app, frame.album) }
+                if (content == null) {
+                    at(now + RETRY)
+                    continue
+                }
+                val items = (content as? Frames.Content.Items)?.items
+                when {
+                    items == null -> manager.updateAppWidget(id, state(app, R.drawable.ic_hide_image, R.string.widget_album_deleted, configure(app, id)))
+                    items.isEmpty() -> manager.updateAppWidget(id, state(app, R.drawable.ic_photo_library, R.string.widget_album_empty, configure(app, id)))
+                    else -> {
+                        val next = FrameQueue.step(frame, items.map { it.id }, now, Random.Default)
+                        if (next != frame) Frames.advance(app, id, frame, next)
+                        val shown = items.first { it.id == next.current }
+                        val picture = withContext(Dispatchers.IO) { picture(app, shown, manager.getAppWidgetOptions(id)) }
+                        // The viewer over the album around the photo: a few hundred either side, not the whole album – its
+                        // ids went with the remote views and a large folder's passed the binder's limit (review of S11)
+                        val index = items.indexOf(shown)
+                        val around = items.subList((index - AROUND).coerceAtLeast(0), (index + AROUND + 1).coerceAtMost(items.size)).map { it.id }
+                        manager.updateAppWidget(id, RemoteViews(app.packageName, R.layout.widget_on_this_day).apply {
+                            if (picture != null) setImageViewBitmap(R.id.photo, picture) else setImageViewResource(R.id.photo, R.drawable.widget_placeholder)
+                            setViewVisibility(R.id.label, View.GONE)
+                            setOnClickPendingIntent(R.id.photo, openFrame(app, id, around, shown.id))
+                        })
+                        at(next.nextAt)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // This one tried again soon; the others go on
+                at(now + RETRY)
+            }
+        }
+        return earliest
+    }
+
+    /** A photo, or a video's frame, at the widget's size, centre-cropped; null when it can't be read. */
+    private fun picture(context: Context, item: MediaItem, options: Bundle): Bitmap? = if (item.video) videoFrame(context, item, options) else photo(context, item, options)
+
+    /** The widget's box in pixels, as on a phone held upright (its least width, its greatest height), at most [LONGEST]. */
+    private fun box(context: Context, options: Bundle): Pair<Int, Int> {
+        val density = context.resources.displayMetrics.density
+        val boxW = (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 250) * density
+        val boxH = (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 110) * density
+        val fit = minOf(1f, LONGEST / max(boxW, boxH))
+        return (boxW * fit).roundToInt().coerceAtLeast(1) to (boxH * fit).roundToInt().coerceAtLeast(1)
+    }
+
+    /** A video's first frame covering the box, its middle cut out. */
+    private fun videoFrame(context: Context, item: MediaItem, options: Bundle): Bitmap? {
+        val (width, height) = box(context, options)
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, item.uri())
+            val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            var w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toFloatOrNull() ?: return null
+            var h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toFloatOrNull() ?: return null
+            if (rotation % 180 != 0) w = h.also { h = w }
+            // Asked to fit within the size that covers the box: its scaled frame then covers it exactly
+            val scale = max(width / w, height / h)
+            val frame = retriever.getScaledFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, (w * scale).roundToInt().coerceAtLeast(width), (h * scale).roundToInt().coerceAtLeast(height)) ?: return null
+            val cropW = minOf(width, frame.width)
+            val cropH = minOf(height, frame.height)
+            val cut = Bitmap.createBitmap(frame, (frame.width - cropW) / 2, (frame.height - cropH) / 2, cropW, cropH)
+            // The whole frame given back at once: several video Frames drawn together held them all
+            if (cut !== frame) frame.recycle()
+            cut
+        } catch (_: Exception) {
+            null
+        } finally {
+            retriever.release()
         }
     }
 
@@ -174,13 +294,8 @@ object Widgets {
      * least width and greatest height.
      */
     private fun photo(context: Context, item: MediaItem, options: Bundle): Bitmap? = try {
-        val density = context.resources.displayMetrics.density
-        val boxW = (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH).takeIf { it > 0 } ?: 250) * density
-        val boxH = (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 110) * density
         // At most [LONGEST] on the longer side: the binder's limit for remote views holds
-        val fit = minOf(1f, LONGEST / max(boxW, boxH))
-        val width = (boxW * fit).roundToInt().coerceAtLeast(1)
-        val height = (boxH * fit).roundToInt().coerceAtLeast(1)
+        val (width, height) = box(context, options)
         ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, item.uri())) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             // Scaled to cover the box, then its middle cut out (the file's orientation applied by the decoder)
@@ -219,8 +334,30 @@ object Widgets {
         return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
+    /** A Frame's setup again (its album emptied or deleted): the widget's configuration, its address its own. */
+    private fun configure(context: Context, id: Int): PendingIntent {
+        val intent = Intent(context, FrameConfigActivity::class.java)
+            .setData(Uri.Builder().scheme("gallery-widget").authority("frame-setup").appendPath(id.toString()).build())
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** The viewer over a Frame's album, at its photo; the address its own per widget and photo. */
+    private fun openFrame(context: Context, id: Int, ids: List<Long>, start: Long): PendingIntent {
+        val intent = WidgetOpenActivity.intent(context, ids, start)
+            .setData(Uri.Builder().scheme("gallery-widget").authority("frame").appendPath(id.toString()).appendPath(start.toString()).build())
+        return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
     /** The widget's photo at most this many pixels on its longer side (a phone's width, sharp across 4 cells). */
     private const val LONGEST = 1440f
+
+    /** A Frame that couldn't be drawn is tried again after this long. */
+    private const val RETRY = 5 * 60_000L
+
+    /** How many of a Frame's album either side of its photo a tap opens the viewer over. */
+    private const val AROUND = 200
 
     /** How many of the newest photos the last fallback chooses among. */
     private const val RECENT = 300
@@ -244,6 +381,27 @@ class OnThisDayWidget : AppWidgetProvider() {
 
 /** The system's broadcasts the widgets follow. */
 private val SYSTEM = setOf(Intent.ACTION_LOCALE_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED)
+
+/** Frame (SPEC §21.1), 2 × 2 by default, resizable; set up by [FrameConfigActivity] when placed and from the launcher. */
+class FrameWidget : AppWidgetProvider() {
+    override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) = redraw(context)
+
+    /** Resized: the photo is read at the new size. */
+    override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) = redraw(context)
+
+    /** Removed: its album and round go with it. */
+    override fun onDeleted(context: Context, ids: IntArray) = Frames.forget(context, ids)
+
+    /** Restored by the launcher with new ids: the choices follow them (review of S11). */
+    override fun onRestored(context: Context, oldIds: IntArray, newIds: IntArray) = Frames.move(context, oldIds, newIds)
+
+    override fun onDisabled(context: Context) = redraw(context)
+
+    private fun redraw(context: Context) {
+        val pending = goAsync()
+        Widgets.update(context) { pending.finish() }
+    }
+}
 
 /** A change of language, zone or clock while the app is closed: the widgets' words and day follow. */
 class WidgetSystemReceiver : BroadcastReceiver() {
@@ -269,8 +427,9 @@ class WidgetJob : JobService() {
                 Widgets.updateAndWait(app)
             } finally {
                 // Set again before this run is given back: a job still running counts as waiting, so [ensure] would leave it
+                // (the Frames' tick is set by the redraw itself, at the earliest next change)
                 if (Widgets.placed(app)) {
-                    if (params.jobId == CHANGES) scheduleChanges(app) else scheduleMidnight(app)
+                    if (params.jobId == CHANGES) scheduleChanges(app) else if (params.jobId == MIDNIGHT) scheduleMidnight(app)
                 }
                 jobFinished(params, false)
             }
@@ -283,6 +442,25 @@ class WidgetJob : JobService() {
     companion object {
         private const val CHANGES = 1
         private const val MIDNIGHT = 2
+        private const val FRAMES = 3
+
+        /**
+         * The Frames' next change, at [at] (epoch ms) – the earliest among them –, or none. About then (D43): the scheduler
+         * may run it some minutes late, and later still while the phone dozes.
+         */
+        fun scheduleFrames(context: Context, at: Long?) {
+            val scheduler = context.getSystemService(JobScheduler::class.java)
+            if (at == null) {
+                scheduler.cancel(FRAMES)
+                return
+            }
+            val wait = (at - System.currentTimeMillis()).coerceAtLeast(60_000)
+            val job = JobInfo.Builder(FRAMES, ComponentName(context, WidgetJob::class.java))
+                .setMinimumLatency(wait)
+                .setOverrideDeadline(wait + 15 * 60_000)
+                .build()
+            schedule(context, job)
+        }
 
         /** Sets the jobs unless they are waiting already. */
         fun ensure(context: Context) {
@@ -298,6 +476,7 @@ class WidgetJob : JobService() {
             val scheduler = context.getSystemService(JobScheduler::class.java)
             scheduler.cancel(CHANGES)
             scheduler.cancel(MIDNIGHT)
+            scheduler.cancel(FRAMES)
         }
 
         private fun scheduleChanges(context: Context) {

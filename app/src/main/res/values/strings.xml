@@ -579,4 +579,15 @@
     <string name="widget_on_this_day_desc">A photo taken on this day in an earlier year.</string>
     <string name="label_around_this_day">Around this day, %1$s</string>
     <string name="widget_no_access">Gallery has no access to photos.</string>
+    <string name="widget_frame_name">Frame</string>
+    <string name="widget_frame_desc">A photo from an album, changing now and then.</string>
+    <string name="widget_album_empty">The album is empty.</string>
+    <string name="widget_album_deleted">Album deleted. Tap to choose another.</string>
+    <string name="widget_frame_setup">Tap to choose an album.</string>
+    <string name="header_album">Album</string>
+    <string name="header_change_photo">Change photo</string>
+    <string name="interval_hourly">Every hour</string>
+    <string name="interval_6_hours">Every 6 hours</string>
+    <string name="interval_daily">Daily</string>
+    <string name="button_add">Add</string>
 </resources>

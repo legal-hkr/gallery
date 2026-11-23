@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Frame (SPEC §21.1): 2 × 2 by default, resizable from 2 × 2; its album and interval chosen when it is placed, and again from the launcher's edit. Its photo changes about on time through the scheduler (D43), never by a period of its own. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="sh.hnet.gallery.widget.FrameConfigActivity"
+    android:description="@string/widget_frame_desc"
+    android:initialLayout="@layout/widget_on_this_day_loading"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minResizeHeight="110dp"
+    android:previewLayout="@layout/widget_frame_preview"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />
