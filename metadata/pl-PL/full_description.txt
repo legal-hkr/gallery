@@ -20,6 +20,10 @@ Udostępnianie i prywatność:
 - Udostępniane pliki domyślnie bez lokalizacji, z przełącznikiem bezpośrednio w oknie udostępniania
 - Sejf szyfrowany w telefonie, otwierany odciskiem palca albo blokadą ekranu, z importem z dowolnego nośnika i eksportem na dowolny nośnik
 
+Widżety:
+- „Tego dnia”: zdjęcie zrobione tego samego dnia w poprzednich latach
+- „Ramka”: zdjęcia z wybranego albumu, zmieniane co godzinę, co 6 godzin albo raz dziennie
+
 A także:
 - Edytor: kadrowanie, obracanie i prostowanie, korekta światła i koloru albo jeden z sześciu filtrów, rysowanie i pisanie po zdjęciach, przycinanie filmów co do klatki; zapis jako kopia albo w miejsce oryginału, z zachowaniem Ultra HDR, HDR w filmach i metadanych
 - Pokaz slajdów z przenikaniem albo efektem Kena Burnsa

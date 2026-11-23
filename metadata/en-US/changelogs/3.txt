@@ -1,0 +1,11 @@
+v0.2.0
+
+New:
+- “On this day” widget: a photo taken on this day in earlier years
+- “Frame” widget: photos from an album of your choice, changing every hour, every 6 hours or every day
+
+Fixes:
+- Tapping the Straighten or Adjust sliders no longer makes the value jump back
+- Albums no longer lose their items when an SD card is removed or files are rescanned
+- Opening the map no longer freezes the app
+- Settings › Language now marks the selected language right away

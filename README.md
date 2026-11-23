@@ -2,7 +2,7 @@
 
 A private gallery for Android: photos and videos by day, HDR, albums, places and an encrypted vault, with no Internet access.
 
-**Current version**: v0.1.1
+**Current version**: v0.2.0
 
 Source code and releases: [git.hnet.sh/hkr/gallery](https://git.hnet.sh/hkr/gallery)
 
@@ -41,6 +41,11 @@ Gallery shows the photos and videos on your phone and is designed to be the only
 
 - **Without location**: Shared files have their location removed by default, with a switch right in the share sheet
 - **Vault**: Encrypted on the phone and unlocked with your fingerprint or screen lock; move items in and out, or import from and export to any storage
+
+### Widgets
+
+- **On this day**: A photo taken on this day in earlier years, a different one each day
+- **Frame**: Photos from an album of your choice, changing every hour, every 6 hours or every day
 
 ### And also
 

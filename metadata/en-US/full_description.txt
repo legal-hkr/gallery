@@ -20,6 +20,10 @@ Sharing and privacy:
 - Shared files have their location removed by default, with a switch right in the share sheet
 - A vault encrypted on the phone, unlocked with your fingerprint or screen lock, with import from and export to any storage
 
+Widgets:
+- On this day: a photo taken on this day in earlier years
+- Frame: photos from an album of your choice, changing every hour, every 6 hours or every day
+
 And also:
 - An editor to crop, rotate and straighten, adjust light and color or apply one of six filters, draw and write on photos, and trim videos frame-accurately; edits are saved as a copy or over the original, keeping Ultra HDR, HDR video and metadata
 - A slideshow with crossfade or Ken Burns

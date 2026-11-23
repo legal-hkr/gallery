@@ -1,0 +1,11 @@
+v0.2.0
+
+Nowości:
+- Widżet „Tego dnia” ze zdjęciem zrobionym tego samego dnia w poprzednich latach
+- Widżet „Ramka” ze zdjęciami z wybranego albumu, zmienianymi co godzinę, co 6 godzin albo raz dziennie
+
+Poprawki:
+- Dotknięcie suwaka prostowania albo korekty nie cofa już wartości
+- Albumy nie tracą już elementów, gdy karta SD jest wyjęta albo pliki są ponownie skanowane
+- Otwieranie mapy nie zawiesza już aplikacji
+- Strona Ustawienia › Język od razu zaznacza wybrany język
