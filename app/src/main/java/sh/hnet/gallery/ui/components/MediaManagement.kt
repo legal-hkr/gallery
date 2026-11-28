@@ -21,9 +21,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -64,7 +64,8 @@ fun MediaManagementOfferSheet(onNotNow: () -> Unit, onOpenSettings: () -> Unit) 
             Text(stringResource(R.string.desc_media_management_offer), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             Text(stringResource(R.string.desc_media_management_revoke), style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                TextButton(onClick = onNotNow) { Text(stringResource(R.string.button_not_now)) }
+                // Outlined beside the filled one, as the dialogs' pairs (the owner, 27 Nov 2026): the sheet interrupts as a dialog does
+                OutlinedButton(onClick = onNotNow) { Text(stringResource(R.string.button_not_now)) }
                 Button(onClick = onOpenSettings) { Text(stringResource(R.string.button_open_settings)) }
             }
         }

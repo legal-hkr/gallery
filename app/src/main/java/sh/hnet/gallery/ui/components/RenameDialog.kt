@@ -6,7 +6,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -77,7 +76,7 @@ fun RenameDialog(name: String, taken: Collection<String>, onDismiss: () -> Unit,
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
-        confirmButton = { TextButton(onClick = submit, enabled = field.text.isNotBlank()) { Text(stringResource(R.string.button_rename)) } },
+        dismissButton = { DialogDismissButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
+        confirmButton = { DialogConfirmButton(onClick = submit, enabled = field.text.isNotBlank()) { Text(stringResource(R.string.button_rename)) } },
     )
 }

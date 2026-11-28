@@ -2,9 +2,7 @@
 
 package sh.hnet.gallery.ui.albums
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,7 +21,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -57,8 +53,11 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.model.AlbumNames
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.ui.components.AlbumCover
+import sh.hnet.gallery.ui.components.DialogConfirmButton
+import sh.hnet.gallery.ui.components.DialogDismissButton
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.LocalOpenAlbum
+import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.groupShapes
 import sh.hnet.gallery.ui.components.settingsRowColors
 
@@ -118,22 +117,14 @@ fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -
                     onClick = onNoAlbum,
                     shapes = groupShapes(0, count),
                     colors = settingsRowColors(),
-                    leadingContent = {
-                        Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
-                            Icon(painterResource(R.drawable.ic_close), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-                        }
-                    },
+                    leadingContent = { RowIcon(R.drawable.ic_close) },
                 ) { Text(stringResource(R.string.label_no_album), maxLines = 1) }
             }
             SegmentedListItem(
                 onClick = { naming = true },
                 shapes = groupShapes(first, count),
                 colors = settingsRowColors(),
-                leadingContent = {
-                    Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
-                        Icon(painterResource(R.drawable.ic_add), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                },
+                leadingContent = { RowIcon(R.drawable.ic_add) },
             ) { Text(stringResource(R.string.label_new_album), maxLines = 1) }
             rows.forEachIndexed { index, album ->
                 val inIt = album.memberIds.count { it in ids }
@@ -148,7 +139,8 @@ fun AddToAlbumSheet(items: List<MediaItem>, onDismiss: () -> Unit, onAdded: () -
                     enabled = !all,
                     shapes = groupShapes(index + 1 + first, count),
                     colors = settingsRowColors(),
-                    leadingContent = { AlbumCover(album.newest, Modifier.size(48.dp)) },
+                    // 40 dp as the round icons above it and the Frame's album rows (as Music's playlists beside its New playlist)
+                    leadingContent = { AlbumCover(album.newest, Modifier.size(40.dp)) },
                     trailingContent = if (all) ({ Icon(painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary) }) else null,
                     supportingContent = {
                         Text(
@@ -215,7 +207,7 @@ fun AlbumNameDialog(title: String, initial: String, confirmLabel: String, taken:
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
-        confirmButton = { TextButton(onClick = submit, enabled = field.text.isNotBlank()) { Text(confirmLabel) } },
+        dismissButton = { DialogDismissButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
+        confirmButton = { DialogConfirmButton(onClick = submit, enabled = field.text.isNotBlank()) { Text(confirmLabel) } },
     )
 }

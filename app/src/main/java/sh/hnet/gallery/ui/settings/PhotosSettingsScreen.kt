@@ -3,7 +3,6 @@
 package sh.hnet.gallery.ui.settings
 
 import androidx.annotation.DrawableRes
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +40,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -59,6 +57,7 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.model.SourceState
 import sh.hnet.gallery.ui.components.AlbumCover
 import sh.hnet.gallery.ui.components.LocalMediaActions
+import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.SettingsGroupHeader
 import sh.hnet.gallery.ui.components.SettingsSwitchRow
 import sh.hnet.gallery.ui.components.TooltipIconButton
@@ -267,11 +266,7 @@ private fun CollapsedHidden(count: Int, onClick: () -> Unit) {
         onClick = onClick,
         shapes = groupShapes(0, 1),
         colors = settingsRowColors(),
-        leadingContent = {
-            Box(Modifier.size(40.dp).background(scheme.secondaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_visibility_off), contentDescription = null, tint = scheme.onSecondaryContainer)
-            }
-        },
+        leadingContent = { RowIcon(R.drawable.ic_visibility_off) },
         trailingContent = { Icon(painterResource(R.drawable.ic_expand_more), contentDescription = null) },
         supportingContent = { Text(stringResource(R.string.desc_hidden_folders), maxLines = 2, overflow = TextOverflow.Ellipsis) },
     ) {

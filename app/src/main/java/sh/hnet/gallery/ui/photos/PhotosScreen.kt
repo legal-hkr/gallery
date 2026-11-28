@@ -27,8 +27,8 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +65,7 @@ import sh.hnet.gallery.ui.components.EmptyState
 import sh.hnet.gallery.ui.components.GridFastScroller
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.MediaAccess
+import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.rememberMediaAccessAsk
 import sh.hnet.gallery.ui.grid.MediaGrid
@@ -270,16 +271,15 @@ internal fun PartialAccessCard(count: Int, onAnswer: () -> Unit, sides: Dp = 16.
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
-                Icon(painterResource(R.drawable.ic_photo_library), contentDescription = null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
-            }
+            RowIcon(R.drawable.ic_photo_library)
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.title_partial_access), style = MaterialTheme.typography.bodyLarge)
                 Text(stringResource(R.string.desc_partial_access, count), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            TextButton(onClick = ask) { Text(stringResource(R.string.button_choose_more)) }
+            // A pair on a card: outlined and tonal (the owner, 27 Nov 2026), so they match the dialogs' pairs
+            OutlinedButton(onClick = ask) { Text(stringResource(R.string.button_choose_more)) }
             FilledTonalButton(onClick = ask) { Text(stringResource(R.string.button_allow_all)) }
         }
     }

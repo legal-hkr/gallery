@@ -20,7 +20,6 @@ import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +49,7 @@ import sh.hnet.gallery.R
 import sh.hnet.gallery.backup.BackupCheck
 import sh.hnet.gallery.backup.BackupManager
 import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
+import sh.hnet.gallery.ui.components.DialogConfirmButton
 import sh.hnet.gallery.ui.components.ErrorDetails
 import sh.hnet.gallery.ui.components.ErrorDetailsDialog
 import sh.hnet.gallery.ui.components.RowIcon
@@ -149,7 +149,7 @@ fun rememberRestoreAction(snackbars: SnackbarHostState, messageScope: CoroutineS
                     for ((album, count) in missing) Text(stringResource(R.string.format_missing_per_album, album, count))
                 }
             },
-            confirmButton = { TextButton(onClick = { missingShown = null }) { Text(stringResource(R.string.button_close)) } },
+            confirmButton = { DialogConfirmButton(onClick = { missingShown = null }) { Text(stringResource(R.string.button_close)) } },
         )
     }
 

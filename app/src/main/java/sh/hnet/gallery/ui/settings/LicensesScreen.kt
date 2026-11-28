@@ -11,7 +11,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +22,7 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import sh.hnet.gallery.R
+import sh.hnet.gallery.ui.components.DialogConfirmButton
 import sh.hnet.gallery.ui.components.SettingsGroup
 import sh.hnet.gallery.ui.components.SettingsPage
 import sh.hnet.gallery.ui.components.settingsRowColors
@@ -77,7 +77,7 @@ fun LicensesScreen(onBack: () -> Unit) {
                     Text(licenseText, style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = { TextButton(onClick = { showing = false }) { Text(stringResource(R.string.button_close)) } },
+            confirmButton = { DialogConfirmButton(onClick = { showing = false }) { Text(stringResource(R.string.button_close)) } },
         )
     }
 }

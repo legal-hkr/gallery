@@ -39,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -488,6 +489,8 @@ internal fun DrawTools(choice: DrawChoice) {
                         tools.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                         else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                     },
+                    // One container level above the tools' surfaceContainer (the owner, 27 Nov 2026): M3's unchecked toggle is that very color, so the tools not chosen had no shape
+                    colors = ToggleButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
                     modifier = (if (chosen) Modifier.fillMaxWidth() else Modifier.width(56.dp)).semantics {
                         role = Role.RadioButton
                         contentDescription = name

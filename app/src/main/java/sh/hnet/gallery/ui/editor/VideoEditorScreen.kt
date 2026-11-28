@@ -39,7 +39,6 @@ import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -109,6 +108,8 @@ import sh.hnet.gallery.model.History
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Trim
 import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
+import sh.hnet.gallery.ui.components.DialogConfirmButton
+import sh.hnet.gallery.ui.components.DialogDismissButton
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.MediaThumbnail
@@ -473,9 +474,9 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
             onDismissRequest = { leaving = false },
             title = { Text(stringResource(R.string.title_discard_changes)) },
             text = { Text(stringResource(R.string.desc_discard_video)) },
-            dismissButton = { TextButton(onClick = { leaving = false }) { Text(stringResource(R.string.button_keep_editing)) } },
+            dismissButton = { DialogDismissButton(onClick = { leaving = false }) { Text(stringResource(R.string.button_keep_editing)) } },
             confirmButton = {
-                TextButton(onClick = {
+                DialogConfirmButton(onClick = {
                     leaving = false
                     onClose()
                 }) { Text(stringResource(R.string.button_discard)) }
@@ -487,9 +488,9 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
             onDismissRequest = { askingSdr = null },
             title = { Text(stringResource(R.string.title_save_sdr)) },
             text = { Text(stringResource(R.string.desc_save_sdr)) },
-            dismissButton = { TextButton(onClick = { askingSdr = null }) { Text(stringResource(R.string.button_cancel)) } },
+            dismissButton = { DialogDismissButton(onClick = { askingSdr = null }) { Text(stringResource(R.string.button_cancel)) } },
             confirmButton = {
-                TextButton(onClick = {
+                DialogConfirmButton(onClick = {
                     askingSdr = null
                     proceed(replace, sdr = true)
                 }) { Text(stringResource(R.string.button_save_sdr)) }
@@ -501,7 +502,7 @@ fun VideoEditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) 
             onDismissRequest = { cantSave = false },
             title = { Text(stringResource(R.string.title_cant_save_video)) },
             text = { Text(stringResource(R.string.desc_cant_save_hdr)) },
-            confirmButton = { TextButton(onClick = { cantSave = false }) { Text(stringResource(R.string.button_close)) } },
+            confirmButton = { DialogConfirmButton(onClick = { cantSave = false }) { Text(stringResource(R.string.button_close)) } },
         )
     }
     if (replacing) {

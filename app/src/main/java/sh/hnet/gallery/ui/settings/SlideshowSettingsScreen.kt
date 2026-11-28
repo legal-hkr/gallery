@@ -9,9 +9,11 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.ListItemShapes
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -78,6 +80,8 @@ private fun ChoiceRow(shapes: ListItemShapes, title: String, labels: List<String
                             labels.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                             else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                         },
+                        // One container level above the row (the owner, 27 Nov 2026): M3's unchecked surfaceContainer is the row's own color, so the choice not taken vanished into it
+                        colors = ToggleButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
                         modifier = Modifier.weight(1f).semantics { role = Role.RadioButton },
                     ) {
                         Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)

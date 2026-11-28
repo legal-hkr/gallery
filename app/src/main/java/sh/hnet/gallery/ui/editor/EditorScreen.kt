@@ -53,7 +53,6 @@ import androidx.compose.material3.SliderState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -125,6 +124,8 @@ import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Orientation
 import sh.hnet.gallery.model.PxSize
 import sh.hnet.gallery.ui.components.ConfirmDestructiveDialog
+import sh.hnet.gallery.ui.components.DialogConfirmButton
+import sh.hnet.gallery.ui.components.DialogDismissButton
 import sh.hnet.gallery.ui.components.LocalConsent
 import sh.hnet.gallery.ui.components.LocalMediaActions
 import sh.hnet.gallery.ui.components.TooltipIconButton
@@ -361,9 +362,9 @@ fun EditorScreen(item: MediaItem, onClose: () -> Unit, onCopySaved: (Long) -> Un
             onDismissRequest = { leaving = false },
             title = { Text(stringResource(R.string.title_discard_changes)) },
             text = { Text(stringResource(R.string.desc_discard_photo)) },
-            dismissButton = { TextButton(onClick = { leaving = false }) { Text(stringResource(R.string.button_keep_editing)) } },
+            dismissButton = { DialogDismissButton(onClick = { leaving = false }) { Text(stringResource(R.string.button_keep_editing)) } },
             confirmButton = {
-                TextButton(onClick = {
+                DialogConfirmButton(onClick = {
                     leaving = false
                     onClose()
                 }) { Text(stringResource(R.string.button_discard)) }

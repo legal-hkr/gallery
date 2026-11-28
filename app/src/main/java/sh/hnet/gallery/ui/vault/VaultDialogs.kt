@@ -10,7 +10,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,6 +22,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import sh.hnet.gallery.R
+import sh.hnet.gallery.ui.components.DialogConfirmButton
+import sh.hnet.gallery.ui.components.DialogDismissButton
 
 /**
  * Import's question (SPEC §18.6): what happens to the files, and a checkbox to delete the originals afterwards (off);
@@ -48,8 +49,8 @@ fun ImportDialog(count: Int, onConfirm: (deleteOriginals: Boolean) -> Unit, onDi
                 }
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
-        confirmButton = { TextButton(onClick = { onConfirm(delete) }) { Text(stringResource(R.string.button_import)) } },
+        dismissButton = { DialogDismissButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
+        confirmButton = { DialogConfirmButton(onClick = { onConfirm(delete) }) { Text(stringResource(R.string.button_import)) } },
     )
 }
 
@@ -61,7 +62,7 @@ fun ExportDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
         icon = { Icon(painterResource(R.drawable.ic_output), contentDescription = null) },
         title = { Text(stringResource(R.string.title_export_vault, count)) },
         text = { Text(stringResource(R.string.desc_export_vault)) },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(R.string.button_choose_folder)) } },
+        dismissButton = { DialogDismissButton(onClick = onDismiss) { Text(stringResource(R.string.button_cancel)) } },
+        confirmButton = { DialogConfirmButton(onClick = onConfirm) { Text(stringResource(R.string.button_choose_folder)) } },
     )
 }

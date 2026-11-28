@@ -71,6 +71,7 @@ import sh.hnet.gallery.model.CollectionKind
 import sh.hnet.gallery.model.FolderKey
 import sh.hnet.gallery.ui.components.AlbumCover
 import sh.hnet.gallery.ui.components.LocalMediaActions
+import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
 import sh.hnet.gallery.ui.grid.SelectableFrame
@@ -280,9 +281,7 @@ internal fun CollectionTile(@DrawableRes icon: Int, name: String, count: String?
             .alpha(if (enabled) 1f else 0.38f),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).background(scheme.secondaryContainer, MaterialTheme.shapes.medium), contentAlignment = Alignment.Center) {
-            Icon(painterResource(icon), contentDescription = null, tint = scheme.onSecondaryContainer)
-        }
+        RowIcon(icon)
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text(name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (count != null) Text(count, style = MaterialTheme.typography.bodyMedium, color = scheme.onSurfaceVariant, maxLines = 1)

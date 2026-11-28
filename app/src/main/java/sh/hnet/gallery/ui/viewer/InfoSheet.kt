@@ -91,6 +91,8 @@ import sh.hnet.gallery.model.ExifText
 import sh.hnet.gallery.model.MediaItem
 import sh.hnet.gallery.model.Playback
 import sh.hnet.gallery.model.TimelineFolders
+import sh.hnet.gallery.ui.components.DialogConfirmButton
+import sh.hnet.gallery.ui.components.DialogDismissButton
 import sh.hnet.gallery.ui.components.RowIcon
 import sh.hnet.gallery.ui.components.TooltipIconButton
 import sh.hnet.gallery.ui.components.albumName
@@ -214,12 +216,12 @@ fun InfoSheet(
         DatePickerDialog(
             onDismissRequest = { pickingDate = false },
             confirmButton = {
-                TextButton(enabled = picker.selectedDateMillis != null, onClick = {
+                DialogConfirmButton(enabled = picker.selectedDateMillis != null, onClick = {
                     pickingDate = false
                     picker.selectedDateMillis?.let { pickedDate = LocalDate.ofEpochDay(Math.floorDiv(it, DAY_MILLIS)) }
                 }) { Text(stringResource(R.string.button_next)) }
             },
-            dismissButton = { TextButton(onClick = { pickingDate = false }) { Text(stringResource(R.string.button_cancel)) } },
+            dismissButton = { DialogDismissButton(onClick = { pickingDate = false }) { Text(stringResource(R.string.button_cancel)) } },
         ) {
             DatePicker(picker)
         }
@@ -231,12 +233,12 @@ fun InfoSheet(
         TimePickerDialog(
             onDismissRequest = { pickedDate = null },
             confirmButton = {
-                TextButton(onClick = {
+                DialogConfirmButton(onClick = {
                     pickedDate = null
                     onChangeDate?.invoke(date, LocalTime.of(picker.hour, picker.minute))
                 }) { Text(stringResource(R.string.button_save)) }
             },
-            dismissButton = { TextButton(onClick = { pickedDate = null }) { Text(stringResource(R.string.button_cancel)) } },
+            dismissButton = { DialogDismissButton(onClick = { pickedDate = null }) { Text(stringResource(R.string.button_cancel)) } },
             title = { TimePickerDialogDefaults.Title(displayMode = mode) },
             modeToggleButton = { TimePickerDialogDefaults.DisplayModeToggle(onDisplayModeChange = { input = !input }, displayMode = mode) },
         ) {

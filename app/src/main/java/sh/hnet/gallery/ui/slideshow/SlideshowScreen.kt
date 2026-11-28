@@ -45,6 +45,7 @@ import androidx.compose.material3.SelectableDropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -464,6 +465,8 @@ private fun SlideshowToolbar(playing: Boolean, onPlay: () -> Unit, transition: S
                     checked = transition == value,
                     onCheckedChange = { if (it) onTransition(value) },
                     shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes() else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                    // One container level above the toolbar's surfaceContainer (the owner, 27 Nov 2026): M3's unchecked toggle is that very color, so the transition not chosen had no shape
+                    colors = ToggleButtonDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
                 ) {
                     Text(stringResource(text), maxLines = 1)
                 }
