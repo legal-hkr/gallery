@@ -1,0 +1,5 @@
+v0.2.1
+
+Changes:
+- Buttons, dialogs and list icons now look like Android’s own: filled and outlined buttons in dialogs, round icons in lists, and selected rows that no longer change color or shape
+- Updated build tools

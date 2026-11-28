@@ -18,8 +18,8 @@ android {
         applicationId = "sh.hnet.gallery"
         minSdk = 34
         targetSdk = 37
-        versionCode = 3
-        versionName = "v0.2.0"
+        versionCode = 4
+        versionName = "v0.2.1"
     }
 
     buildTypes {

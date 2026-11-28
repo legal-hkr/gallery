@@ -2,7 +2,7 @@
 
 A private gallery for Android: photos and videos by day, HDR, albums, places and an encrypted vault, with no Internet access.
 
-**Current version**: v0.2.0
+**Current version**: v0.2.1
 
 Source code and releases: [git.hnet.sh/hkr/gallery](https://git.hnet.sh/hkr/gallery)
 

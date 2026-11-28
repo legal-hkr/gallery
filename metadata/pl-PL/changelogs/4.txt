@@ -1,0 +1,5 @@
+v0.2.1
+
+Zmiany:
+- Przyciski, okna dialogowe i ikony na listach wyglądają jak w Androidzie: pełne i obramowane przyciski w oknach dialogowych, okrągłe ikony na listach oraz zaznaczone wiersze bez zmiany koloru i kształtu
+- Nowsze wersje narzędzi do budowania
